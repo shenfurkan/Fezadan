@@ -1,6 +1,6 @@
 <table>
   <tr>
-    <td><img src="public_html/cdn/fezadanlogo.png" width="120" alt="Fezadan Logo"></td>
+    <td><img src="public_html/cdn/darkthemelogo.png" width="120" alt="Fezadan Logo"></td>
     <td><h1>Fezadan.org PHP MVC CMS Motoru</h1></td>
   </tr>
 </table>
