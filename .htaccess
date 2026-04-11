@@ -1,0 +1,24 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    
+    # Apache'nin dosya tahmin etme özelliğini kapatıyoruz (Çakışmayı önler)
+    Options -MultiViews -Indexes
+
+    # --- ÖZEL ROTALAR ---
+    # Bu kuralları en sade haliyle, parametresiz yazalım
+    RewriteRule ^privacy$ index.php?url=home/privacy [L,QSA]
+    RewriteRule ^gizlilik-politikasi$ index.php?url=home/privacy [L,QSA]
+    RewriteRule ^yazar/([0-9]+)$ index.php?url=home/author/$1 [L,QSA]
+
+    # --- GENEL MVC YÖNLENDİRMESİ ---
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php?url=$1 [L,QSA]
+</IfModule>
+
+# PHP Ayarları (Bloğun en altında kalsın)
+php_value upload_max_filesize 64M
+php_value post_max_size 64M
+php_value max_execution_time 300
+php_value max_input_time 300

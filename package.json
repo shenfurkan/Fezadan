@@ -1,0 +1,12 @@
+{
+  "devDependencies": {
+    "tailwindcss": "^4.1.18"
+  },
+  "dependencies": {
+    "@tailwindcss/cli": "^4.1.18"
+  },
+  "scripts": {
+    "dev": "npx @tailwindcss/cli -i ./public_html/assets/css/input.css -o ./public_html/assets/css/admin.css --watch",
+    "build": "npx @tailwindcss/cli -i ./public_html/assets/css/input.css -o ./public_html/assets/css/admin.css --minify"
+  }
+}

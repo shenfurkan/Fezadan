@@ -1,0 +1,26 @@
+# --- security ---
+app/Config/config.php
+app/Config/database.php
+.env
+ssl/
+/public_html/git-deploy.php
+/public_html/scripts/deploy-logic.php
+/.cpanel.yml
+
+# --- systemfiles ---
+.DS_Store
+Thumbs.db
+node_modules/
+index.php
+/public_html/robots.txt
+/public_html/sitemap.xml
+
+# --- uploads ---
+/public_html/uploads/*
+!/public_html/uploads/.gitkeep
+/storage
+/vendor
+
+# --- logs ---
+public_html/error_log
+*.log

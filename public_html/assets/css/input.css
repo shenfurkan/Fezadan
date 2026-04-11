@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* Fezadan Renk Tanımlamaları */
+@theme {
+    --color-main: #6D2323;
+    --color-paper: #FEF9E1;
+    --color-accent: #A31D1D;
+}
+
+@layer base {
+    :root {
+        --bg-paper: #FEF9E1;
+        --text-main: #6D2323;
+        --line-color: #6D2323;
+        --text-accent: #A31D1D;
+    }
+}
