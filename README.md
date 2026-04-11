@@ -1,13 +1,13 @@
-<p align="center">
-  <img src="public_html/cdn/fezadanlogo.png" width="200" alt="Fezadan Logo">
-</p>
-
-# Fezadan.org PHP MVC CMS Motoru
+<table>
+  <tr>
+    <td><img src="public_html/cdn/fezadanlogo.png" width="120" alt="Fezadan Logo"></td>
+    <td><h1>Fezadan.org PHP MVC CMS Motoru</h1></td>
+  </tr>
+</table>
 
 Fezadan, PHP tabanlı özel bir MVC (Model-View-Controller) mimarisi üzerine inşa edilmiş, hafif, hızlı ve modern bir içerik yönetim sistemi (CMS) ve blog motorudur. Gelişmiş yönetim paneli ve Tailwind CSS ile hazırlanmış duyarlı (responsive) ön yüzü sayesinde içeriklerinizi kolayca yönetmenizi sağlar.
 
 ## Özellikler
-
 - **Özel MVC Mimarisi:** İhtiyaca yönelik, esnek ve hafif bir çekirdek (`Core`) ve yönlendirme (routing) yapısı.
 - **Kapsamlı Yönetim Paneli:** Makale ekleme/düzenleme, yazar ve kategori yönetimi, detaylı profil ayarları.
 - **Modern Arayüz:** Tailwind CSS ile geliştirilmiş modern tasarım, özelleştirilmiş fontlar ve hızlı sayfa yüklemeleri.
