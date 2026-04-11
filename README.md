@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="main/public_html/cdn/fezadanlogo.jpg" width="200" alt="Fezadan Logo">
+  <img src="public_html/cdn/fezadanlogo.png" width="200" alt="Fezadan Logo">
 </p>
 
 # Fezadan.org PHP MVC CMS Motoru
