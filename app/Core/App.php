@@ -5,7 +5,30 @@ class App {
     protected $params = [];
 
     public function __construct() {
+        $host = $_SERVER['HTTP_HOST'] ?? '';
         $url = $this->parseUrl();
+
+        // Notlar Subdomain Kontrolü
+        if (strpos($host, 'notlar.') === 0) {
+            require_once ROOT . '/app/Controllers/NotlarController.php';
+            $this->controller = new NotlarController();
+            
+            if (isset($url[0]) && $url[0] == 'not') {
+                if (isset($url[1]) && $url[1] == 'download') {
+                    $this->method = 'download';
+                    $this->params = isset($url[2]) ? [$url[2]] : [];
+                } else {
+                    $this->method = 'read';
+                    $this->params = isset($url[1]) ? [$url[1]] : [];
+                }
+            } else {
+                $this->method = 'index';
+                $this->params = [];
+            }
+            
+            call_user_func_array([$this->controller, $this->method], $this->params);
+            return;
+        }
 
         // URL var mı kontrol et
         if (file_exists(ROOT . '/app/Controllers/' . ucfirst($url[0]) . 'Controller.php')) {

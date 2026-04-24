@@ -4,16 +4,17 @@ app/Config/database.php
 .env
 ssl/
 /public_html/git-deploy.php
-/public_html/scripts/deploy-logic.php
+/public_html/scripts/
 /.cpanel.yml
 
 # --- systemfiles ---
 .DS_Store
 Thumbs.db
 node_modules/
-index.php
+/index.php
 /public_html/robots.txt
 /public_html/sitemap.xml
+.vscode
 
 # --- uploads ---
 /public_html/uploads/*

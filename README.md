@@ -1,6 +1,6 @@
 <table>
   <tr>
-    <td><img src="public_html/cdn/darkthemelogo.png" width="120" alt="Fezadan Logo"></td>
+    <td><img src="public_html/cdn/logo-dark.png" width="120" alt="Fezadan Logo"></td>
     <td><h1>Fezadan.org PHP MVC CMS Motoru</h1></td>
   </tr>
 </table>
@@ -36,6 +36,10 @@ Proje güvenliği artırmak amacıyla sistem ve açık dizin olarak ikiye ayrıl
 
 - **`app/`:** Projenin beyni. Tüm Controller (Kontrolcüler), View (Görünümler) ve Core (Çekirdek) dosyaları burada yer alır. Dışarıdan doğrudan erişime kapalıdır.
 - **`public_html/`:** Web sunucunuzun okuyacağı kök dizindir. CSS, JS, fontlar, görseller ve gelen istekleri karşılayan ana `index.php` dosyasını barındırır.
+
+## notlar.fezadan.org
+
+v2 release ile sitenin bünyesine katılan Fezadan Notlar bilgiye erişimin herkesin hakkı olduğu fikrinden doğdu. Cloudflare R2 depolamasını kullanan ve kendi modern PDF okuyucu görünümüyle çeşitli üniversitelerden ve konulardan ders notlarını barındırmasını planladığımız arşive siz de katkıda bulunabilirsiniz.
 
 ## Kurulum
 

@@ -82,8 +82,15 @@ require_once ROOT . '/app/Views/inc/header.php';
 
                         <?php if (!empty($author['website'])): ?>
                             <a href="<?php echo htmlspecialchars($author['website']); ?>" target="_blank" class="flex items-center gap-3 text-[var(--text-main)] hover:text-[var(--text-accent)] transition-colors">
-                                <span class="text-[var(--text-accent)] text-lg leading-none">▣</span> 
+                                <span class="text-lg leading-none">🌐</span> 
                                 Kişisel Websitesi
+                            </a>
+                        <?php endif; ?>
+
+                        <?php if (!empty($author['email'])): ?>
+                            <a href="mailto:<?php echo htmlspecialchars($author['email']); ?>" class="flex items-center gap-3 text-[var(--text-main)] hover:text-[var(--text-accent)] transition-colors">
+                                <span class="text-lg leading-none">✉️</span>
+                                <?php echo htmlspecialchars($author['email']); ?>
                             </a>
                         <?php endif; ?>
                         

@@ -19,20 +19,32 @@ function isActive($uri, $target)
         <?php echo isset($page_title) ? $page_title : 'FEZADAN'; ?>
     </title>
     
-    <link rel="icon" type="image/png" href="/cdn/darkthemelogo.png?v=3.0">
-    <link rel="apple-touch-icon" href="/cdn/darkthemelogo.png?v=3.0">
+    <link rel="icon" type="image/x-icon" href="/cdn/light-favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/cdn/light-favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/cdn/light-favicon-16x16.png">
+    <link rel="light-apple-touch-icon" href="/cdn/light-apple-touch-icon.png">
     
     <meta name="description"
         content="<?php echo isset($article['short_desc']) ? htmlspecialchars($article['short_desc']) : 'Veri ve estetik arasındaki sessiz çatışma.'; ?>">
     <meta name="robots" content="index, follow">
-    <link rel="canonical" href="https://fezadan.org<?php echo parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH); ?>">
+    <?php
+    $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http");
+    $host = $_SERVER['HTTP_HOST'];
+    $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    $canonical_url = $protocol . "://" . $host . $path;
+    ?>
+    <link rel="canonical" href="<?php echo $canonical_url; ?>">
 
     <meta property="og:site_name" content="FEZADAN">
     <meta property="og:type" content="article">
     <meta property="og:title" content="<?php echo isset($page_title) ? $page_title : 'FEZADAN'; ?>">
+    <meta property="og:description" content="<?php echo $og_desc ?? ''; ?>">
+    <meta property="og:image" content="<?php echo $og_image ?? ''; ?>">
+    <meta property="og:url" content="<?php echo $og_url ?? ''; ?>">
+    <meta name="twitter:card" content="summary_large_image">
     
     <link rel="stylesheet" href="<?php echo SITE_URL; ?>/assets/css/admin.css?v=<?php echo filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/css/admin.css'); ?>">
-    <link rel="stylesheet" href="<?php echo SITE_URL; ?>/assets/css/fonts.css">
+    <link rel="stylesheet" href="/assets/css/fonts.css">
 
     <style>
         :root {
@@ -69,12 +81,19 @@ function isActive($uri, $target)
         }
 
         .theme-switch {
-            width: 44px;
+            width: 48px; /* Genişletildi */
             height: 24px;
             background-color: var(--text-main);
+            border: 2px solid var(--text-main); /* Çerçeve eklendi */
             border-radius: 999px;
             position: relative;
-            transition: background-color 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+        }
+
+        /* Karanlık tema için kontrast ayarı */
+        [data-theme="dark"] .theme-switch {
+            background-color: var(--bg-secondary);
+            border-color: var(--text-main);
         }
 
         .theme-switch::after {
@@ -82,12 +101,17 @@ function isActive($uri, $target)
             position: absolute;
             top: 2px;
             left: 2px;
-            width: 20px;
-            height: 20px;
+            width: 16px; /* Çerçeveden dolayı ufaltıldı */
+            height: 16px; /* Çerçeveden dolayı ufaltıldı */
             background-color: var(--bg-paper);
             border-radius: 50%;
             transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        [data-theme="dark"] .theme-switch::after {
+            transform: translateX(24px); /* Genişliğe göre uyarlandı */
+            background-color: var(--text-main);
         }
 
         .theme-icon {
@@ -95,6 +119,12 @@ function isActive($uri, $target)
             height: 14px;
             color: var(--text-main);
         }
+
+        .sun-icon { opacity: 1; color: var(--text-main); }
+        .moon-icon { opacity: 0.3; color: var(--text-main); }
+
+        [data-theme="dark"] .sun-icon { opacity: 0.3; }
+        [data-theme="dark"] .moon-icon { opacity: 1; }
 
         [data-theme="dark"] .theme-switch::after {
             transform: translateX(20px);
@@ -246,13 +276,13 @@ function isActive($uri, $target)
 
         <div class="relative z-50">
             <a href="/" class="flex items-center gap-2" aria-label="Anasayfa">
-                <img src="/cdn/fezadanlogo.jpg" 
+                <img src="/cdn/logo-light.png" 
                     alt="Fezadan Logo" 
                     width="150" height="40"
                     style="height: 40px; width: auto;" 
                     class="object-contain rounded-sm logo-light">
                     
-                <img src="/cdn/darkthemelogo.png" 
+                <img src="/cdn/logo-dark.png" 
                     alt="Fezadan Logo" 
                     width="150" height="40"
                     style="height: 40px; width: auto;" 
@@ -263,20 +293,28 @@ function isActive($uri, $target)
         <div class="hidden md:flex gap-8 items-center pt-1">
             <a href="<?php echo SITE_URL; ?>/makaleler"
                 class="nav-link <?php echo isActive($current_uri, '/makaleler'); ?>">Makaleler</a>
+            
+            <?php 
+                $host = str_replace('www.', '', $_SERVER['HTTP_HOST']);
+                $notlar_url = (isset($_SERVER['HTTPS']) ? "https://" : "http://") . (strpos($host, 'notlar.') === 0 ? $host : "notlar." . $host);
+            ?>
+            <a href="<?php echo $notlar_url; ?>" class="nav-link">Notlar</a>
+            
             <a href="<?php echo SITE_URL; ?>/hakkinda"
                 class="nav-link <?php echo isActive($current_uri, '/hakkinda'); ?>">Hakkında</a>
+                
             <a href="<?php echo SITE_URL; ?>/manifesto"
-                class="nav-link <?php echo isActive($current_uri, '/hakkinda'); ?>">Manifesto</a>
+                class="nav-link <?php echo isActive($current_uri, '/manifesto'); ?>">Manifesto</a>
 
             <div id="theme-toggle" class="theme-switch-wrapper group" role="button" tabindex="0" aria-label="Temayı Değiştir">
-                <svg class="theme-icon opacity-50 group-hover:opacity-100 transition-opacity" fill="none"
+                <svg class="theme-icon sun-icon opacity-50 group-hover:opacity-100 transition-opacity" fill="none"
                     stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z">
                     </path>
                 </svg>
                 <div class="theme-switch"></div>
-                <svg class="theme-icon opacity-50 group-hover:opacity-100 transition-opacity" fill="none"
+                <svg class="theme-icon moon-icon opacity-50 group-hover:opacity-100 transition-opacity" fill="none"
                     stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z">
@@ -301,19 +339,21 @@ function isActive($uri, $target)
                 class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">ANASAYFA</a>
             <a href="/makaleler"
                 class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">MAKALELER</a>
+            <a href="<?php echo $notlar_url; ?>"
+                class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">NOTLAR</a>
             <a href="/hakkinda"
                 class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">HAKKINDA</a>
             <a href="/manifesto"
                 class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">MANİFESTO</a>
             <div class="theme-switch-wrapper group scale-125 mt-4" role="button" tabindex="0" aria-label="Temayı Değiştir">
-                <svg class="theme-icon opacity-50 group-hover:opacity-100 transition-opacity" fill="none"
+                <svg class="theme-icon sun-icon opacity-50 group-hover:opacity-100 transition-opacity" fill="none"
                     stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z">
                     </path>
                 </svg>
                 <div class="theme-switch"></div>
-                <svg class="theme-icon opacity-50 group-hover:opacity-100 transition-opacity" fill="none"
+                <svg class="theme-icon moon-icon opacity-50 group-hover:opacity-100 transition-opacity" fill="none"
                     stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z">
