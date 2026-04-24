@@ -8,10 +8,11 @@ class HomeController extends Controller {
             $pdo = new \PDO($dsn, DB_USER, DB_PASS);
             $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 
-            // Makaleleri çek
+            // Makaleleri çek (sadece yayınlananlar)
             $sql = "SELECT articles.*, authors.slug AS author_slug 
                     FROM articles 
                     LEFT JOIN authors ON articles.author_id = authors.id 
+                    WHERE articles.status = 'published'
                     ORDER BY articles.created_at DESC";
             $articles = $pdo->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
 
@@ -52,7 +53,7 @@ class HomeController extends Controller {
                 authors.image_url AS author_img
             FROM articles 
             LEFT JOIN authors ON articles.author_id = authors.id 
-            WHERE articles.slug = :slug";
+            WHERE articles.slug = :slug AND articles.status = 'published'";
             
             $stmt = $pdo->prepare($sql);
             $stmt->execute([':slug' => $slug]);

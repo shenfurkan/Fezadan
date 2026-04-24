@@ -17,9 +17,21 @@ class MakalelerController extends Controller {
             $authorId = isset($_GET['author']) ? (int)$_GET['author'] : null;
             $searchQuery = isset($_GET['q']) ? trim($_GET['q']) : '';
             $sortOrder = isset($_GET['sort']) ? $_GET['sort'] : 'newest';
-            $allCategories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll(\PDO::FETCH_ASSOC);
-            $allAuthors = $pdo->query("SELECT id, name FROM authors ORDER BY name ASC")->fetchAll(\PDO::FETCH_ASSOC);
-            $whereClauses = ["1=1"];
+            $allCategories = $pdo->query("
+                SELECT DISTINCT c.* FROM categories c 
+                JOIN article_categories ac ON c.id = ac.category_id 
+                JOIN articles a ON ac.article_id = a.id 
+                WHERE a.status = 'published' 
+                ORDER BY c.name ASC
+            ")->fetchAll(\PDO::FETCH_ASSOC);
+            $allAuthors = $pdo->query("
+                SELECT DISTINCT au.id, au.name 
+                FROM authors au 
+                JOIN articles a ON au.id = a.author_id 
+                WHERE a.status = 'published' 
+                ORDER BY au.name ASC
+            ")->fetchAll(\PDO::FETCH_ASSOC);
+            $whereClauses = ["a.status = 'published'"];
             $params = [];
 
             if ($catId) {

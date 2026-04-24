@@ -36,27 +36,55 @@ class AdminController extends Controller
     {
         $username = $_POST['username'] ?? '';
         $password = $_POST['password'] ?? '';
+        
+        // MAHREMİYET ODAKLI IP HASHLEME
+        $userIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        $dailySalt = date('Y-m-d') . APP_SALT; 
+        $ipHash = hash('sha256', $userIp . $dailySalt);
 
         try {
             $pdo = $this->getPDO();
-            // Admin kullanıcı adı arama
+
+            // 1. ESKİ KAYITLARI TEMİZLE: 3 saatten eski denemeleri sil
+            $pdo->exec("DELETE FROM login_attempts WHERE attempt_time < NOW() - INTERVAL 3 HOUR");
+
+            // 2. KONTROL: Bu hash ile son 3 saatte kaç hatalı giriş yapılmış?
+            $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM login_attempts WHERE ip_hash = ?");
+            $stmtCount->execute([$ipHash]);
+            $attempts = $stmtCount->fetchColumn();
+
+            // 3. ENGEL: 3 hata varsa engelle
+            if ($attempts >= 3) {
+                header('Location: /admin?error=locked');
+                exit;
+            }
+
+            // 4. DOĞRULAMA
             $stmt = $pdo->prepare("SELECT * FROM admins WHERE username = ?");
             $stmt->execute([$username]);
             $user = $stmt->fetch(\PDO::FETCH_ASSOC);
 
-            // Kullanıcı adı ve şifre kontrolü
             if ($user && password_verify($password, $user['password'])) {
+                
+                // Başarılı giriş: Bu hash'e ait hatalı denemeleri temizle
+                $pdo->prepare("DELETE FROM login_attempts WHERE ip_hash = ?")->execute([$ipHash]);
+
                 $_SESSION['admin_logged_in'] = true;
                 $_SESSION['admin_user'] = $user['username'];
+                $_SESSION['admin_name'] = $user['name'];
 
-                // Son giriş zamanı güncellemesi
                 $pdo->prepare("UPDATE admins SET last_login = NOW() WHERE id = ?")->execute([$user['id']]);
 
                 header('Location: /admin/dashboard');
+                exit;
             }
             else {
-                // Geçersiz giriş
+                // Başarısız giriş: Hashlenmiş IP'yi kaydet
+                $stmtFail = $pdo->prepare("INSERT INTO login_attempts (ip_hash) VALUES (?)");
+                $stmtFail->execute([$ipHash]);
+
                 header('Location: /admin?error=1');
+                exit;
             }
         }
         catch (\PDOException $e) {
@@ -151,11 +179,13 @@ class AdminController extends Controller
             }
 
             // İstatistikler
-            $totalRealCount = $pdo->query("SELECT COUNT(*) FROM articles")->fetchColumn();
+            $totalRealCount = $pdo->query("SELECT COUNT(*) FROM articles WHERE status = 'published'")->fetchColumn();
+            $totalDrafts = $pdo->query("SELECT COUNT(*) FROM articles WHERE status = 'draft'")->fetchColumn();
             $totalReads = (int)$pdo->query("SELECT SUM(`reads`) FROM articles")->fetchColumn();
 
             $stats = [
                 'total_articles' => $totalRealCount,
+                'total_drafts'   => $totalDrafts, 
                 'total_reads' => $totalReads,
                 'system_status' => 'Aktif',
                 'last_login' => date('H:i')
@@ -284,6 +314,7 @@ class AdminController extends Controller
         $selectedCategories = $_POST['categories'] ?? [];
         $slug = $this->createSlug($title);
         $image_db_path = '';
+        $status = $_POST['status'] ?? 'published';
 
         if (isset($_FILES['cover_image']) && $_FILES['cover_image']['error'] === 0) {
             $file = $_FILES['cover_image'];
@@ -302,12 +333,13 @@ class AdminController extends Controller
             $pdo = $this->getPDO();
             $pdo->beginTransaction();
 
-            $stmt = $pdo->prepare("INSERT INTO articles (title, slug, short_desc, content, refs, image_url, author_id) VALUES (:title, :slug, :desc, :content, :refs, :img, :author_id)");
+            $stmt = $pdo->prepare("INSERT INTO articles (title, slug, short_desc, content, refs, image_url, author_id, status) VALUES (:title, :slug, :desc, :content, :refs, :img, :author_id, :status)");
             $stmt->execute([
                 ':title' => $title, ':slug' => $slug, ':desc' => $desc,
                 ':content' => $content,
                 ':refs' => $refs,
-                ':img' => $image_db_path, ':author_id' => $author_id
+                ':img' => $image_db_path, ':author_id' => $author_id,
+                ':status' => $status
             ]);
             $articleId = $pdo->lastInsertId();
 
@@ -320,7 +352,8 @@ class AdminController extends Controller
 
             $pdo->commit();
             $this->generateSitemap();
-            header('Location: /admin/dashboard?status=success');
+            $msg = ($status === 'draft') ? 'draft_saved' : 'success';
+            header('Location: /admin/dashboard?status=' . $msg);
         }
         catch (\PDOException $e) {
             $pdo->rollBack();
@@ -360,6 +393,26 @@ class AdminController extends Controller
             }
         }
         header('Location: /admin/dashboard?status=deleted');
+    }
+
+    // Taslak yayınlama
+    public function publish()
+    {
+        if (!isset($_SESSION['admin_logged_in'])) exit;
+
+        $id = $_GET['id'] ?? null;
+        if ($id) {
+            try {
+                $pdo = $this->getPDO();
+                $pdo->prepare("UPDATE articles SET status = 'published' WHERE id = ?")
+                    ->execute([$id]);
+                $this->generateSitemap();
+            } catch (\PDOException $e) {
+                die("Yayınlama Hatası: " . $e->getMessage());
+            }
+        }
+        header('Location: /admin/dashboard?status=published');
+        exit;
     }
 
     // Çıkış yapma
@@ -433,11 +486,15 @@ class AdminController extends Controller
         try {
             $pdo = $this->getPDO();
 
-            $sql = "SELECT c.*, COUNT(a.id) as article_count 
+            // GÜNCELLENEN SORGU: Alt sorgularla her iki tabloyu da sayıyoruz
+            $sql = "SELECT c.*, 
+                    (SELECT COUNT(*) FROM article_categories ac 
+                    JOIN articles a ON ac.article_id = a.id 
+                    WHERE ac.category_id = c.id AND a.status = 'published') as article_count,
+                    (SELECT COUNT(*) FROM note_categories nc 
+                    JOIN notes n ON nc.note_id = n.id 
+                    WHERE nc.category_id = c.id) as note_count
                     FROM categories c 
-                    LEFT JOIN article_categories ac ON c.id = ac.category_id 
-                    LEFT JOIN articles a ON ac.article_id = a.id 
-                    GROUP BY c.id 
                     ORDER BY c.name ASC";
 
             $categories = $pdo->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
@@ -558,6 +615,8 @@ class AdminController extends Controller
         $selectedCategories = $_POST['categories'] ?? [];
         $current_image = $_POST['current_image'] ?? '';
         $image_db_path = $current_image;
+        $status = $_POST['status'] ?? 'published';
+        $slug = $this->createSlug($title);
 
         if (isset($_FILES['cover_image']) && $_FILES['cover_image']['error'] === 0) {
             $upload_dir = ROOT . '/public_html/uploads/';
@@ -572,10 +631,20 @@ class AdminController extends Controller
             $pdo = $this->getPDO();
             $pdo->beginTransaction();
 
-            // Makale bilgisini güncelle
-            $sql = "UPDATE articles SET title = ?, short_desc = ?, content = ?, refs = ?, author_id = ?, image_url = ? WHERE id = ?";
+            // Makale bilgisini güncelle — slug her güncellemede başlıktan yeniden üretilir.
+            // Aynı slug başka bir makalede varsa sonuna -2, -3 ... ekle (kendi id'si hariç).
+            $baseSlug = $slug;
+            $suffix = 2;
+            while (true) {
+                $chk = $pdo->prepare("SELECT id FROM articles WHERE slug = ? AND id != ?");
+                $chk->execute([$slug, $id]);
+                if (!$chk->fetch()) break;
+                $slug = $baseSlug . '-' . $suffix++;
+            }
+
+            $sql = "UPDATE articles SET title = ?, slug = ?, short_desc = ?, content = ?, refs = ?, author_id = ?, image_url = ?, status = ? WHERE id = ?";
             $stmt = $pdo->prepare($sql);
-            $stmt->execute([$title, $desc, $content, $refs, $author_id, $image_db_path, $id]);
+            $stmt->execute([$title, $slug, $desc, $content, $refs, $author_id, $image_db_path, $status, $id]);
 
             // Kategori sayısını güncelle
             $pdo->prepare("DELETE FROM article_categories WHERE article_id = ?")->execute([$id]);
@@ -604,46 +673,47 @@ class AdminController extends Controller
         try {
             $pdo = $this->getPDO();
 
-            $stmt = $pdo->query("SELECT slug, created_at FROM articles ORDER BY created_at DESC");
-            $articles = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            // Verileri çek
+            $articles = $pdo->query("SELECT slug, created_at FROM articles WHERE status = 'published' ORDER BY created_at DESC")->fetchAll(\PDO::FETCH_ASSOC);
+            $notes = $pdo->query("SELECT slug, created_at FROM notes ORDER BY created_at DESC")->fetchAll(\PDO::FETCH_ASSOC);
 
-            // XML oluştur
-            $xml = '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
-            $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . PHP_EOL;
+            // --- A. ANA SİTE SİTEMAP (sitemap_main.xml) ---
+            $xmlMain = '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
+            $xmlMain .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . PHP_EOL;
+            
+            $mainPages = [
+                'https://fezadan.org/',
+                'https://fezadan.org/makaleler',
+                'https://fezadan.org/hakkinda',
+                'https://fezadan.org/manifesto'
+            ];
 
-            // Anasayfa
-            $xml .= '  <url>' . PHP_EOL;
-            $xml .= '    <loc>https://fezadan.org/</loc>' . PHP_EOL;
-            $xml .= '    <changefreq>daily</changefreq>' . PHP_EOL;
-            $xml .= '    <priority>1.0</priority>' . PHP_EOL;
-            $xml .= '  </url>' . PHP_EOL;
-
-            // Makaleler sayfası
-            $xml .= '  <url>' . PHP_EOL;
-            $xml .= '    <loc>https://fezadan.org/makaleler</loc>' . PHP_EOL;
-            $xml .= '    <changefreq>weekly</changefreq>' . PHP_EOL;
-            $xml .= '    <priority>0.8</priority>' . PHP_EOL;
-            $xml .= '  </url>' . PHP_EOL;
-
-            // Her makale için URL
-            foreach ($articles as $article) {
-                $lastMod = date('Y-m-d', strtotime($article['created_at']));
-                $xml .= '  <url>' . PHP_EOL;
-                $xml .= '    <loc>https://fezadan.org/makale/' . $article['slug'] . '</loc>' . PHP_EOL;
-                $xml .= '    <lastmod>' . $lastMod . '</lastmod>' . PHP_EOL;
-                $xml .= '    <changefreq>monthly</changefreq>' . PHP_EOL;
-                $xml .= '    <priority>0.6</priority>' . PHP_EOL;
-                $xml .= '  </url>' . PHP_EOL;
+            foreach ($mainPages as $loc) {
+                $xmlMain .= "  <url><loc>$loc</loc><changefreq>daily</changefreq><priority>1.0</priority></url>" . PHP_EOL;
             }
 
-            $xml .= '</urlset>';
+            foreach ($articles as $article) {
+                $lastMod = date('Y-m-d', strtotime($article['created_at']));
+                $xmlMain .= "  <url><loc>https://fezadan.org/makale/{$article['slug']}</loc><lastmod>{$lastMod}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>" . PHP_EOL;
+            }
+            $xmlMain .= '</urlset>';
+            file_put_contents(ROOT . '/public_html/sitemap_main.xml', $xmlMain);
 
-            // Sitemap'i kaydet
-            $filePath = ROOT . '/public_html/sitemap.xml';
-            file_put_contents($filePath, $xml);
+            // --- B. NOTLAR SİTESİ SİTEMAP (sitemap_notes.xml) ---
+            $xmlNotes = '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
+            $xmlNotes .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . PHP_EOL;
+            
+            $xmlNotes .= "  <url><loc>https://notlar.fezadan.org/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>" . PHP_EOL;
 
-        }
-        catch (\Exception $e) {
+            foreach ($notes as $note) {
+                $lastMod = date('Y-m-d', strtotime($note['created_at']));
+                $xmlNotes .= "  <url><loc>https://notlar.fezadan.org/not/{$note['slug']}</loc><lastmod>{$lastMod}</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>" . PHP_EOL;
+            }
+            $xmlNotes .= '</urlset>';
+            file_put_contents(ROOT . '/public_html/sitemap_notes.xml', $xmlNotes);
+
+        } catch (\Exception $e) {
+            // Hata loglama
         }
     }
 
@@ -689,6 +759,7 @@ class AdminController extends Controller
             $twitter = trim($_POST['twitter'] ?? '');
             $instagram = trim($_POST['instagram'] ?? '');
             $website = trim($_POST['website'] ?? '');
+            $email = trim($_POST['email'] ?? '');
             $featured = $_POST['featured'] ?? [];
             $featured_str = implode(',', $featured);
 
@@ -710,12 +781,12 @@ class AdminController extends Controller
                 $pdo = $this->getPDO();
 
                 if ($id) {
-                    $stmt = $pdo->prepare("UPDATE authors SET name = ?, slug = ?, bio = ?, image_url = ?, twitter = ?, instagram = ?, website = ?, featured_articles = ? WHERE id = ?");
-                    $stmt->execute([$name, $slug, $bio, $image_path, $twitter, $instagram, $website, $featured_str, $id]);
+                    $stmt = $pdo->prepare("UPDATE authors SET name = ?, slug = ?, bio = ?, image_url = ?, twitter = ?, instagram = ?, website = ?, email = ?, featured_articles = ? WHERE id = ?");
+                    $stmt->execute([$name, $slug, $bio, $image_path, $twitter, $instagram, $website, $email, $featured_str, $id]);
                 }
                 else {
-                    $stmt = $pdo->prepare("INSERT INTO authors (name, slug, bio, image_url, twitter, instagram, website, featured_articles) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-                    $stmt->execute([$name, $slug, $bio, $image_path, $twitter, $instagram, $website, $featured_str]);
+                    $stmt = $pdo->prepare("INSERT INTO authors (name, slug, bio, image_url, twitter, instagram, website, email, featured_articles) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    $stmt->execute([$name, $slug, $bio, $image_path, $twitter, $instagram, $website, $email, $featured_str]);
                 }
                 
                 header('Location: /admin/authors?status=success');
@@ -797,6 +868,223 @@ class AdminController extends Controller
                 echo json_encode(['error' => 'Yükleme hatası: ' . $_FILES['file']['error']]);
                 exit;
             }
+        }
+    }
+
+    public function addNote() {
+        if (!isset($_SESSION['admin_logged_in'])) { header('Location: /admin'); exit; }
+        try {
+            $pdo = $this->getPDO();
+            $categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll(\PDO::FETCH_ASSOC);
+            
+            // Notlar ve Kategoriler
+            $notes = $pdo->query("SELECT n.*, GROUP_CONCAT(c.name SEPARATOR ', ') as category_names 
+                                  FROM notes n 
+                                  LEFT JOIN note_categories nc ON n.id = nc.note_id
+                                  LEFT JOIN categories c ON nc.category_id = c.id 
+                                  GROUP BY n.id
+                                  ORDER BY n.created_at DESC")->fetchAll(\PDO::FETCH_ASSOC);
+
+            // İSTATİSTİKLER: Sayı ve Toplam Boyut
+            $stats = $pdo->query("SELECT COUNT(*) as total_count, SUM(file_size) as total_size FROM notes")->fetch(\PDO::FETCH_ASSOC);
+
+            $this->view('admin/add-note', [
+                'categories' => $categories, 
+                'notes' => $notes,
+                'stats' => $stats // İstatistikleri view'a gönderiyoruz
+            ]);
+        } catch (\PDOException $e) { die($e->getMessage()); }
+    }
+
+    public function storeNote()
+    {
+        if (!isset($_SESSION['admin_logged_in'])) exit;
+
+        $title = $_POST['title'] ?? '';
+        $desc = $_POST['description'] ?? '';
+        $uploader_name = $_SESSION['admin_name'] ?? 'Admin';
+        $selectedCategories = $_POST['categories'] ?? [];
+        $lang = $_POST['lang'] ?? 'TR';
+
+        $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $title)));
+
+        // 1. Dosya kontrolünü en başta yapalım
+        if (empty($_FILES['pdf_file']['name'])) {
+            header('Location: /admin/addNote?error=no_file');
+            exit;
+        }
+
+        try {
+            $file = $_FILES['pdf_file'];
+            $fileSize = $file['size'];
+            $tempPath = $file['tmp_name'];
+
+            // 2. R2 Yüklemesini try-catch içine aldık ki hataları yakalayalım
+            require_once ROOT . '/app/Core/R2Storage.php';
+            $r2 = new \App\Core\R2Storage();
+            $r2Path = $r2->uploadPDF($tempPath, $slug);
+
+            // 3. Yükleme başarısızsa sessiz kalma, kullanıcıyı uyar
+            if (!$r2Path) {
+                throw new \Exception("Cloudflare R2 yükleme hatası oluştu.");
+            }
+
+            $pdo = $this->getPDO();
+            $pdo->beginTransaction();
+
+            $stmt = $pdo->prepare("INSERT INTO notes (title, slug, description, r2_path, uploader_name, file_size, lang) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            
+            if ($stmt->execute([$title, $slug, $desc, $r2Path, $uploader_name, $fileSize, $lang])) {
+                $noteId = $pdo->lastInsertId();
+                
+                if (!empty($selectedCategories)) {
+                    $stmtCat = $pdo->prepare("INSERT INTO note_categories (note_id, category_id) VALUES (?, ?)");
+                    foreach ($selectedCategories as $catId) { 
+                        $stmtCat->execute([$noteId, $catId]); 
+                    }
+                }
+                
+                $pdo->commit();
+                
+                // Sitemap güncellemesi (Eğer eklediysen)
+                if (method_exists($this, 'generateSitemap')) {
+                    $this->generateSitemap();
+                }
+
+                header('Location: /admin/addNote?status=success');
+                exit;
+            } else {
+                throw new \Exception("Veritabanına kayıt yapılamadı.");
+            }
+
+        } catch (\Exception $e) {
+            if (isset($pdo) && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            // Hatayı logla ve kullanıcıya boş sayfa yerine hata mesajı gönder
+            error_log("Note Upload Error: " . $e->getMessage());
+            header('Location: /admin/addNote?error=system_failure&msg=' . urlencode($e->getMessage()));
+            exit;
+        }
+    }
+
+    public function deleteNote()
+    {
+        if (!isset($_SESSION['admin_logged_in'])) exit;
+
+        $id = $_GET['id'] ?? null;
+        if ($id) {
+            try {
+                $pdo = $this->getPDO();
+                
+                // Önce silinecek notun R2 yolunu bul
+                $stmt = $pdo->prepare("SELECT r2_path FROM notes WHERE id = ?");
+                $stmt->execute([$id]);
+                $note = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+                if ($note) {
+                    // 1. Veritabanından sil
+                    $pdo->prepare("DELETE FROM notes WHERE id = ?")->execute([$id]);
+
+                    // 2. Cloudflare R2'den sil
+                    require_once ROOT . '/app/Core/R2Storage.php';
+                    $r2 = new \App\Core\R2Storage();
+                    $r2->deletePDF($note['r2_path']);
+                }
+            } catch (\PDOException $e) {
+                die("Silme Hatası: " . $e->getMessage());
+            }
+        }
+        header('Location: /admin/addNote?status=deleted');
+        exit;
+    }
+
+    // --- NOT DÜZENLEME SAYFASINI AÇ ---
+    public function editNote()
+    {
+        if (!isset($_SESSION['admin_logged_in'])) { header('Location: /admin'); exit; }
+        
+        $id = $_GET['id'] ?? null;
+        if (!$id) { header('Location: /admin/addNote'); exit; }
+
+        try {
+            $pdo = $this->getPDO();
+            
+            // Notu çek
+            $stmt = $pdo->prepare("SELECT * FROM notes WHERE id = ?");
+            $stmt->execute([$id]);
+            $note = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+            if (!$note) { header('Location: /admin/addNote'); exit; }
+
+            // Tüm kategorileri çek
+            $cats = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll(\PDO::FETCH_ASSOC);
+            
+            // Bu nota ait seçili kategorileri çek
+            $noteCatsStmt = $pdo->prepare("SELECT category_id FROM note_categories WHERE note_id = ?");
+            $noteCatsStmt->execute([$id]);
+            $noteCategoryIds = $noteCatsStmt->fetchAll(\PDO::FETCH_COLUMN);
+
+            $this->view('admin/edit-note', [
+                'note' => $note,
+                'categories' => $cats,
+                'noteCategoryIds' => $noteCategoryIds
+            ]);
+            
+        } catch (\PDOException $e) {
+            die("Veritabanı Hatası: " . $e->getMessage());
+        }
+    }
+
+    // --- NOT GÜNCELLEMESİNİ KAYDET ---
+    public function updateNote()
+    {
+        if (!isset($_SESSION['admin_logged_in'])) exit;
+
+        $id = $_POST['id'] ?? null;
+        $title = $_POST['title'] ?? '';
+        $desc = $_POST['description'] ?? '';
+        $lang = $_POST['lang'] ?? 'TR';
+        $selectedCategories = $_POST['categories'] ?? [];
+
+        if (!$id || empty($title)) {
+            header('Location: /admin/addNote?error=missing_data');
+            exit;
+        }
+
+        try {
+            $pdo = $this->getPDO();
+            $pdo->beginTransaction();
+
+            // Dosya ve slug'a dokunmadan sadece metinleri güncelliyoruz
+            $stmt = $pdo->prepare("UPDATE notes SET title = ?, description = ?, lang = ? WHERE id = ?");
+            if ($stmt->execute([$title, $desc, $lang, $id])) {
+                
+                // Eski kategorileri temizle
+                $pdo->prepare("DELETE FROM note_categories WHERE note_id = ?")->execute([$id]);
+
+                // Yeni seçilen kategorileri ekle
+                if (!empty($selectedCategories)) {
+                    $stmtCat = $pdo->prepare("INSERT INTO note_categories (note_id, category_id) VALUES (?, ?)");
+                    foreach ($selectedCategories as $catId) { 
+                        $stmtCat->execute([$id, $catId]); 
+                    }
+                }
+                
+                $pdo->commit();
+                
+                // Sitemap'i güncelle (Linklerde değişiklik olmasa da "lastmod" tarihi değişmiş olur)
+                if (method_exists($this, 'generateSitemap')) {
+                    $this->generateSitemap();
+                }
+
+                header('Location: /admin/addNote?status=updated');
+                exit;
+            }
+        } catch (\Exception $e) {
+            if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+            error_log("Note Update Error: " . $e->getMessage());
+            die("Sistem Hatası: " . $e->getMessage());
         }
     }
 }

@@ -10,7 +10,7 @@
         <span class="hidden md:inline opacity-50">|</span>
         <a href="/gizlilik-politikasi" class="hover:text-[#E5D0AC] hover:opacity-100 transition-all duration-300">Gizlilik Politikası</a>
         <span class="hidden md:inline opacity-50">|</span>
-        <a href="https://github.com/shenfurkan/Fezadan.git" class="hover:text-[#E5D0AC] hover:opacity-100 transition-all duration-300">Kaynak Kod</a>
+        <a href="https://github.com/shenfurkan/Fezadan" class="hover:text-[#E5D0AC] hover:opacity-100 transition-all duration-300">Kaynak Kod</a>
     </div>
     <div class="flex gap-6">
         <a href="https://www.instagram.com/fezadanorg" target="_blank" rel="noopener noreferrer" class="hover:text-[#E5D0AC] hover:opacity-100 transition-all duration-300">Instagram</a>

@@ -4,6 +4,18 @@
     
     Options -MultiViews -Indexes
 
+    RewriteCond %{HTTP_HOST} ^notlar\.fezadan\.org$ [NC]
+    RewriteRule ^sitemap\.xml$ sitemap_notes.xml [L]
+
+    RewriteCond %{HTTP_HOST} ^fezadan\.org$ [NC]
+    RewriteRule ^sitemap\.xml$ sitemap_main.xml [L]
+
+    RewriteCond %{HTTP_HOST} ^notlar\.fezadan\.org$ [NC]
+    RewriteRule ^robots\.txt$ robots_notes.txt [L]
+
+    RewriteCond %{HTTP_HOST} ^fezadan\.org$ [NC]
+    RewriteRule ^robots\.txt$ robots_main.txt [L]
+
     RewriteRule ^privacy$ index.php?url=home/privacy [L,QSA]
     RewriteRule ^gizlilik-politikasi$ index.php?url=home/privacy [L,QSA]
     RewriteRule ^yazar/([0-9]+)$ index.php?url=home/author/$1 [L,QSA]
@@ -65,3 +77,17 @@
         Header set Expires 0
     </FilesMatch>
 </IfModule>
+
+<IfModule mod_headers.c>
+    # Font dosyaları için CORS izni ver
+    <FilesMatch "\.(ttf|ttc|otf|eot|woff|woff2|font.css)$">
+        Header set Access-Control-Allow-Origin "*"
+    </FilesMatch>
+</IfModule>
+
+php_value upload_max_filesize 20M
+php_value post_max_size 25M
+php_value memory_limit 256M
+php_value max_execution_time 300
+php_value max_input_time 300
+AddType application/javascript .mjs

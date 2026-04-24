@@ -30,7 +30,7 @@ class MakaleController extends Controller {
                 authors.slug AS author_slug
             FROM articles 
             LEFT JOIN authors ON articles.author_id = authors.id 
-            WHERE articles.slug = :slug";
+            WHERE articles.slug = :slug AND articles.status = 'published'";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([':slug' => $slug]);
             $article = $stmt->fetch(\PDO::FETCH_ASSOC);

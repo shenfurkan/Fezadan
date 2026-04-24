@@ -3,30 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <title>FEZADAN | PROFİL AYARLARI</title>
-    <link rel="stylesheet" href="<?php echo SITE_URL; ?>/assets/css/admin.css">
+    <link rel="icon" type="image/x-icon" href="/cdn/dark-favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/cdn/dark-favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/cdn/dark-favicon-16x16.png">
+    <link rel="light-apple-touch-icon" href="/cdn/dark-apple-touch-icon.png">
+    <link rel="stylesheet" href="/assets/css/admin.css">
+    <link rel="stylesheet" href="/assets/css/fonts.css">
     <style>
-        :root { --bg-paper: #FEF9E1; --text-main: #6D2323; --line-color: #6D2323; }
-        body { background-color: var(--bg-paper); color: var(--text-main); font-family: 'Space Grotesk', sans-serif; }
+        :root { --bg-paper: #FEF9E1; --bg-secondary: #E5D0AC; --text-main: #6D2323; --text-accent: #A31D1D; --line-color: #6D2323; }
+        body { background-color: var(--bg-paper); color: var(--text-main); font-family: 'Space Grotesk', sans-serif; overflow-x: hidden; }
+        .font-syne  { font-family: 'Syne', sans-serif; }
+        .font-mono  { font-family: 'JetBrains Mono', monospace; }
+        .grid-bg { background-image: linear-gradient(var(--line-color) 1px, transparent 1px), linear-gradient(90deg, var(--line-color) 1px, transparent 1px); background-size: 40px 40px; opacity: 0.05; pointer-events: none; }
+        .nav-item { position: relative; transition: all 0.3s; z-index: 1; }
+        .nav-item::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--text-main); transition: width 0.3s; z-index: -1; }
+        .nav-item:hover::before { width: 100%; }
+        .nav-item:hover { color: var(--bg-paper); padding-left: 1.5rem; }
+        .nav-item.active { background: var(--text-main); color: var(--bg-paper); }
         .brutalist-input { width: 100%; background: transparent; border-bottom: 2px solid var(--line-color); padding: 12px; font-family: 'JetBrains Mono', monospace; outline: none; transition: 0.3s; }
-        .brutalist-input:focus { background: rgba(109, 35, 35, 0.05); }
+        .brutalist-input:focus { background: rgba(109,35,35,0.05); }
     </style>
 </head>
-<body class="flex h-screen overflow-hidden">
+<body class="flex h-screen w-full overflow-hidden relative">
 
-    <aside class="w-72 border-r-2 border-[var(--text-main)] p-8 flex flex-col justify-between">
-        <div>
-            <h1 class="font-syne text-3xl font-bold mb-8">FEZADAN</h1>
-            <nav class="flex flex-col gap-4">
-                <a href="/admin/dashboard" class="font-bold uppercase tracking-widest text-sm hover:underline">← Geri Dön</a>
-            </nav>
-        </div>
-    </aside>
+    <div class="grid-bg fixed inset-0 z-0"></div>
+    
+    <?php include __DIR__ . '/_side_panel.php'; ?>
 
-    <main class="flex-1 p-12 overflow-y-auto">
-        <h2 class="font-syne text-4xl font-bold uppercase mb-12">PROFİL GÜVENLİĞİ</h2>
-
-        <?php if(isset($_GET['status'])): ?>
-            <div class="mb-8 p-4 bg-[#6D2323] text-[#FEF9E1] font-mono text-xs uppercase">
+    <?php if(isset($_GET['status'])): ?>
+            <div class="mb-8 p-4 bg-[#6D2323] text-[#FEF9E1] font-mono text-xs uppercase shadow-[4px_4px_0px_#A31D1D]">
                 <?php 
                     if($_GET['status'] == 'success') echo "✅ ŞİFRE BAŞARIYLA GÜNCELLENDİ.";
                     elseif($_GET['status'] == 'wrong_pass') echo "❌ MEVCUT ŞİFRE HATALI.";
@@ -38,7 +43,7 @@
         <form action="/admin/update-password" method="POST" class="max-w-md space-y-8">
             <div>
                 <label class="block font-mono text-[10px] uppercase opacity-60">Aktif Kullanıcı</label>
-                <div class="font-bold text-xl uppercase"><?php echo $_SESSION['admin_user']; ?></div>
+                <div class="font-bold text-xl uppercase text-[var(--text-main)]"><?php echo htmlspecialchars($_SESSION['admin_user'] ?? 'ADMIN'); ?></div>
             </div>
 
             <div>
@@ -61,6 +66,6 @@
                 GÜVENLİK PROTOKOLÜNÜ GÜNCELLE
             </button>
         </form>
-    </main>
-</body>
+
+    </div> </main> </body>
 </html>
