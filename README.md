@@ -74,6 +74,10 @@ Yetkilendirme ve veri bütünlüğü, siber saldırılara karşı aşağıdaki k
 * **PDO Güvenliği:** Veritabanı sorgularında `PDO::ATTR_EMULATE_PREPARES` false olarak ayarlanır, bu sayede gerçek prepared statement kullanılır ve SQL injection riski tamamen ortadan kaldırılır.
 * **Input Validation:** Tüm kullanıcı girdileri `filter_var()` ve `FILTER_SANITIZE_URL` gibi PHP filtreleri ile temizlenir. URL parsing işlemlerinde güvenlik önlemleri alınır.
 * **HTTP Headers Güvenliği:** Güvenlik header'ları (X-Content-Type-Options, X-Frame-Options vb.) uygulanır ve Content-Type header'ları zorlanır.
+* **Modern Parola Şifreleme:** Kullanıcı parolaları veritabanında asla düz metin olarak tutulmaz; PHP'nin yerleşik `password_hash()` API'si ile güçlü algoritmalar (Bcrypt vb.) ve benzersiz tuzlar (salt) kullanılarak şifrelenir.
+* **Derinlemesine Dosya Yükleme Güvenliği:** Yüklenen dosyalar sadece uzantı bazlı değil, `finfo` kullanılarak MIME-type bazlı kontrol edilir. Orijinal dosya isimleri değiştirilerek benzersiz ve güvenli isimlerle yeniden adlandırılır, böylece path manipülasyonu engellenir.
+* **Content Security Policy (CSP) Avantajı:** Dış CDN'lere ve harici asset'lere bağımlı olmayan lokal mimari, harici kaynakların yüklenmesini engelleyen sıkı bir CSP uygulanmasına olanak tanır. Bu sayede olası XSS enjeksiyonlarında dahi tarayıcı seviyesinde dış kaynaklı kod yürütülmesi engellenir.
+* **Açık Yönlendirme (Open Redirect) Koruması:** Kullanıcı yönlendirmelerinde alınan parametrelerin sistem içi lokal rotalar (`/` ile başlayan) olduğu doğrulanarak Phishing ve benzeri manipülasyon saldırıları önlenir.
 
 ---
 
