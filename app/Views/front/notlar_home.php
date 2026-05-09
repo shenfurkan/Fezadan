@@ -3,7 +3,7 @@
     include __DIR__ . '/../inc/notes_header.php'; 
 ?>
 
-    <main class="flex-1 relative z-10 max-w-7xl mx-auto px-6 py-12 w-full flex flex-col min-h-screen">
+    <main id="main-content" class="flex-1 relative z-10 max-w-7xl mx-auto px-6 py-12 w-full flex flex-col min-h-screen">
         
         <form action="/" method="GET" class="mb-12 flex flex-col lg:flex-row gap-4 bg-[var(--bg-secondary)] p-6 border-2 border-[var(--text-main)] shadow-[8px_8px_0px_var(--text-main)]">
             

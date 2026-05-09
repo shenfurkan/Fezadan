@@ -4,23 +4,40 @@
     
     Options -MultiViews -Indexes
 
+    # Hassas dosya ve klasorler public web'den okunamaz.
+    RewriteRule ^(?:scripts|logs|backups|backup|vendor|storage|tmp)(?:/|$) - [F,L]
+    RewriteRule ^(?:\.env|composer\.(?:json|lock)|package(?:-lock)?\.json|docker-compose\.ya?ml|Dockerfile|.*\.(?:sql|sqlite|bak|backup|log|ini|conf|sh|ps1))$ - [F,L]
+
     RewriteCond %{HTTP_HOST} ^notlar\.fezadan\.org$ [NC]
     RewriteRule ^sitemap\.xml$ sitemap_notes.xml [L]
 
     RewriteCond %{HTTP_HOST} ^fezadan\.org$ [NC]
     RewriteRule ^sitemap\.xml$ sitemap_main.xml [L]
 
+    # robots.txt: aynı public_html iki host'a hizmet ediyor — host'a göre ayrı dosya
     RewriteCond %{HTTP_HOST} ^notlar\.fezadan\.org$ [NC]
     RewriteRule ^robots\.txt$ robots_notes.txt [L]
 
-    RewriteCond %{HTTP_HOST} ^fezadan\.org$ [NC]
+    RewriteCond %{HTTP_HOST} ^(www\.)?fezadan\.org$ [NC]
     RewriteRule ^robots\.txt$ robots_main.txt [L]
 
-    RewriteRule ^privacy$ index.php?url=home/privacy [L,QSA]
-    RewriteRule ^gizlilik-politikasi$ index.php?url=home/privacy [L,QSA]
-    RewriteRule ^yazar/([0-9]+)$ index.php?url=home/author/$1 [L,QSA]
+    # Kök ikon yolları: bazı crawler'lar HTML'i okumadan bu standart dosyaları dener.
+    RewriteRule ^favicon\.ico$ cdn/light-favicon.ico [L]
+    RewriteRule ^favicon-32x32\.png$ cdn/light-favicon-32x32.png [L]
+    RewriteRule ^favicon-16x16\.png$ cdn/light-favicon-16x16.png [L]
+    RewriteRule ^apple-touch-icon\.png$ cdn/light-apple-touch-icon.png [L]
+    RewriteRule ^android-chrome-192x192\.png$ cdn/light-android-chrome-192x192.png [L]
+    RewriteRule ^android-chrome-512x512\.png$ cdn/light-android-chrome-512x512.png [L]
+
+    # SEO friendly URL'ler
+    RewriteRule ^privacy$ index.php?url=privacy [L,QSA]
+    RewriteRule ^gizlilik-politikasi$ index.php?url=privacy [L,QSA,R=301]
+    RewriteRule ^yazar/([a-zA-Z0-9_-]+)$ index.php?url=yazar/index/$1 [L,QSA]
+    RewriteRule ^makale/([a-zA-Z0-9_-]+)$ index.php?url=makale/index/$1 [L,QSA]
     
-    RewriteRule ^kategori/([a-zA-Z0-9-]+)$ index.php?url=home/kategori/$1 [L,QSA]
+    RewriteRule ^galeri$ index.php?url=galeri [L,QSA]
+    RewriteRule ^galeri/arsiv$ index.php?url=galeri/archive [L,QSA]
+    RewriteRule ^galeri/([a-zA-Z0-9_-]+)$ index.php?url=galeri/show/$1 [L,QSA]
 
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
@@ -65,17 +82,22 @@
 </IfModule>
 
 <IfModule mod_headers.c>
-    <FilesMatch "\.(js|css|xml|gz|txt)$">
-        Header set Cache-Control "max-age=31536000, public"
+    <FilesMatch "\.(js|css|gz)$">
+        Header set Cache-Control "max-age=31536000, public, immutable"
     </FilesMatch>
     <FilesMatch "\.(ico|jpe?g|png|gif|swf|webp|svg|woff|woff2|ttf|eot)$">
-        Header set Cache-Control "max-age=31536000, public"
+        Header set Cache-Control "max-age=31536000, public, immutable"
+    </FilesMatch>
+    # Sitemap & robots: kısa cache — Google taze sürümü görsün
+    <FilesMatch "\.(xml|txt)$">
+        Header set Cache-Control "max-age=600, public"
     </FilesMatch>
     <FilesMatch "\.(php|html|htm)$">
         Header set Cache-Control "no-cache, no-store, must-revalidate"
         Header set Pragma "no-cache"
         Header set Expires 0
     </FilesMatch>
+    Header always set Vary "Accept-Encoding"
 </IfModule>
 
 <IfModule mod_headers.c>
@@ -85,9 +107,20 @@
     </FilesMatch>
 </IfModule>
 
+AddType application/javascript .mjs
+
+# PHP Ayarlari — LiteSpeed .user.ini okumaz, buraya yazilmali
+php_value session.save_handler files
+php_value session.save_path "/home/fezadano5/tmp/sessions"
+php_value session.use_strict_mode 1
+php_value session.gc_maxlifetime 1440
+
+# Upload limitleri — post_max_size 8M'di, resim yuklemeleri sessizce basarisiz oluyordu
 php_value upload_max_filesize 20M
 php_value post_max_size 25M
 php_value memory_limit 256M
 php_value max_execution_time 300
 php_value max_input_time 300
-AddType application/javascript .mjs
+
+# Gecici dizin — LiteSpeed icin acik belirtelim
+php_value upload_tmp_dir "/home/fezadano5/tmp"

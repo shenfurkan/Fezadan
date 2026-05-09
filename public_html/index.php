@@ -2,31 +2,58 @@
 // --- 1. Oturum ve Başlık Güvenliği ---
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
-ini_set('session.cookie_secure', 1);
+
+// HTTPS tespiti — Cloudflare proxy veya direkt HTTPS
+$_isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')
+    || (strpos(($_SERVER['HTTP_CF_VISITOR'] ?? ''), '"https"') !== false);
+
+// cookie_secure sadece HTTPS'te aktif — HTTP Docker'da session'i ezmiyordu
+ini_set('session.cookie_secure', $_isHttps ? '1' : '0');
 ini_set('session.cookie_samesite', 'Lax');
+
+// Session kayıt dizini: .user.ini ayarlı yolu veya home tmp kullan
+$customSessionPath = '/home/fezadano5/tmp/sessions';
+if ((!is_dir($customSessionPath) && !@mkdir($customSessionPath, 0755, true)) || !is_writable($customSessionPath)) {
+    // .user.ini upload_tmp_dir'i dene (cPanel open_basedir uyumlu)
+    $altBase = ini_get('upload_tmp_dir') ?: ini_get('sys_temp_dir') ?: sys_get_temp_dir();
+    $customSessionPath = rtrim($altBase, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'fezadan_sessions';
+    if (!is_dir($customSessionPath)) {
+        @mkdir($customSessionPath, 0700, true);
+    }
+}
+if (is_dir($customSessionPath) && is_writable($customSessionPath)) {
+    session_save_path($customSessionPath);
+}
 
 session_start();
 
 header('X-Frame-Options: SAMEORIGIN');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
-header('Strict-Transport-Security: max-age=31536000; includeSubDomains; preload');
-header("Content-Security-Policy: frame-ancestors 'self'; upgrade-insecure-requests;");
+if ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')) {
+    header('Strict-Transport-Security: max-age=31536000; includeSubDomains; preload');
+}
+// // // // header("Content-Security-Policy: frame-ancestors 'self'; upgrade-insecure-requests;");
 header_remove('X-Powered-By');
 
 // --- 2. Cloudflare IP Doğrulama Fonksiyonu ---
 function get_secure_remote_ip() {
-    $remote_ip = $_SERVER['REMOTE_ADDR'];
-    
-    // Cloudflare IP Aralıkları (IPv4)
+    $remote_ip = $_SERVER['REMOTE_ADDR'] ?? '';
+
+    // Cloudflare IP Aralıkları (IPv4 + IPv6)
+    // Kaynak: https://www.cloudflare.com/ips/
     $cf_ips = [
+        // IPv4
         '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
         '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
         '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
-        '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22'
+        '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+        // IPv6
+        '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32',
+        '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
     ];
 
-    // Gelen isteğin gerçekten Cloudflare'den gelip gelmediğini kontrol et
     $is_cf = false;
     foreach ($cf_ips as $range) {
         if (ip_in_range($remote_ip, $range)) {
@@ -35,21 +62,37 @@ function get_secure_remote_ip() {
         }
     }
 
-    if ($is_cf && isset($_SERVER['HTTP_CF_CONNECTING_IP'])) {
-        return $_SERVER['HTTP_CF_CONNECTING_IP'];
+    if ($is_cf && !empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+        $cfIp = $_SERVER['HTTP_CF_CONNECTING_IP'];
+        if (filter_var($cfIp, FILTER_VALIDATE_IP)) {
+            return $cfIp;
+        }
     }
 
     return $remote_ip;
 }
 
-// Yardımcı Fonksiyon: IP Aralık Kontrolü
+// Yardımcı Fonksiyon: IP Aralık Kontrolü (IPv4 + IPv6)
 function ip_in_range($ip, $range) {
-    list($subnet, $bits) = explode('/', $range);
-    $ip = ip2long($ip);
-    $subnet = ip2long($subnet);
-    $mask = -1 << (32 - $bits);
-    $subnet &= $mask;
-    return ($ip & $mask) == $subnet;
+    if (strpos($range, '/') === false) return false;
+    list($subnet, $bits) = explode('/', $range, 2);
+    $bits = (int)$bits;
+
+    $ipBin = @inet_pton($ip);
+    $subnetBin = @inet_pton($subnet);
+    if ($ipBin === false || $subnetBin === false) return false;
+    if (strlen($ipBin) !== strlen($subnetBin)) return false; // farklı aile (v4 vs v6)
+
+    $bytes = (int) floor($bits / 8);
+    $remainder = $bits % 8;
+
+    if ($bytes > 0 && substr($ipBin, 0, $bytes) !== substr($subnetBin, 0, $bytes)) {
+        return false;
+    }
+    if ($remainder === 0) return true;
+
+    $mask = chr(0xff << (8 - $remainder) & 0xff);
+    return (ord($ipBin[$bytes]) & ord($mask)) === (ord($subnetBin[$bytes]) & ord($mask));
 }
 
 // Güvenli IP'yi ata
@@ -59,7 +102,7 @@ $_SERVER['REMOTE_ADDR'] = get_secure_remote_ip();
 if (in_array($_SERVER['REMOTE_ADDR'], ['127.0.0.1', '::1'])) {
     ini_set('display_errors', 1); error_reporting(E_ALL);
 } else {
-    ini_set('display_errors', 0); error_reporting(0);
+    ini_set('display_errors', 0); error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED & ~E_STRICT);
 }
 
 // --- 4. Dizin Yapılandırması ---
@@ -75,8 +118,16 @@ if (file_exists(dirname($current_dir) . '/app/Config/config.php')) {
 
 // --- 5. Başlat ---
 require_once ROOT . '/app/Config/config.php';
+require_once ROOT . '/app/Core/ErrorHandler.php';
+require_once ROOT . '/app/Core/AdminLog.php';
+require_once ROOT . '/app/Core/Db.php';
+require_once ROOT . '/app/Core/Csrf.php';
+require_once ROOT . '/app/Core/Flash.php';
+require_once ROOT . '/app/Core/Upload.php';
 require_once ROOT . '/app/Core/App.php';
 require_once ROOT . '/app/Core/Controller.php';
 require_once ROOT . '/vendor/autoload.php';
+
+ErrorHandler::register();
 
 $app = new App();

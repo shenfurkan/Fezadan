@@ -8,9 +8,13 @@
     <div class="mb-4 md:mb-0 flex flex-col md:flex-row items-center gap-2 md:gap-4">
         <span>FEZADAN</span>
         <span class="hidden md:inline opacity-50">|</span>
-        <a href="/gizlilik-politikasi" class="hover:text-[#E5D0AC] hover:opacity-100 transition-all duration-300">Gizlilik Politikası</a>
+        <a href="/privacy" class="hover:text-[#E5D0AC] hover:opacity-100 transition-all duration-300">Gizlilik Politikası</a>
         <span class="hidden md:inline opacity-50">|</span>
-        <a href="https://github.com/shenfurkan/Fezadan" class="hover:text-[#E5D0AC] hover:opacity-100 transition-all duration-300">Kaynak Kod</a>
+        <a href="/sitemap.xml" class="hover:text-[#E5D0AC] hover:opacity-100 transition-all duration-300">Site Haritası</a>
+        <span class="hidden md:inline opacity-50">|</span>
+        <a href="https://github.com/shenfurkan/Fezadan" rel="noopener" class="hover:text-[#E5D0AC] hover:opacity-100 transition-all duration-300">Kaynak Kod</a>
+        <span class="hidden md:inline opacity-50">|</span>
+        <a href="/rss" class="hover:text-[#E5D0AC] hover:opacity-100 transition-all duration-300">RSS</a>
     </div>
     <div class="flex gap-6">
         <a href="https://www.instagram.com/fezadanorg" target="_blank" rel="noopener noreferrer" class="hover:text-[#E5D0AC] hover:opacity-100 transition-all duration-300">Instagram</a>

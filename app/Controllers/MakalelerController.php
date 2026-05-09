@@ -2,10 +2,7 @@
 class MakalelerController extends Controller {
     
     private function getPDO() {
-        $dsn = "mysql:host=".DB_HOST.";dbname=".DB_NAME.";charset=".DB_CHARSET;
-        $pdo = new \PDO($dsn, DB_USER, DB_PASS);
-        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-        return $pdo;
+        return Db::pdo();
     }
 
     public function index() {
@@ -16,7 +13,11 @@ class MakalelerController extends Controller {
             $catId = isset($_GET['cat']) ? (int)$_GET['cat'] : null;
             $authorId = isset($_GET['author']) ? (int)$_GET['author'] : null;
             $searchQuery = isset($_GET['q']) ? trim($_GET['q']) : '';
-            $sortOrder = isset($_GET['sort']) ? $_GET['sort'] : 'newest';
+            // Sort whitelist (kullanıcı input'unu hiçbir zaman SQL'e sokmuyoruz)
+            $allowedSorts = ['newest','oldest','az','za'];
+            $sortOrder = isset($_GET['sort']) && in_array($_GET['sort'], $allowedSorts, true)
+                ? $_GET['sort']
+                : 'newest';
             $allCategories = $pdo->query("
                 SELECT DISTINCT c.* FROM categories c 
                 JOIN article_categories ac ON c.id = ac.category_id 
@@ -59,8 +60,8 @@ class MakalelerController extends Controller {
             }
 
             // Sayfalandırma
-            $limit = 8;
-            $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+            $limit  = 8;
+            $page   = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
             $offset = ($page - 1) * $limit;
 
             $totalStmt = $pdo->prepare("SELECT COUNT(DISTINCT a.id) FROM articles a WHERE $whereSql");
@@ -68,22 +69,37 @@ class MakalelerController extends Controller {
             $totalArticles = $totalStmt->fetchColumn();
             $totalPages = ceil($totalArticles / $limit);
 
-            $sql = "SELECT a.*, au.name as author_name 
-                    FROM articles a 
-                    LEFT JOIN authors au ON a.author_id = au.id 
-                    WHERE $whereSql 
-                    ORDER BY $orderBy 
+            // Tek sorguda kategori bilgisi (N+1 yok)
+            $sql = "SELECT a.*, au.name as author_name,
+                           GROUP_CONCAT(DISTINCT CONCAT_WS('|', c.id, c.name, c.slug) SEPARATOR ';;') AS categories_raw
+                    FROM articles a
+                    LEFT JOIN authors au ON a.author_id = au.id
+                    LEFT JOIN article_categories ac2 ON ac2.article_id = a.id
+                    LEFT JOIN categories c ON c.id = ac2.category_id
+                    WHERE $whereSql
+                    GROUP BY a.id
+                    ORDER BY $orderBy
                     LIMIT $limit OFFSET $offset";
-            
+
             $stmt = $pdo->prepare($sql);
             $stmt->execute($params);
             $articles = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
             foreach ($articles as &$article) {
-                $cStmt = $pdo->prepare("SELECT c.id, c.name FROM categories c JOIN article_categories ac ON c.id = ac.category_id WHERE ac.article_id = ?");
-                $cStmt->execute([$article['id']]);
-                $article['categories'] = $cStmt->fetchAll(\PDO::FETCH_ASSOC);
+                $cats = [];
+                if (!empty($article['categories_raw'])) {
+                    foreach (explode(';;', $article['categories_raw']) as $row) {
+                        if ($row === '') continue;
+                        [$cid, $cname, $cslug] = array_pad(explode('|', $row, 3), 3, '');
+                        if ($cid !== '' && $cname !== '') {
+                            $cats[] = ['id' => (int)$cid, 'name' => $cname, 'slug' => $cslug];
+                        }
+                    }
+                }
+                $article['categories'] = $cats;
+                unset($article['categories_raw']);
             }
+            unset($article);
 
             $this->view('front/makaleler', [
                 'articles' => $articles,
@@ -100,7 +116,7 @@ class MakalelerController extends Controller {
                 ]
             ]);
 
-        } catch (\PDOException $e) { die("Hata: " . $e->getMessage()); }
+        } catch (\PDOException $e) { throw new \Exception("Hata: " . $e->getMessage()); }
     }
 
 }

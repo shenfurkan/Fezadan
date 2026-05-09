@@ -8,14 +8,17 @@ class App {
         $host = $_SERVER['HTTP_HOST'] ?? '';
         $url = $this->parseUrl();
 
-        // Notlar Subdomain Kontrolü
+        // Notlar subdomain routing.
         if (strpos($host, 'notlar.') === 0) {
             require_once ROOT . '/app/Controllers/NotlarController.php';
             $this->controller = new NotlarController();
-            
-            if (isset($url[0]) && $url[0] == 'not') {
-                if (isset($url[1]) && $url[1] == 'download') {
+
+            if (isset($url[0]) && $url[0] === 'not') {
+                if (isset($url[1]) && $url[1] === 'download') {
                     $this->method = 'download';
+                    $this->params = isset($url[2]) ? [$url[2]] : [];
+                } elseif (isset($url[1]) && $url[1] === 'view') {
+                    $this->method = 'viewPdf';
                     $this->params = isset($url[2]) ? [$url[2]] : [];
                 } else {
                     $this->method = 'read';
@@ -25,40 +28,29 @@ class App {
                 $this->method = 'index';
                 $this->params = [];
             }
-            
+
             call_user_func_array([$this->controller, $this->method], $this->params);
             return;
         }
 
-        // URL var mı kontrol et
         if (file_exists(ROOT . '/app/Controllers/' . ucfirst($url[0]) . 'Controller.php')) {
             $this->controller = ucfirst($url[0]) . 'Controller';
             unset($url[0]);
-        }
-        // Geçersiz link
-        elseif ($url[0] != '') {
-            header("HTTP/1.0 404 Not Found");
-            echo "<div style='height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#FEF9E1; color:#6D2323; font-family:sans-serif;'>";
-            echo "<h1 style='font-size:5rem; margin:0;'>404</h1>";
-            echo "<p style='font-size:1.5rem; letter-spacing:3px; text-transform:uppercase;'>Bu Frekans Boş</p>";
-            echo "<a href='/' style='margin-top:20px; color:#A31D1D; text-decoration:underline;'>Merkeze Dön</a>";
-            echo "</div>";
-            exit;
+        } elseif ($url[0] !== '') {
+            $this->render404();
         }
 
         require_once ROOT . '/app/Controllers/' . $this->controller . '.php';
-        
+
         $this->controller = new $this->controller;
 
-        // Method kontrolü
         if (isset($url[1])) {
             if (method_exists($this->controller, $url[1])) {
                 $this->method = $url[1];
                 unset($url[1]);
-            }
-            else {
+            } else {
                 $camelCaseMethod = lcfirst(str_replace('-', '', ucwords($url[1], '-')));
-                
+
                 if (method_exists($this->controller, $camelCaseMethod)) {
                     $this->method = $camelCaseMethod;
                     unset($url[1]);
@@ -75,5 +67,17 @@ class App {
             return explode('/', filter_var(rtrim($_GET['url'], '/'), FILTER_SANITIZE_URL));
         }
         return ['home'];
+    }
+
+    private function render404(): void {
+        http_response_code(404);
+        header('Content-Type: text/html; charset=utf-8');
+        $view = ROOT . '/app/Views/errors/404.php';
+        if (is_file($view)) {
+            require $view;
+        } else {
+            echo 'Sayfa bulunamadı.';
+        }
+        exit;
     }
 }

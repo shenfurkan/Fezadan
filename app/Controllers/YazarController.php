@@ -8,15 +8,14 @@ class YazarController extends Controller {
         }
 
         try {
-            $dsn = "mysql:host=".DB_HOST.";dbname=".DB_NAME.";charset=".DB_CHARSET;
-            $pdo = new \PDO($dsn, DB_USER, DB_PASS);
-            $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+            $pdo = Db::pdo();
 
             $stmt = $pdo->prepare("SELECT * FROM authors WHERE slug = ?");
             $stmt->execute([$slug]);
             $author = $stmt->fetch(\PDO::FETCH_ASSOC);
 
             if (!$author) {
+                http_response_code(404);
                 $this->view('errors/404_author');
                 exit;
             }
@@ -27,11 +26,16 @@ class YazarController extends Controller {
 
             $featured_articles = [];
             if (!empty($author['featured_articles'])) {
-                $featuredIds = explode(',', $author['featured_articles']);
-                $inQuery = implode(',', array_fill(0, count($featuredIds), '?'));
-                $stmtFeatured = $pdo->prepare("SELECT * FROM articles WHERE id IN ($inQuery) AND status = 'published'");
-                $stmtFeatured->execute($featuredIds);
-                $featured_articles = $stmtFeatured->fetchAll(\PDO::FETCH_ASSOC);
+                $featuredIds = array_values(array_unique(array_filter(
+                    array_map('intval', explode(',', (string)$author['featured_articles'])),
+                    static fn($id) => $id > 0
+                )));
+                if (!empty($featuredIds)) {
+                    $inQuery = implode(',', array_fill(0, count($featuredIds), '?'));
+                    $stmtFeatured = $pdo->prepare("SELECT * FROM articles WHERE id IN ($inQuery) AND status = 'published'");
+                    $stmtFeatured->execute($featuredIds);
+                    $featured_articles = $stmtFeatured->fetchAll(\PDO::FETCH_ASSOC);
+                }
             }
 
             $this->view('front/author', [
@@ -41,7 +45,7 @@ class YazarController extends Controller {
             ]);
 
         } catch (\PDOException $e) {
-            die("Sistem Hatası: " . $e->getMessage());
+            throw new \Exception("Sistem Hatası: " . $e->getMessage());
         }
     }
 }

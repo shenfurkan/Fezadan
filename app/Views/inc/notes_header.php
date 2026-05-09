@@ -20,7 +20,10 @@
     <link rel="icon" type="image/x-icon" href="/cdn/light-favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/cdn/light-favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/cdn/light-favicon-16x16.png">
-    <link rel="light-apple-touch-icon" href="/cdn/light-apple-touch-icon.png">
+    <link rel="apple-touch-icon" href="/cdn/light-apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="/cdn/light-android-chrome-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/cdn/light-android-chrome-512x512.png">
     
     <meta name="description" content="<?php echo htmlspecialchars($page_description ?? 'Fezadan PDF Veri Havuzu. Astronomi, bilim ve teknoloji üzerine akademik notlar, makaleler ve araştırmalar.'); ?>">
     <meta name="robots" content="index, follow">
@@ -37,11 +40,21 @@
     <meta name="twitter:image" content="https://fezadan.org/cdn/notlar-social-preview.png">
     <meta name="twitter:card" content="summary_large_image">
     
-    <link rel="stylesheet" href="/assets/css/admin.css?v=<?php echo filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/css/admin.css'); ?>">
+    <link rel="stylesheet" href="/assets/css/yonetim.css?v=<?php echo filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/css/yonetim.css'); ?>">
     <link rel="stylesheet" href="/assets/css/fonts.css">
     
     <style>
-        :root { 
+        .skip-to-content {
+            position: absolute; left: -9999px; top: 0; z-index: 100;
+            padding: 12px 20px; background: #6D2323; color: #FEF9E1;
+            font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+            font-size: 0.85rem; text-decoration: none;
+        }
+        .skip-to-content:focus { left: 12px; top: 12px; outline: 3px solid #FEF9E1; outline-offset: 2px; }
+        :focus-visible { outline: 2px solid #A31D1D; outline-offset: 2px; }
+        a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
+
+        :root {
             --bg-paper: #FEF9E1; 
             --bg-secondary: #E5D0AC; 
             --text-main: #6D2323; 
@@ -143,6 +156,8 @@
     </style>
 </head>
 <body class="relative min-h-screen flex flex-col">
+
+    <a href="#main-content" class="skip-to-content">Ana içeriğe atla</a>
     <div class="grid-bg fixed inset-0 z-0"></div>
 
     <nav id="main-navbar" class="fixed top-0 left-0 w-full z-50 bg-[var(--bg-paper)] border-b-2 border-[var(--text-main)] flex justify-between items-center px-4 md:px-8 h-[85px] shadow-[0_4px_0px_rgba(109,35,35,0.05)]">
