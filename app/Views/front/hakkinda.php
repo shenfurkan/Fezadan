@@ -1,6 +1,10 @@
-<?php 
-$page_title = "FEZADAN | Hakkında";
-require_once ROOT . '/app/Views/inc/header.php'; 
+<?php
+$siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
+$page_title       = 'Hakkında | FEZADAN';
+$page_description = 'FEZADAN hakkında — bilim, estetik ve fikir üzerine bağımsız bir yayının manifestosu, ekibi ve amaçları.';
+$page_canonical   = $siteBase . '/hakkinda';
+$og_url           = $page_canonical;
+require_once ROOT . '/app/Views/inc/header.php';
 ?>
 
 <style>
@@ -40,13 +44,13 @@ require_once ROOT . '/app/Views/inc/header.php';
     }
 </style>
 
-<main class="flex-grow w-full max-w-[1920px] mx-auto">
+<main id="main-content" class="flex-grow w-full max-w-[1920px] mx-auto">
     
     <div class="grid-layout">
         <aside class="sidebar">
             <div>
                 <h1 class="font-syne text-5xl md:text-7xl font-bold uppercase leading-[0.9] text-[var(--text-main)] mb-6">
-                    İnsan<br>Raporu
+                    Misyon<br>Tanımı
                 </h1>
                 <div class="w-16 h-1 bg-[var(--text-main)] opacity-50 mb-6"></div>
             </div>
@@ -60,8 +64,6 @@ require_once ROOT . '/app/Views/inc/header.php';
         </aside>
 
         <article class="content-area">
-            <h2 class="font-syne text-2xl font-bold mb-8 text-[var(--text-main)] uppercase">MİSYON TANIMI</h2>
-            
             <div class="space-y-6 text-lg leading-relaxed opacity-90 text-[var(--text-main)]">
                 <p>
                     fezadan.org, açık kaynak felsefesi ve bilginin özgürlüğü ilkeleri üzerine inşa edilmiş, gözetim kapitalizmine karşı duran özerk bir dijital direniş uzayıdır. Günümüzde internet, özel insan deneyimini tek taraflı olarak gasp edip kâr amaçlı davranışsal veriye dönüştüren, kullanıcıları satılık birer meta olarak gören gözetim kapitalizminin tahakkümü altındadır. Bizler, şirketlerin gözetim yoluyla kurduğu bu hiyerarşik panoptikon sistemini tümüyle reddediyoruz.

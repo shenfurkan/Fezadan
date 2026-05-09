@@ -102,7 +102,7 @@
         </div>
     </div>
 
-    <main class="flex flex-col lg:flex-row w-full lg:border-t-2 border-[var(--text-main)]" style="min-height: calc(100vh - 85px);">
+    <main id="main-content" class="flex flex-col lg:flex-row w-full lg:border-t-2 border-[var(--text-main)]" style="min-height: calc(100vh - 85px);">
         
         <aside class="w-64 border-r-2 border-[var(--text-main)] bg-[var(--bg-paper)] overflow-y-auto custom-scrollbar hidden xl:flex flex-col shrink-0" style="height: calc(100vh - 85px);">
             <div class="sticky top-0 bg-[var(--text-main)] text-[var(--bg-paper)] p-3 font-syne font-bold uppercase text-xs z-20 border-b-2 border-[var(--text-main)]">

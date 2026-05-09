@@ -1,24 +1,143 @@
 <?php
-$page_title = isset($article['title']) ? htmlspecialchars($article['title']) . " | FEZADAN" : 'Makale | FEZADAN';
-$og_title = htmlspecialchars($article['title']);
-$og_desc = htmlspecialchars($article['short_desc'] ?? mb_substr(strip_tags($article['content']), 0, 160));
-$og_url = "https://fezadan.org/makale/" . ($article['slug'] ?? '');
-$og_image = !empty($article['image_url']) ? "https://fezadan.org/" . ltrim($article['image_url'], '/') : "https://fezadan.org/assets/default-cover.jpg";
+$siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
+$slug     = $article['slug'] ?? '';
+
+// --- Meta / OG (header.php'nin standart değişkenleri) ---
+$page_title       = ($article['title'] ?? 'Makale') . ' | FEZADAN';
+$page_description = !empty($article['short_desc'])
+    ? $article['short_desc']
+    : mb_substr(trim(strip_tags($article['content'] ?? '')), 0, 160);
+$page_canonical   = $siteBase . '/makale/' . $slug;
+$og_url           = $page_canonical;
+$og_type          = 'article';
+$og_image         = !empty($article['image_url'])
+    ? Upload::assetUrl($article['image_url'])
+    : $siteBase . '/cdn/notlar-social-preview.png';
+
+// LCP: Hero görselini önceden indir
+$preload_image = $og_image;
+
+$article_published_time = !empty($article['created_at']) ? date('c', strtotime($article['created_at'])) : null;
+$article_modified_time  = !empty($article['updated_at']) ? date('c', strtotime($article['updated_at'])) : $article_published_time;
+$article_author_name    = $article['author_name'] ?? null;
+$article_section        = !empty($categories[0]['name']) ? $categories[0]['name'] : null;
+$article_tags           = array_column($categories ?? [], 'name');
+
+if (!function_exists('fezadan_is_own_upload_image')) {
+    function fezadan_is_own_upload_image(string $src): bool
+    {
+        $src = trim(html_entity_decode($src, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        if ($src === '' || strpos($src, 'data:') === 0 || strpos($src, 'blob:') === 0) {
+            return false;
+        }
+
+        $path = (string)(parse_url($src, PHP_URL_PATH) ?: $src);
+        $path = '/' . ltrim($path, '/');
+        if (strpos($path, '/uploads/') !== 0) {
+            return false;
+        }
+
+        if (!preg_match('#^https?://#i', $src)) {
+            return true;
+        }
+
+        $host = (string)parse_url($src, PHP_URL_HOST);
+        $siteHost = defined('SITE_URL') ? (string)parse_url(SITE_URL, PHP_URL_HOST) : '';
+        $cdnHost = defined('CDN_URL') ? (string)parse_url(CDN_URL, PHP_URL_HOST) : '';
+        return $host !== '' && (
+            ($siteHost !== '' && strcasecmp($host, $siteHost) === 0)
+            || ($cdnHost !== '' && strcasecmp($host, $cdnHost) === 0)
+        );
+    }
+}
+
+if (!function_exists('fezadan_normalize_article_images')) {
+    function fezadan_normalize_article_images(string $html): string
+    {
+        return (string)preg_replace_callback('/<img\b[^>]*>/i', function ($matches) {
+            $tag = $matches[0];
+            if (preg_match('/\ssrc=(["\'])(.*?)\1/i', $tag, $srcMatch)) {
+                $src = html_entity_decode($srcMatch[2], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                if (fezadan_is_own_upload_image($src)) {
+                    $newSrc = htmlspecialchars(Upload::assetUrl($src), ENT_QUOTES, 'UTF-8');
+                    $tag = preg_replace('/\ssrc=(["\']).*?\1/i', ' src="' . $newSrc . '"', $tag, 1);
+                }
+            }
+
+            if (stripos($tag, ' loading=') === false) {
+                $tag = preg_replace('/(\s*\/?>)$/', ' loading="lazy"$1', $tag, 1);
+            }
+            if (stripos($tag, ' decoding=') === false) {
+                $tag = preg_replace('/(\s*\/?>)$/', ' decoding="async"$1', $tag, 1);
+            }
+            return $tag;
+        }, $html);
+    }
+}
+
+// --- JSON-LD: BlogPosting + BreadcrumbList ---
+$wordCount = str_word_count(strip_tags($article['content'] ?? ''));
+$blogPosting = [
+    '@context' => 'https://schema.org',
+    '@type'    => 'BlogPosting',
+    'headline' => $article['title'] ?? '',
+    'description' => $page_description,
+    'image'    => [$og_image],
+    'datePublished' => $article_published_time,
+    'dateModified'  => $article_modified_time,
+    'author' => [
+        '@type' => 'Person',
+        'name'  => $article['author_name'] ?? 'FEZADAN',
+        'url'   => !empty($article['author_slug']) ? $siteBase . '/yazar/' . $article['author_slug'] : $siteBase,
+    ],
+    'publisher' => [
+        '@type' => 'Organization',
+        'name'  => 'FEZADAN',
+        'logo'  => [
+            '@type' => 'ImageObject',
+            'url'   => $siteBase . '/cdn/logo-light.png',
+        ],
+    ],
+    'mainEntityOfPage' => [
+        '@type' => 'WebPage',
+        '@id'   => $page_canonical,
+    ],
+    'inLanguage' => 'tr-TR',
+    'wordCount'  => $wordCount,
+];
+if (!empty($article_section))      $blogPosting['articleSection'] = $article_section;
+if (!empty($article_tags))         $blogPosting['keywords']       = implode(', ', $article_tags);
+
+$breadcrumbItems = [
+    ['@type' => 'ListItem', 'position' => 1, 'name' => 'Anasayfa',  'item' => $siteBase . '/'],
+    ['@type' => 'ListItem', 'position' => 2, 'name' => 'Makaleler', 'item' => $siteBase . '/makaleler'],
+];
+if (!empty($categories[0]['id'])) {
+    $breadcrumbItems[] = [
+        '@type' => 'ListItem', 'position' => 3,
+        'name'  => $categories[0]['name'],
+        'item'  => $siteBase . '/makaleler?cat=' . (int)$categories[0]['id'],
+    ];
+    $breadcrumbItems[] = ['@type' => 'ListItem', 'position' => 4, 'name' => $article['title'] ?? '', 'item' => $page_canonical];
+} else {
+    $breadcrumbItems[] = ['@type' => 'ListItem', 'position' => 3, 'name' => $article['title'] ?? '', 'item' => $page_canonical];
+}
+$breadcrumb = [
+    '@context' => 'https://schema.org',
+    '@type'    => 'BreadcrumbList',
+    'itemListElement' => $breadcrumbItems,
+];
+
+$extra_jsonld = [$blogPosting, $breadcrumb];
+
 require_once ROOT . '/app/Views/inc/header.php';
 
-$word_count = str_word_count(strip_tags($article['content']));
-$reading_time = ceil($word_count / 200);
-if ($reading_time < 1)
-    $reading_time = 1;
-
+$word_count = $wordCount;
+$reading_time = max(1, (int)ceil($word_count / 200));
 $total_seconds = $reading_time * 60;
-$threshold_seconds = ceil($total_seconds * 0.20);
-
-if ($threshold_seconds < 10)
-    $threshold_seconds = 10;
+$threshold_seconds = max(10, (int)ceil($total_seconds * 0.20));
 
 require_once ROOT . '/app/Controllers/MakaleController.php';
-$secretKey = getenv('SECRET_KEY');
 ?>
 
 <style>
@@ -91,6 +210,14 @@ $secretKey = getenv('SECRET_KEY');
         padding-left: 1.5em;
         margin-bottom: 1.5em;
         marker: #A31D1D;
+    }
+
+    .journal-text blockquote {
+        border-left: 4px solid var(--text-accent);
+        padding-left: 1.5rem;
+        font-style: italic;
+        color: var(--text-main);
+        margin: 1.5rem 0;
     }
 
     ::selection {
@@ -659,7 +786,7 @@ $secretKey = getenv('SECRET_KEY');
         </ul>
     </aside>
 
-    <main class="relative z-10 w-full px-6 py-12 md:py-20 min-w-0">
+    <main id="main-content" class="relative z-10 w-full px-6 py-12 md:py-20 min-w-0">
         <article>
             <header class="mb-12 text-center md:text-left border-b border-[var(--line-color)] pb-10">
                 <div class="flex flex-wrap justify-center md:justify-start items-center gap-2 md:gap-3 font-mono text-xs md:text-sm text-[var(--text-accent)] mb-6 uppercase tracking-wider font-bold">
@@ -709,13 +836,26 @@ $secretKey = getenv('SECRET_KEY');
                 <?php endif; ?>
             </header>
             <div class="journal-text font-body">
-                <?php if (!empty($article['image_url'])): ?>
+                <?php if (!empty($article['image_url'])):
+                    $coverRel  = '/' . ltrim($article['image_url'], '/');
+                    $coverUrl  = Upload::assetUrl($coverRel);
+                    $coverWebp = Upload::webpUrl($coverRel);
+                    $coverAlt  = !empty($article['title']) ? htmlspecialchars($article['title'], ENT_QUOTES, 'UTF-8') . ' — kapak görseli' : 'Kapak görseli';
+                ?>
                 <figure class="my-12">
                     <div class="p-2 border border-[#2B1B17] bg-[var(--bg-secondary)]/20">
-                        <div
-                            class="aspect-video w-full overflow-hidden relative">
-                            <img src="<?php echo SITE_URL . '/' . ltrim($article['image_url'], '/'); ?>"
-                                class="w-full h-full object-cover mix-blend-multiply contrast-110" alt="Kapak Görseli">
+                        <div class="aspect-video w-full overflow-hidden relative">
+                            <picture>
+                                <?php if ($coverWebp): ?>
+                                    <source type="image/webp" srcset="<?= htmlspecialchars($coverWebp, ENT_QUOTES, 'UTF-8') ?>">
+                                <?php endif; ?>
+                                <img src="<?= htmlspecialchars($coverUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                    class="w-full h-full object-cover mix-blend-multiply contrast-110"
+                                    alt="<?= $coverAlt ?>"
+                                    width="1200" height="675"
+                                    fetchpriority="high"
+                                    decoding="async">
+                            </picture>
                         </div>
                     </div>
                 </figure>
@@ -735,6 +875,7 @@ if (isset($article['content'])) {
     // Editörden gelen figcaption'lardaki contenteditable attribute'unu temizle
     $processedContent = preg_replace('/(<figcaption)\s+contenteditable="true"/', '$1', $processedContent);
     $processedContent = preg_replace('/(<figcaption)\s+data-placeholder="[^"]*"/', '$1', $processedContent);
+    $processedContent = fezadan_normalize_article_images($processedContent);
     echo $processedContent;
 }
 else {
@@ -851,7 +992,7 @@ else {
                 </a>
             </div>                                    
 
-            <div class="mt-20 pt-10 border-t border-[var(--line-color)]">
+            <div class="mt-12">
                 <div class="flex flex-col md:flex-row items-center md:items-start gap-8 bg-[var(--bg-secondary)]/10 p-8 border border-[var(--line-color)]">
 
                     <a href="<?php echo SITE_URL; ?>/yazar/<?php echo $article['author_slug'] ?? $article['author_id']; ?>"
@@ -885,6 +1026,54 @@ else {
                 </div>
             </div>
         </article>
+
+        <?php if (!empty($related)): ?>
+        <section aria-labelledby="related-heading" class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 mt-16 mb-12">
+            <h2 id="related-heading" class="text-xs uppercase tracking-[0.3em] font-bold text-[var(--text-accent)] border-b border-[var(--line-color)] pb-3 mb-8">
+                İlgili Makaleler
+            </h2>
+            <ul class="grid grid-cols-1 md:grid-cols-3 gap-8 list-none p-0">
+                <?php foreach ($related as $rel): ?>
+                    <?php
+                        $relUrl   = $siteBase . '/makale/' . $rel['slug'];
+                        $relImg   = !empty($rel['image_url'])
+                            ? Upload::assetUrl($rel['image_url'])
+                            : $siteBase . '/cdn/notlar-social-preview.png';
+                        $relDesc  = !empty($rel['short_desc'])
+                            ? mb_substr($rel['short_desc'], 0, 120)
+                            : '';
+                    ?>
+                    <li>
+                        <article class="group">
+                            <a href="<?= htmlspecialchars($relUrl, ENT_QUOTES, 'UTF-8') ?>" class="block">
+                                <div class="aspect-[16/10] overflow-hidden border border-[var(--line-color)] mb-3 bg-[var(--bg-secondary)]">
+                                    <img src="<?= htmlspecialchars($relImg, ENT_QUOTES, 'UTF-8') ?>"
+                                         alt="<?= htmlspecialchars($rel['title'], ENT_QUOTES, 'UTF-8') ?>"
+                                         loading="lazy" decoding="async"
+                                         width="800" height="500"
+                                         class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                         style="filter: var(--img-filter); mix-blend-mode: var(--img-blend); opacity: var(--img-opacity);">
+                                </div>
+                                <h3 class="font-syne text-lg font-bold leading-tight text-[var(--text-main)] group-hover:text-[var(--text-accent)] transition-colors">
+                                    <?= htmlspecialchars($rel['title'], ENT_QUOTES, 'UTF-8') ?>
+                                </h3>
+                                <?php if ($relDesc): ?>
+                                    <p class="text-sm mt-2 opacity-80 leading-relaxed">
+                                        <?= htmlspecialchars($relDesc, ENT_QUOTES, 'UTF-8') ?><?= mb_strlen($rel['short_desc'] ?? '') > 120 ? '…' : '' ?>
+                                    </p>
+                                <?php endif; ?>
+                                <?php if (!empty($rel['author_name'])): ?>
+                                    <div class="text-xs uppercase tracking-widest mt-3 opacity-60">
+                                        <?= htmlspecialchars($rel['author_name'], ENT_QUOTES, 'UTF-8') ?>
+                                    </div>
+                                <?php endif; ?>
+                            </a>
+                        </article>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </section>
+        <?php endif; ?>
     </main>
 
     <div class="hidden xl:block"></div>
@@ -1267,35 +1456,13 @@ else {
         });
     })();
 </script>
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "BlogPosting",
-  "headline": "<?php echo htmlspecialchars($article['title']); ?>",
-  "image": "<?php echo !empty($article['image_url']) ? "https://fezadan.org" . $article['image_url'] : "https://fezadan.org/assets/default-cover.jpg"; ?>",
-  "author": {
-    "@type": "Person",
-    "name": "<?php echo htmlspecialchars($article['author_name']); ?>",
-    "url": "<?php echo "https://fezadan.org/yazar/" . $article['author_slug']; ?>"
-  },
-  "datePublished": "<?php echo date('c', strtotime($article['created_at'])); ?>",
-  "description": "<?php echo htmlspecialchars($article['short_desc']); ?>",
-  "publisher": {
-    "@type": "Organization",
-    "name": "FEZADAN",
-    "logo": {
-      "@type": "ImageObject",
-      "url": "https://fezadan.org/assets/uploads/logo.jpg"
-    }
-  }
-}
-</script>
+<?php /* JSON-LD artık header.php'de $extra_jsonld dizisi üzerinden basılıyor */ ?>
 <script>
     document.addEventListener("DOMContentLoaded", function () {
         const articleId = <?php echo $article['id']; ?>;
         const targetSeconds = <?php echo $threshold_seconds; ?>;
 
-        const token = "<?php echo md5('okuma_' . $article['id'] . date('Y-m-d') . $secretKey); ?>";
+        const token = "<?php echo MakaleController::readToken((int)$article['id']); ?>";
 
         let timeSpent = 0; 
         let isRead = false;

@@ -1,5 +1,68 @@
 <?php
-$page_title = htmlspecialchars($author['name']) . ' | FEZADAN Yazar Profili';
+$siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
+$authorSlug = $author['slug'] ?? '';
+$authorBio  = trim(strip_tags($author['bio'] ?? ''));
+
+$page_title       = ($author['name'] ?? 'Yazar') . ' — Yazar Profili | FEZADAN';
+$page_description = !empty($authorBio)
+    ? mb_substr($authorBio, 0, 160)
+    : ($author['name'] ?? 'Yazar') . ' — FEZADAN yazar profili, makaleleri ve biyografisi.';
+$page_canonical   = $siteBase . '/yazar/' . $authorSlug;
+$og_url           = $page_canonical;
+$og_type          = 'profile';
+$og_image         = !empty($author['image_url'])
+    ? Upload::assetUrl($author['image_url'])
+    : $siteBase . '/cdn/notlar-social-preview.png';
+
+// Person schema
+$personSchema = [
+    '@context' => 'https://schema.org',
+    '@type'    => 'Person',
+    'name'     => $author['name'] ?? '',
+    'url'      => $page_canonical,
+];
+if (!empty($authorBio))            $personSchema['description'] = $authorBio;
+if (!empty($author['image_url']))  $personSchema['image']       = $og_image;
+$personSchema['worksFor'] = [
+    '@type' => 'Organization',
+    'name'  => 'FEZADAN',
+    'url'   => $siteBase . '/',
+];
+
+// Yazarın makaleleri için CollectionPage + ItemList
+$itemList = [];
+foreach (($all_articles ?? []) as $i => $a) {
+    $itemList[] = [
+        '@type'    => 'ListItem',
+        'position' => $i + 1,
+        'url'      => $siteBase . '/makale/' . $a['slug'],
+        'name'     => $a['title'],
+    ];
+}
+$collection = [
+    '@context'  => 'https://schema.org',
+    '@type'     => 'CollectionPage',
+    'name'      => $author['name'] . ' — Makaleler',
+    'url'       => $page_canonical,
+    'mainEntity'=> [
+        '@type'           => 'ItemList',
+        'numberOfItems'   => count($itemList),
+        'itemListElement' => $itemList,
+    ],
+];
+
+$breadcrumb = [
+    '@context' => 'https://schema.org',
+    '@type'    => 'BreadcrumbList',
+    'itemListElement' => [
+        ['@type' => 'ListItem', 'position' => 1, 'name' => 'Anasayfa', 'item' => $siteBase . '/'],
+        ['@type' => 'ListItem', 'position' => 2, 'name' => 'Makaleler','item' => $siteBase . '/makaleler'],
+        ['@type' => 'ListItem', 'position' => 3, 'name' => $author['name'], 'item' => $page_canonical],
+    ],
+];
+
+$extra_jsonld = [$personSchema, $collection, $breadcrumb];
+
 require_once ROOT . '/app/Views/inc/header.php';
 ?>
 
@@ -39,7 +102,7 @@ require_once ROOT . '/app/Views/inc/header.php';
 
 <div class="texture-overlay"></div>
 
-<main class="relative z-10 w-full px-6 py-12 md:py-24 max-w-[1400px] mx-auto flex-grow">
+<main id="main-content" class="relative z-10 w-full px-6 py-12 md:py-24 max-w-[1400px] mx-auto flex-grow">
     
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20">
         
@@ -49,7 +112,7 @@ require_once ROOT . '/app/Views/inc/header.php';
                 
                 <div class="mb-6 mx-auto">
                     <div class="w-36 h-36 md:w-48 md:h-48 rounded-full border-2 border-[var(--line-color)] p-1 shadow-[4px_4px_0px_#6D2323] bg-[var(--bg-paper)] group author-fixed-border">
-                        <img src="<?php echo !empty($author['image_url']) ? SITE_URL . '/' . ltrim($author['image_url'], '/') : SITE_URL . '/assets/default-avatar.jpg'; ?>" 
+                        <img src="<?php echo !empty($author['image_url']) ? htmlspecialchars(Upload::assetUrl($author['image_url']), ENT_QUOTES, 'UTF-8') : SITE_URL . '/assets/default-avatar.jpg'; ?>" 
                              class="w-full h-full object-cover rounded-full grayscale group-hover:grayscale-0 transition-all duration-500" 
                              alt="<?php echo htmlspecialchars($author['name']); ?>">
                     </div>
@@ -115,7 +178,7 @@ require_once ROOT . '/app/Views/inc/header.php';
                             <a href="/makale/<?php echo $article['slug']; ?>" class="brutalist-card bg-[var(--bg-paper)] group block">
                                 <?php if (!empty($article['image_url'])): ?>
                                     <div class="aspect-video w-full overflow-hidden border-b-2 border-[var(--line-color)]">
-                                        <img src="<?php echo SITE_URL . '/' . ltrim($article['image_url'], '/'); ?>" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500">
+                                        <img src="<?php echo htmlspecialchars(Upload::assetUrl($article['image_url']), ENT_QUOTES, 'UTF-8'); ?>" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500">
                                     </div>
                                 <?php endif; ?>
                                 <div class="p-6">

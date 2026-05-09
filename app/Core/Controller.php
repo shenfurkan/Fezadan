@@ -2,10 +2,10 @@
 class Controller {
     public function view($view, $data = []) {
         if (file_exists(ROOT . '/app/Views/' . $view . '.php')) {
-            extract($data);
+            extract($data, EXTR_SKIP);
             require_once ROOT . '/app/Views/' . $view . '.php';
         } else {
-            die("View dosyası bulunamadı: " . $view);
+            throw new \RuntimeException("View dosyası bulunamadı: " . $view);
         }
     }
     
@@ -18,6 +18,58 @@ class Controller {
         $str = preg_replace('/[\s-]+/', ' ', $str);
         $str = trim($str);
         $str = str_replace(' ', '-', $str);
+        if ($str === '') {
+            // Türkçe karakterler tamamen filtrelendiyse yedek: rastgele kısa anahtar
+            $str = 'icerik-' . substr(bin2hex(random_bytes(3)), 0, 6);
+        }
         return $str;
+    }
+
+    /**
+     * Verilen tabloda slug benzersizliğini garantiler.
+     * Çakışma varsa "-2", "-3"... ekleyerek uygun bir slug döndürür.
+     *
+     * @param \PDO     $pdo
+     * @param string   $table       Whitelist'lenmiş tablo adı (articles|authors|notes|categories|patch_notes)
+     * @param string   $base        createSlug() çıktısı
+     * @param int|null $excludeId   Update senaryosunda kendi id'sini hariç tutmak için
+     * @param string   $column      Slug kolon adı (varsayılan 'slug')
+     */
+    protected function uniqueSlug(\PDO $pdo, string $table, string $base, ?int $excludeId = null, string $column = 'slug'): string
+    {
+        // SQL injection'a karşı tablo/kolon adlarını whitelist
+        $allowedTables = ['articles', 'authors', 'notes', 'categories', 'patch_notes'];
+        if (!in_array($table, $allowedTables, true)) {
+            throw new \InvalidArgumentException("uniqueSlug: izin verilmeyen tablo '$table'");
+        }
+        if (!preg_match('/^[a-z_]+$/i', $column)) {
+            throw new \InvalidArgumentException("uniqueSlug: geçersiz kolon adı");
+        }
+
+        if ($base === '') {
+            $base = 'icerik';
+        }
+
+        $slug   = $base;
+        $suffix = 2;
+
+        $sql = "SELECT 1 FROM `$table` WHERE `$column` = ?"
+             . ($excludeId !== null ? " AND id <> ?" : "")
+             . " LIMIT 1";
+
+        while (true) {
+            $stmt = $pdo->prepare($sql);
+            $params = [$slug];
+            if ($excludeId !== null) $params[] = $excludeId;
+            $stmt->execute($params);
+            if (!$stmt->fetchColumn()) {
+                return $slug;
+            }
+            $slug = $base . '-' . $suffix++;
+            // Aşırı çakışmada sonsuz döngüyü kır
+            if ($suffix > 1000) {
+                return $base . '-' . substr(bin2hex(random_bytes(3)), 0, 6);
+            }
+        }
     }
 }

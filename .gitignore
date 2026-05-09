@@ -1,27 +1,85 @@
-# --- security ---
-app/Config/config.php
-app/Config/database.php
+# Environment and secrets
 .env
-ssl/
-/public_html/git-deploy.php
-/public_html/scripts/
-/.cpanel.yml
+.env.*
+!.env.example
 
-# --- systemfiles ---
-.DS_Store
-Thumbs.db
+# Dependencies / build
+vendor/
 node_modules/
-/index.php
-/public_html/robots.txt
-/public_html/sitemap.xml
-.vscode
+.composer/
 
-# --- uploads ---
-/public_html/uploads/*
-!/public_html/uploads/.gitkeep
-/storage
-/vendor
-
-# --- logs ---
-public_html/error_log
+# Runtime caches, temp, and logs
 *.log
+error_log
+logs/
+access-logs/
+tmp/
+storage/
+lscache/
+
+# cPanel / hosting system files
+.cagefs/
+.cl.selector/
+.cpanel/
+.cphorde/
+.htpasswds/
+.koality/
+.razor/
+.sitepad/
+.softaculous/
+.spamassassin/
+.ssh/
+.subaccounts/
+.trash/
+.pki/
+mail/
+ssl/
+public_ftp/
+
+# Shell/account files
+.bash_history
+.bash_logout
+.bash_profile
+.bashrc
+.lastlogin
+.contactemail
+.ftpquota
+.myimunify_id
+.spamassassinboxenable
+.spamassassinenable
+
+# IDE / local settings
+.vscode/
+
+# Backup/sync copies
+backups/
+repo_yedek/
+www/
+fezadan.org/
+etc/
+Fezadan-Previous/
+
+# Generated web runtime files
+public_html/error_log
+public_html/uploads/
+public_html/assets/uploads/
+
+# Sunucu tani scripti - commit edilmemeli, kullandiktan sonra elle sil
+public_html/debug_server.php
+
+# Local test/snapshot folders
+snapshot/
+previous/
+Fezadan-main/
+degisiklik_raporu*.md
+
+# Docker and local dev files
+Dockerfile
+docker-compose.yml
+docker-entrypoint.sh
+docker-php-config.php
+
+# Test and migration scripts
+migration_galeri.php
+test_apis.php
+test_deepl.php

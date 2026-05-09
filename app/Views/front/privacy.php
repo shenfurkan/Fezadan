@@ -1,5 +1,9 @@
 <?php
-$page_title = 'Gizlilik Politikası | FEZADAN';
+$siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
+$page_title       = 'Gizlilik Politikası | FEZADAN';
+$page_description = 'FEZADAN gizlilik politikası — veri toplama, çerez ve kullanıcı hakları hakkında bilgi.';
+$page_canonical   = $siteBase . '/privacy';
+$og_url           = $page_canonical;
 require_once ROOT . '/app/Views/inc/header.php';
 ?>
 
@@ -13,7 +17,7 @@ require_once ROOT . '/app/Views/inc/header.php';
 
 <div class="texture-overlay"></div>
 
-<main class="relative z-10 w-full px-6 py-12 lg:p-16 2xl:p-20 max-w-4xl mx-auto flex-grow">
+<main id="main-content" class="relative z-10 w-full px-6 py-12 lg:p-16 2xl:p-20 max-w-4xl mx-auto flex-grow">
     
     <header class="mb-12 border-b border-[var(--text-main)]/30 pb-8">
         <h1 class="font-syne text-5xl md:text-6xl xl:text-7xl font-bold leading-[0.9] tracking-tighter uppercase text-[var(--text-main)] break-words">

@@ -1,6 +1,39 @@
-<?php 
-$page_title = "FEZADAN | Anasayfa";
-require_once ROOT . '/app/Views/inc/header.php'; 
+<?php
+$siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
+
+$page_title       = 'FEZADAN — Bilim ve Estetik';
+$page_description = 'Veri ve estetik arasındaki sessiz çatışma. FEZADAN — bilim, estetik ve fikir üzerine bağımsız bir yayın.';
+$page_canonical   = $siteBase . '/';
+$og_url           = $page_canonical;
+$og_type          = 'website';
+$og_image         = $siteBase . '/cdn/notlar-social-preview.png';
+
+$extra_jsonld = [
+    [
+        '@context'  => 'https://schema.org',
+        '@type'     => 'WebSite',
+        'name'      => 'FEZADAN',
+        'url'       => $siteBase . '/',
+        'inLanguage'=> 'tr-TR',
+        'potentialAction' => [
+            '@type'  => 'SearchAction',
+            'target' => [
+                '@type'       => 'EntryPoint',
+                'urlTemplate' => $siteBase . '/makaleler?q={search_term_string}',
+            ],
+            'query-input' => 'required name=search_term_string',
+        ],
+    ],
+    [
+        '@context' => 'https://schema.org',
+        '@type'    => 'Organization',
+        'name'     => 'FEZADAN',
+        'url'      => $siteBase . '/',
+        'logo'     => $siteBase . '/cdn/logo-light.png',
+    ],
+];
+
+require_once ROOT . '/app/Views/inc/header.php';
 ?>
 <style>
     .hero-title {
@@ -115,7 +148,7 @@ require_once ROOT . '/app/Views/inc/header.php';
     }
 </style>
 
-<main class="flex-grow w-full max-w-[1920px] mx-auto">
+<main id="main-content" class="flex-grow w-full max-w-[1920px] mx-auto">
     
     <header class="px-4 pt-12 md:pt-20 pb-8 flex flex-col items-center">
         <div class="text-xs md:text-sm uppercase tracking-[0.3em] text-[var(--text-main)] mb-2 font-bold opacity-80"> KOLEKTİF
@@ -153,24 +186,38 @@ require_once ROOT . '/app/Views/inc/header.php';
             
             <a href="/makale/<?php echo $article['slug']; ?>" class="absolute inset-0 z-0" aria-label="<?php echo htmlspecialchars($article['title']); ?> makalesini oku"></a>
 
-            <?php if($preview_img): 
-                $loading_attr = ($article_counter > 2) ? 'loading="lazy" decoding="async"' : '';
+            <?php if($preview_img):
+                if ($article_counter === 1) {
+                    $loading_attr = 'fetchpriority="high" decoding="async"';
+                } elseif ($article_counter <= 2) {
+                    $loading_attr = 'decoding="async"';
+                } else {
+                    $loading_attr = 'loading="lazy" decoding="async"';
+                }
+                $preview_webp = Upload::webpUrl($preview_img);
+                $preview_url = Upload::assetUrl($preview_img);
+                $preview_fallback = Upload::assetUrl((string)(parse_url($preview_img, PHP_URL_PATH) ?: $preview_img));
             ?>
-                <img src="<?php echo $preview_img; ?>" 
-                     width="600" height="400" 
-                     <?php echo $loading_attr; ?>
-                     class="reveal-img pointer-events-none" 
-                     alt="<?php echo htmlspecialchars($article['title']); ?>">
+                <picture>
+                    <?php if ($preview_webp): ?>
+                        <source type="image/webp" srcset="<?php echo htmlspecialchars($preview_webp, ENT_QUOTES, 'UTF-8'); ?>">
+                    <?php endif; ?>
+                    <img src="<?php echo htmlspecialchars($preview_url, ENT_QUOTES, 'UTF-8'); ?>" 
+                         width="600" height="400" 
+                         <?php echo $loading_attr; ?>
+                         onerror="if(this.dataset.fallback){this.onerror=null;this.src=this.dataset.fallback;}"
+                         data-fallback="<?php echo htmlspecialchars($preview_fallback, ENT_QUOTES, 'UTF-8'); ?>"
+                         class="reveal-img pointer-events-none" 
+                         alt="<?php echo htmlspecialchars($article['title']); ?>">
+                </picture>
             <?php endif; ?>
             
             <div class="content-layer relative z-10 flex justify-end items-start pointer-events-none">
     
                 <div class="flex flex-wrap justify-end gap-1 max-w-[100%] pointer-events-auto mt-1">
                     <?php if (!empty($article['categories'])): ?>
-                        <?php foreach($article['categories'] as $cat): 
-                            $cat_slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', str_replace(['ı','ğ','ü','ş','ö','ç','İ','Ğ','Ü','Ş','Ö','Ç'], ['i','g','u','s','o','c','i','g','u','s','o','c'], $cat['name'])), '-'));
-                        ?>
-                            <a href="/kategori/<?php echo $cat_slug; ?>" aria-label="<?php echo htmlspecialchars($cat['name']); ?> kategorisine git"
+                        <?php foreach($article['categories'] as $cat): ?>
+                            <a href="/makaleler?cat=<?php echo (int)$cat['id']; ?>" aria-label="<?php echo htmlspecialchars($cat['name']); ?> kategorisindeki makalelere git"
                             class="flex items-center justify-center leading-none h-6 uppercase text-[var(--text-main)] font-bold border border-[var(--text-main)] px-2 bg-[var(--bg-paper)] hover:bg-[var(--text-main)] hover:text-[var(--bg-paper)] transition-colors text-[10px] relative z-20 shadow-sm">
                                 <span class="mt-[2px]"><?php echo htmlspecialchars($cat['name']); ?></span>
                             </a>
@@ -222,22 +269,31 @@ require_once ROOT . '/app/Views/inc/header.php';
             
             <a href="/makale/<?php echo $article['slug']; ?>" class="absolute inset-0 z-0" aria-label="<?php echo htmlspecialchars($article['title']); ?> makalesini oku"></a>
 
-            <?php if($preview_img): ?>
-                <img src="<?php echo $preview_img; ?>" 
-                     width="600" height="400" 
-                     loading="lazy" decoding="async"
-                     class="reveal-img pointer-events-none" 
-                     alt="<?php echo htmlspecialchars($article['title']); ?>">
+            <?php if($preview_img):
+                $preview_webp = Upload::webpUrl($preview_img);
+                $preview_url = Upload::assetUrl($preview_img);
+                $preview_fallback = Upload::assetUrl((string)(parse_url($preview_img, PHP_URL_PATH) ?: $preview_img));
+            ?>
+                <picture>
+                    <?php if ($preview_webp): ?>
+                        <source type="image/webp" srcset="<?php echo htmlspecialchars($preview_webp, ENT_QUOTES, 'UTF-8'); ?>">
+                    <?php endif; ?>
+                    <img src="<?php echo htmlspecialchars($preview_url, ENT_QUOTES, 'UTF-8'); ?>" 
+                         width="600" height="400" 
+                         loading="lazy" decoding="async"
+                         onerror="if(this.dataset.fallback){this.onerror=null;this.src=this.dataset.fallback;}"
+                         data-fallback="<?php echo htmlspecialchars($preview_fallback, ENT_QUOTES, 'UTF-8'); ?>"
+                         class="reveal-img pointer-events-none" 
+                         alt="<?php echo htmlspecialchars($article['title']); ?>">
+                </picture>
             <?php endif; ?>
 
             <div class="content-layer relative z-10 flex justify-end items-start pointer-events-none">
                 
                 <div class="flex flex-wrap justify-end gap-1 max-w-[100%] pointer-events-auto mt-1">
                     <?php if (!empty($article['categories'])): ?>
-                        <?php foreach($article['categories'] as $cat): 
-                            $cat_slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', str_replace(['ı','ğ','ü','ş','ö','ç','İ','Ğ','Ü','Ş','Ö','Ç'], ['i','g','u','s','o','c','i','g','u','s','o','c'], $cat['name'])), '-'));
-                        ?>
-                            <a href="/kategori/<?php echo $cat_slug; ?>" aria-label="<?php echo htmlspecialchars($cat['name']); ?> kategorisine git"
+                        <?php foreach($article['categories'] as $cat): ?>
+                            <a href="/makaleler?cat=<?php echo (int)$cat['id']; ?>" aria-label="<?php echo htmlspecialchars($cat['name']); ?> kategorisindeki makalelere git"
                                class="flex items-center justify-center leading-none h-6 uppercase text-[var(--text-main)] font-bold border border-[var(--text-main)] px-2 bg-[var(--bg-paper)] hover:bg-[var(--text-main)] hover:text-[var(--bg-paper)] transition-colors text-[10px] relative z-20 shadow-sm">
                                 <span class="mt-[2px]"><?php echo htmlspecialchars($cat['name']); ?></span>
                             </a>

@@ -2,11 +2,31 @@
 $current_uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 function isActive($uri, $target)
 {
-    if ($uri == $target || ($target !== '/' && strpos($uri, '/makale') === 0 && $target == '/makaleler')) {
+    if ($uri == $target
+        || ($target !== '/' && strpos($uri, '/makale') === 0 && $target == '/makaleler')
+        || ($target !== '/' && strpos($uri, '/galeri') === 0 && $target == '/galeri')) {
         return 'border-b-2 border-[var(--text-accent)] !text-[var(--text-accent)]';
     }
     return '';
 }
+function ariaCurrent($uri, $target)
+{
+    return $uri == $target ? 'aria-current="page"' : '';
+}
+
+// ============================================================
+// META / SEO Defaults — view'lar override edebilir
+// ============================================================
+$siteBase        = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
+$page_title      = $page_title      ?? 'FEZADAN — Bilim ve Estetik';
+$page_description = $page_description ?? 'Veri ve estetik arasındaki sessiz çatışma. FEZADAN — bilim, estetik ve fikir üzerine bağımsız bir yayın.';
+$og_type         = $og_type         ?? 'website';
+$og_image        = $og_image        ?? ($siteBase . '/cdn/notlar-social-preview.png');
+// Canonical: controller/view sabit slug-bazlı URL set etmediyse mevcut path'e düş
+$page_canonical  = $page_canonical  ?? ($siteBase . parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
+$og_url          = $og_url          ?? $page_canonical;
+$page_robots     = $page_robots     ?? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
+$extra_jsonld    = $extra_jsonld    ?? [];
 ?>
 
 <!DOCTYPE html>
@@ -15,38 +35,103 @@ function isActive($uri, $target)
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>
-        <?php echo isset($page_title) ? $page_title : 'FEZADAN'; ?>
-    </title>
-    
+    <meta name="theme-color" content="#6D2323" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#120A0A" media="(prefers-color-scheme: dark)">
+    <title><?= htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8') ?></title>
+
     <link rel="icon" type="image/x-icon" href="/cdn/light-favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/cdn/light-favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/cdn/light-favicon-16x16.png">
-    <link rel="light-apple-touch-icon" href="/cdn/light-apple-touch-icon.png">
-    
-    <meta name="description"
-        content="<?php echo isset($article['short_desc']) ? htmlspecialchars($article['short_desc']) : 'Veri ve estetik arasındaki sessiz çatışma.'; ?>">
-    <meta name="robots" content="index, follow">
-    <?php
-    $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http");
-    $host = $_SERVER['HTTP_HOST'];
-    $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-    $canonical_url = $protocol . "://" . $host . $path;
-    ?>
-    <link rel="canonical" href="<?php echo $canonical_url; ?>">
+    <link rel="apple-touch-icon" href="/cdn/light-apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="/cdn/light-android-chrome-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/cdn/light-android-chrome-512x512.png">
+
+    <meta name="description" content="<?= htmlspecialchars($page_description, ENT_QUOTES, 'UTF-8') ?>">
+    <meta name="robots" content="<?= htmlspecialchars($page_robots, ENT_QUOTES, 'UTF-8') ?>">
+    <link rel="canonical" href="<?= htmlspecialchars($page_canonical, ENT_QUOTES, 'UTF-8') ?>">
+    <link rel="alternate" type="application/rss+xml" title="FEZADAN RSS" href="/rss">
 
     <meta property="og:site_name" content="FEZADAN">
-    <meta property="og:type" content="article">
-    <meta property="og:title" content="<?php echo isset($page_title) ? $page_title : 'FEZADAN'; ?>">
-    <meta property="og:description" content="<?php echo $og_desc ?? ''; ?>">
-    <meta property="og:image" content="<?php echo $og_image ?? ''; ?>">
-    <meta property="og:url" content="<?php echo $og_url ?? ''; ?>">
+    <meta property="og:locale" content="tr_TR">
+    <meta property="og:type" content="<?= htmlspecialchars($og_type, ENT_QUOTES, 'UTF-8') ?>">
+    <meta property="og:title" content="<?= htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8') ?>">
+    <meta property="og:description" content="<?= htmlspecialchars($page_description, ENT_QUOTES, 'UTF-8') ?>">
+    <meta property="og:image" content="<?= htmlspecialchars($og_image, ENT_QUOTES, 'UTF-8') ?>">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:url" content="<?= htmlspecialchars($og_url, ENT_QUOTES, 'UTF-8') ?>">
     <meta name="twitter:card" content="summary_large_image">
-    
-    <link rel="stylesheet" href="<?php echo SITE_URL; ?>/assets/css/admin.css?v=<?php echo filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/css/admin.css'); ?>">
+    <meta name="twitter:title" content="<?= htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8') ?>">
+    <meta name="twitter:description" content="<?= htmlspecialchars($page_description, ENT_QUOTES, 'UTF-8') ?>">
+    <meta name="twitter:image" content="<?= htmlspecialchars($og_image, ENT_QUOTES, 'UTF-8') ?>">
+
+    <?php if ($og_type === 'article'): ?>
+        <?php if (!empty($article_published_time)): ?>
+            <meta property="article:published_time" content="<?= htmlspecialchars($article_published_time, ENT_QUOTES, 'UTF-8') ?>">
+        <?php endif; ?>
+        <?php if (!empty($article_modified_time)): ?>
+            <meta property="article:modified_time" content="<?= htmlspecialchars($article_modified_time, ENT_QUOTES, 'UTF-8') ?>">
+        <?php endif; ?>
+        <?php if (!empty($article_author_name)): ?>
+            <meta property="article:author" content="<?= htmlspecialchars($article_author_name, ENT_QUOTES, 'UTF-8') ?>">
+        <?php endif; ?>
+        <?php if (!empty($article_section)): ?>
+            <meta property="article:section" content="<?= htmlspecialchars($article_section, ENT_QUOTES, 'UTF-8') ?>">
+        <?php endif; ?>
+        <?php foreach (($article_tags ?? []) as $tag): ?>
+            <meta property="article:tag" content="<?= htmlspecialchars($tag, ENT_QUOTES, 'UTF-8') ?>">
+        <?php endforeach; ?>
+    <?php endif; ?>
+
+    <?php /* En sık kullanılan font dosyalarını preload et — FOIT/CLS azalır */ ?>
+    <link rel="preload" href="/assets/fonts/space-grotesk-v22-latin-ext-regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/syne-v24-latin-ext-700.woff2" as="font" type="font/woff2" crossorigin>
+
+    <?php if (!empty($preload_image)): ?>
+        <link rel="preload" as="image" href="<?= htmlspecialchars($preload_image, ENT_QUOTES, 'UTF-8') ?>" fetchpriority="high">
+    <?php endif; ?>
+
+    <link rel="stylesheet" href="<?= $siteBase ?>/assets/css/yonetim.css?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/css/yonetim.css') ?: time() ?>">
     <link rel="stylesheet" href="/assets/css/fonts.css">
 
+    <?php foreach ($extra_jsonld as $jsonld): ?>
+        <script type="application/ld+json"><?= json_encode($jsonld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
+    <?php endforeach; ?>
+
     <style>
+        /* === A11y: Skip-to-content === */
+        .skip-to-content {
+            position: absolute;
+            left: -9999px;
+            top: 0;
+            z-index: 100;
+            padding: 12px 20px;
+            background: #6D2323;
+            color: #FEF9E1;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-size: 0.85rem;
+            text-decoration: none;
+        }
+        .skip-to-content:focus {
+            left: 12px;
+            top: 12px;
+            outline: 3px solid #FEF9E1;
+            outline-offset: 2px;
+        }
+
+        /* === A11y: Focus visible === */
+        :focus-visible {
+            outline: 2px solid var(--text-accent);
+            outline-offset: 2px;
+        }
+        a:focus:not(:focus-visible),
+        button:focus:not(:focus-visible) {
+            outline: none;
+        }
+
         :root {
             --bg-paper: #FEF9E1;
             --bg-secondary: #E5D0AC;
@@ -125,15 +210,6 @@ function isActive($uri, $target)
 
         [data-theme="dark"] .sun-icon { opacity: 0.3; }
         [data-theme="dark"] .moon-icon { opacity: 1; }
-
-        [data-theme="dark"] .theme-switch::after {
-            transform: translateX(20px);
-            background-color: var(--text-main);
-        }
-
-        [data-theme="dark"] .theme-switch {
-            background-color: var(--bg-secondary);
-        }
 
         ::target-text {
             background-color: transparent;
@@ -272,7 +348,9 @@ function isActive($uri, $target)
 
 <body>
 
-    <nav id="main-navbar" class="flex justify-between items-center px-3 py-5 md:px-6 h-[85px]">
+    <a href="#main-content" class="skip-to-content">Ana içeriğe atla</a>
+
+    <nav id="main-navbar" class="flex justify-between items-center px-3 py-5 md:px-6 h-[85px]" aria-label="Ana gezinme">
 
         <div class="relative z-50">
             <a href="/" class="flex items-center gap-2" aria-label="Anasayfa">
@@ -282,17 +360,23 @@ function isActive($uri, $target)
                     style="height: 40px; width: auto;" 
                     class="object-contain rounded-sm logo-light">
                     
-                <img src="/cdn/logo-dark.png" 
-                    alt="Fezadan Logo" 
+                <img src="/cdn/logo-dark.png"
+                    alt=""
+                    aria-hidden="true"
                     width="150" height="40"
-                    style="height: 40px; width: auto;" 
+                    style="height: 40px; width: auto;"
                     class="object-contain rounded-sm logo-dark">
             </a>
         </div>
 
         <div class="hidden md:flex gap-8 items-center pt-1">
             <a href="<?php echo SITE_URL; ?>/makaleler"
-                class="nav-link <?php echo isActive($current_uri, '/makaleler'); ?>">Makaleler</a>
+                class="nav-link <?php echo isActive($current_uri, '/makaleler'); ?>"
+                <?php echo ariaCurrent($current_uri, '/makaleler'); ?>>Makaleler</a>
+            
+            <a href="<?php echo SITE_URL; ?>/galeri"
+                class="nav-link <?php echo isActive($current_uri, '/galeri'); ?>"
+                <?php echo ariaCurrent($current_uri, '/galeri'); ?>>Galeri</a>
             
             <?php 
                 $host = str_replace('www.', '', $_SERVER['HTTP_HOST']);
@@ -301,12 +385,14 @@ function isActive($uri, $target)
             <a href="<?php echo $notlar_url; ?>" class="nav-link">Notlar</a>
             
             <a href="<?php echo SITE_URL; ?>/hakkinda"
-                class="nav-link <?php echo isActive($current_uri, '/hakkinda'); ?>">Hakkında</a>
+                class="nav-link <?php echo isActive($current_uri, '/hakkinda'); ?>"
+                <?php echo ariaCurrent($current_uri, '/hakkinda'); ?>>Hakkında</a>
                 
             <a href="<?php echo SITE_URL; ?>/manifesto"
-                class="nav-link <?php echo isActive($current_uri, '/manifesto'); ?>">Manifesto</a>
+                class="nav-link <?php echo isActive($current_uri, '/manifesto'); ?>"
+                <?php echo ariaCurrent($current_uri, '/manifesto'); ?>>Manifesto</a>
 
-            <div id="theme-toggle" class="theme-switch-wrapper group" role="button" tabindex="0" aria-label="Temayı Değiştir">
+            <div id="theme-toggle" class="theme-switch-wrapper group" role="button" tabindex="0" aria-label="Temayı Değiştir" aria-pressed="false">
                 <svg class="theme-icon sun-icon opacity-50 group-hover:opacity-100 transition-opacity" fill="none"
                     stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -339,6 +425,8 @@ function isActive($uri, $target)
                 class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">ANASAYFA</a>
             <a href="/makaleler"
                 class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">MAKALELER</a>
+            <a href="/galeri"
+                class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">GALERİ</a>
             <a href="<?php echo $notlar_url; ?>"
                 class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">NOTLAR</a>
             <a href="/hakkinda"
@@ -447,6 +535,24 @@ function isActive($uri, $target)
 
                 document.documentElement.setAttribute('data-theme', newTheme);
                 localStorage.setItem('theme', newTheme);
+                themeToggleBtns.forEach(b => b.setAttribute('aria-pressed', String(newTheme === 'dark')));
             });
+        });
+
+        // Mount sırasında aria-pressed senkronize et
+        (function () {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            themeToggleBtns.forEach(b => b.setAttribute('aria-pressed', String(isDark)));
+        })();
+
+        // Mobil menü: Escape ile kapat (a11y)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && isMenuOpen) {
+                isMenuOpen = false;
+                hamburgerBtn.classList.remove('menu-active');
+                mobileMenu.classList.remove('menu-open');
+                toggleScrollLock(false);
+                hamburgerBtn.focus();
+            }
         });
     </script>

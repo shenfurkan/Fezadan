@@ -1,6 +1,10 @@
-<?php 
-$page_title = "MANIFESTO | FEZADAN";
-require_once ROOT . '/app/Views/inc/header.php'; 
+<?php
+$siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
+$page_title       = 'Manifesto | FEZADAN';
+$page_description = 'FEZADAN manifestosu — veri ve estetik arasındaki sessiz çatışma üzerine bir bildirge.';
+$page_canonical   = $siteBase . '/manifesto';
+$og_url           = $page_canonical;
+require_once ROOT . '/app/Views/inc/header.php';
 ?>
 
 <style>
@@ -48,7 +52,7 @@ require_once ROOT . '/app/Views/inc/header.php';
 
 <div class="texture-overlay"></div>
 
-<main class="relative z-10 w-full max-w-[1920px] mx-auto flex-grow">
+<main id="main-content" class="relative z-10 w-full max-w-[1920px] mx-auto flex-grow">
     
     <div class="grid-layout">
         

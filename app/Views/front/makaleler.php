@@ -1,5 +1,45 @@
-<?php 
-$page_title = "FEZADAN | Tüm Makaleler";
+<?php
+$siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
+
+// SEO stratejisi:
+//   - Hiç filtre yok           → /makaleler            (index, kanonik kendisi)
+//   - Sadece tek kategori (?cat=X) → /makaleler?cat=X  (index, kanonik kendisi → kategori SEO değeri)
+//   - Diğer her kombinasyon (search/sort/page/author/cat+...) → noindex,follow + canonical=/makaleler
+$catOnly = !empty($_GET['cat']) && (int)$_GET['cat'] > 0
+    && empty($_GET['author']) && empty($_GET['q']) && empty($_GET['sort'])
+    && (empty($_GET['page']) || (int)$_GET['page'] === 1);
+$hasOtherFilters = !$catOnly && (
+    !empty($_GET['author']) || !empty($_GET['q']) || !empty($_GET['sort'])
+    || (!empty($_GET['page']) && (int)$_GET['page'] > 1)
+    || !empty($_GET['cat']) // cat + başka filtre kombinasyonu da buraya düşer
+);
+
+// Aktif kategori adını yakala (title/description için)
+$activeCategoryName = null;
+if ($catOnly) {
+    try {
+        $catStmt = Db::pdo()->prepare("SELECT name FROM categories WHERE id = ? LIMIT 1");
+        $catStmt->execute([(int)$_GET['cat']]);
+        $activeCategoryName = $catStmt->fetchColumn() ?: null;
+    } catch (\Throwable $e) { /* yoksa default'a düşer */ }
+}
+
+if ($catOnly && $activeCategoryName) {
+    $page_title       = htmlspecialchars($activeCategoryName) . ' — Makaleler | FEZADAN';
+    $page_description = htmlspecialchars($activeCategoryName) . ' kategorisindeki FEZADAN makaleleri.';
+    $page_canonical   = $siteBase . '/makaleler?cat=' . (int)$_GET['cat'];
+} elseif ($hasOtherFilters) {
+    $page_title       = 'Makaleler — Arama & Filtre | FEZADAN';
+    $page_description = 'FEZADAN makale arşivinde arama yapın. Yazara, kategoriye veya anahtar kelimeye göre filtreleyin.';
+    $page_canonical   = $siteBase . '/makaleler';
+    $page_robots      = 'noindex, follow';
+} else {
+    $page_title       = 'Tüm Makaleler | FEZADAN';
+    $page_description = 'FEZADAN makale arşivi — bilim, estetik ve fikir üzerine bağımsız yayın. Tüm yazılar tek liste.';
+    $page_canonical   = $siteBase . '/makaleler';
+}
+$og_url = $page_canonical;
+
 require_once ROOT . '/app/Views/inc/header.php'; 
 
 function build_url($new_params = []) {
@@ -134,7 +174,7 @@ function build_url($new_params = []) {
     }
 </style>
 
-<main class="flex-grow w-full max-w-[1920px] mx-auto">
+<main id="main-content" class="flex-grow w-full max-w-[1920px] mx-auto">
     
     <header class="px-4 py-12 flex flex-col items-center border-b border-[var(--line-color)] dynamic-border-color bg-[var(--bg-paper)]">
         <h1 class="text-4xl md:text-6xl font-syne font-bold uppercase text-[var(--text-main)]">Tüm Dosyalar</h1>
@@ -200,16 +240,26 @@ function build_url($new_params = []) {
         <div class="grid-item group relative">
             <a href="<?php echo SITE_URL; ?>/makale/<?php echo $article['slug']; ?>" class="absolute inset-0 z-0"></a>
 
-            <?php if($preview_img): ?>
-                <img src="<?php echo $preview_img; ?>" class="reveal-img pointer-events-none" alt="">
+            <?php if($preview_img):
+                $preview_webp = Upload::webpUrl($preview_img);
+                $preview_url = Upload::assetUrl($preview_img);
+                $preview_fallback = Upload::assetUrl((string)(parse_url($preview_img, PHP_URL_PATH) ?: $preview_img));
+            ?>
+                <picture>
+                    <?php if ($preview_webp): ?>
+                        <source type="image/webp" srcset="<?php echo htmlspecialchars($preview_webp, ENT_QUOTES, 'UTF-8'); ?>">
+                    <?php endif; ?>
+                    <img src="<?php echo htmlspecialchars($preview_url, ENT_QUOTES, 'UTF-8'); ?>" width="600" height="400" loading="lazy" decoding="async" onerror="if(this.dataset.fallback){this.onerror=null;this.src=this.dataset.fallback;}" data-fallback="<?php echo htmlspecialchars($preview_fallback, ENT_QUOTES, 'UTF-8'); ?>" class="reveal-img pointer-events-none" alt="<?php echo htmlspecialchars($article['title'] ?? ''); ?>">
+                </picture>
             <?php endif; ?>
 
             <div class="relative z-10 flex justify-end items-start pointer-events-none">
                 
                 <div class="flex flex-wrap justify-end gap-1 max-w-[100%] pointer-events-auto mt-1">
-                    <?php if (!empty($article['categories'])): 
-                        foreach($article['categories'] as $cat): ?>
-                        <a href="?cat=<?php echo $cat['id']; ?>" 
+                    <?php if (!empty($article['categories'])):
+                        foreach($article['categories'] as $cat):
+                    ?>
+                        <a href="/makaleler?cat=<?php echo (int)$cat['id']; ?>"
                         class="flex items-center justify-center leading-none h-6 uppercase text-[var(--text-main)] font-bold border border-[var(--text-main)] px-2 bg-[var(--bg-paper)] hover:bg-[var(--text-main)] hover:text-[var(--bg-paper)] transition-colors text-[10px] relative z-20 shadow-sm">
                             <span class="mt-[2px]"><?php echo htmlspecialchars($cat['name']); ?></span>
                         </a>
