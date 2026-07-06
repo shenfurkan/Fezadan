@@ -1,65 +1,24 @@
-<?php 
+<?php
     $page_title = htmlspecialchars($note['title']);
-    include __DIR__ . '/../inc/notes_header.php'; 
+    $page_description = !empty($note['description'])
+        ? mb_substr(strip_tags($note['description']), 0, 160)
+        : 'FEZADAN Notlar - ' . htmlspecialchars($note['title']);
+    include __DIR__ . '/../inc/notes_header.php';
+
+    $isLocal = function_exists('litecaptcha_is_local_request') && litecaptcha_is_local_request();
+    $requireCaptcha = defined('LITECAPTCHA_ENABLED') && LITECAPTCHA_ENABLED && !$isLocal;
 ?>
-    
-    <style>
-        /* Ana Gövde Sabitleme (Sadece masaüstünde kaydırmayı kilitleriz) */
-        @media (min-width: 1024px) {
-            body { overflow: hidden; }
-        }
-        
-        /* ÖZEL SCROLLBAR TASARIMI (Brutalist Stil) */
-        * {
-            scrollbar-width: auto;
-            scrollbar-color: var(--text-main) var(--bg-paper);
-        }
 
-        .custom-scrollbar::-webkit-scrollbar { width: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: var(--bg-paper); border-left: 2px solid var(--text-main); }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--text-main); border: 2px solid var(--bg-paper); }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--text-accent); }
 
-        /* Metin Katmanı Ayarları (PDF.js Selectable Text) */
-        .textLayer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; line-height: 1.0; z-index: 10; }
-        .textLayer span { position: absolute; color: transparent; cursor: text; transform-origin: 0% 0%; white-space: pre; }
-        .textLayer span::selection { color: var(--bg-paper); background-color: var(--text-accent); }
-
-        /* --- MOBİL İÇİN METADATA ACCORDION ANİMASYONLARI --- */
-        #mobile-metadata-content {
-            display: grid;
-            grid-template-rows: 0fr;
-            transition: grid-template-rows 0.3s ease-in-out;
-        }
-        #mobile-metadata-content.open {
-            grid-template-rows: 1fr;
-        }
-        .metadata-inner { overflow: hidden; }
-        
-        .arrow-icon { transition: transform 0.3s ease; }
-        .arrow-icon.open { transform: rotate(180deg); }
-
-        /* PDF Sayfa Boyutlandırması (Responsive Scale) */
-        .pdf-page-wrapper {
-            transform-origin: top center;
-            width: 100% !important; /* JS'ten gelen width'i eziyoruz */
-            height: auto !important; /* JS'ten gelen height'ı eziyoruz */
-            max-width: 800px; /* Maksimum genişlik */
-            aspect-ratio: 1 / 1.414; /* A4 oranı */
-            position: relative;
-        }
-        
-        /* Canvas'ı Wrapper'a uydurma */
-        .pdf-page-wrapper canvas {
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: contain;
-        }
-    </style>
+    <?php if(isset($_GET['error']) && $_GET['error'] == 'captcha_fail'): ?>
+    <div class="w-full bg-[#6D2323] text-[#FEF9E1] p-4 text-center font-mono font-bold text-sm border-b-2 border-[#FEF9E1] relative z-50">
+        Do&#287;rulama ge&#231;ersiz veya s&#252;resi dolmu&#351;. L&#252;tfen tekrar deneyin.
+    </div>
+    <?php endif; ?>
 
     <?php if(isset($_GET['error']) && $_GET['error'] == 'rate_limit'): ?>
     <div class="w-full bg-[#6D2323] text-[#FEF9E1] p-4 text-center font-mono font-bold uppercase text-sm border-b-2 border-[#FEF9E1] relative z-50">
-        // SİSTEM UYARISI: ÇOK FAZLA İSTEK GÖNDERİLDİ. LÜTFEN 1 DAKİKA BEKLEYİP TEKRAR DENEYİN.
+        Cok fazla istek gonderildi. Lutfen 1 dakika bekleyip tekrar deneyin.
     </div>
     <?php endif; ?>
 
@@ -94,16 +53,22 @@
                     </div>
                 </div>
                 <div class="p-4 flex gap-2">
-                    <a href="/not/download/<?php echo $note['slug']; ?>" class="flex-1 text-center bg-[#6D2323] text-[#FEF9E1] py-3 font-bold uppercase font-syne text-sm border-2 border-[#6D2323] hover:bg-black hover:border-black transition-colors">
-                        İNDİR [↓]
-                    </a>
+                    <?php if ($requireCaptcha): ?>
+                        <button id="dl-trigger-1" class="flex-1 text-center bg-[#6D2323] text-[#FEF9E1] py-3 font-bold uppercase font-syne text-sm border-2 border-[#6D2323] hover:bg-black hover:border-black transition-colors">
+                            İNDİR [↓]
+                        </button>
+                    <?php else: ?>
+                        <a href="/not/download/<?php echo $note['slug']; ?>" class="flex-1 block text-center bg-[#6D2323] text-[#FEF9E1] py-3 font-bold uppercase font-syne text-sm border-2 border-[#6D2323] hover:bg-black hover:border-black transition-colors">
+                            İNDİR [↓]
+                        </a>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
 
     <main id="main-content" class="flex flex-col lg:flex-row w-full lg:border-t-2 border-[var(--text-main)]" style="min-height: calc(100vh - 85px);">
-        
+
         <aside class="w-64 border-r-2 border-[var(--text-main)] bg-[var(--bg-paper)] overflow-y-auto custom-scrollbar hidden xl:flex flex-col shrink-0" style="height: calc(100vh - 85px);">
             <div class="sticky top-0 bg-[var(--text-main)] text-[var(--bg-paper)] p-3 font-syne font-bold uppercase text-xs z-20 border-b-2 border-[var(--text-main)]">
                 // SAYFALAR (<span id="total-pages-thumb">0</span>)
@@ -112,11 +77,11 @@
         </aside>
 
         <section id="viewer-container" class="flex-1 bg-[var(--bg-secondary)]/30 lg:overflow-y-auto custom-scrollbar relative p-4 md:p-8 flex flex-col items-center h-auto lg:h-[calc(100vh-85px)]">
-            
+
             <div id="loading-banner" class="border-2 border-[var(--text-main)] bg-[var(--bg-paper)] p-6 font-mono font-bold uppercase text-center w-full max-w-md animate-pulse mt-12 shadow-[8px_8px_0px_var(--text-main)] mx-auto">
                 Belge İşleniyor... Lütfen Bekleyin.
             </div>
-            
+
             <div id="pdf-pages" class="w-full flex flex-col items-center gap-6 pb-12"></div>
         </section>
 
@@ -135,10 +100,10 @@
                             <?php echo htmlspecialchars($note['lang'] ?? 'TR'); ?>
                         </span>
 
-                        <?php 
+                        <?php
                         if(!empty($note['category_names'])):
                             $cats = explode(', ', $note['category_names']);
-                            foreach($cats as $c): 
+                            foreach($cats as $c):
                         ?>
                             <span class="text-[10px] font-mono bg-[var(--text-main)] text-[var(--bg-paper)] px-2 py-1 uppercase font-bold">
                                 <?php echo htmlspecialchars($c); ?>
@@ -178,15 +143,88 @@
                 <?php endif; ?>
 
                 <div class="mt-auto pt-6 pb-6">
-                    <a href="/not/download/<?php echo $note['slug']; ?>" class="block w-full text-center bg-[#6D2323] text-[#FEF9E1] px-6 py-4 font-bold uppercase font-syne hover:bg-black transition-colors border-2 border-[#6D2323] hover:border-black shadow-[4px_4px_0px_rgba(109,35,35,0.3)] hover:shadow-none hover:translate-y-1">
-                        DOSYAYI İNDİR [↓]
-                    </a>
+                    <?php if ($requireCaptcha): ?>
+                        <button id="dl-trigger-2" class="block w-full text-center bg-[#6D2323] text-[#FEF9E1] px-6 py-4 font-bold uppercase font-syne hover:bg-black transition-colors border-2 border-[#6D2323] hover:border-black shadow-[4px_4px_0px_rgba(109,35,35,0.3)] hover:shadow-none hover:translate-y-1">
+                            DOSYAYI İNDİR [↓]
+                        </button>
+                    <?php else: ?>
+                        <a href="/not/download/<?php echo $note['slug']; ?>" class="block w-full text-center bg-[#6D2323] text-[#FEF9E1] px-6 py-4 font-bold uppercase font-syne hover:bg-black transition-colors border-2 border-[#6D2323] hover:border-black shadow-[4px_4px_0px_rgba(109,35,35,0.3)] hover:shadow-none hover:translate-y-1">
+                            DOSYAYI İNDİR [↓]
+                        </a>
+                    <?php endif; ?>
                 </div>
             </div>
         </aside>
     </main>
 
-    <script>
+    <?php if ($requireCaptcha): ?>
+    <dialog id="downloadModal" class="fezadan-modal p-6 text-[var(--text-main)] w-full max-w-sm border-2 border-[var(--text-main)] bg-[var(--bg-paper)] shadow-[8px_8px_0px_var(--text-main)] transition-all">
+        <div class="flex justify-between items-start mb-4 border-b-2 border-dashed border-[var(--text-main)]/30 pb-4">
+            <div>
+                <h3 class="font-syne font-bold uppercase text-lg">DOGRULAMA</h3>
+                <p class="font-mono text-xs opacity-70 mt-1">İndirmeyi başlatmak için lütfen robot olmadığınızı doğrulayın.</p>
+            </div>
+            <button id="dl-close" class="font-mono text-xl leading-none hover:text-[var(--text-accent)] transition-colors">&times;</button>
+        </div>
+
+        <?php
+            $litecaptchaBaseUrl = rtrim(env_value('LITECAPTCHA_URL', 'https://litecaptcha.fezadan.org'), '/');
+            $litecaptchaEmbedUrl = $litecaptchaBaseUrl . '/?redirect=' . urlencode($downloadUrl) . '&embed=1';
+        ?>
+
+        <form action="<?= htmlspecialchars($downloadPath, ENT_QUOTES, 'UTF-8') ?>" method="GET" class="space-y-4">
+            <input type="hidden" name="lc_rt" id="lc_rt" value="">
+            <input type="hidden" name="lc_sig" id="lc_sig" value="">
+            <input type="hidden" name="lc_exp" id="lc_exp" value="">
+
+            <div class="litecaptcha-check-row" id="litecaptcha-check-row">
+                <div class="litecaptcha-mini-brand" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M12 3.5 18 6v5.2c0 4-2.3 7.4-6 9.3-3.7-1.9-6-5.3-6-9.3V6l6-2.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                    </svg>
+                    <span>LiteCaptcha</span>
+                    <span class="litecaptcha-mini-secure">secure</span>
+                </div>
+                <label class="litecaptcha-check-label" for="litecaptcha-check">
+                    <input id="litecaptcha-check" type="checkbox">
+                    <span>Ben robot değilim</span>
+                </label>
+                <div class="litecaptcha-check-status" id="litecaptcha-status">Hazır</div>
+                <div class="litecaptcha-detail-pop" id="litecaptcha-detail">
+                    Doğrulamayı başlatmak için kutuyu işaretleyin.
+                </div>
+                <iframe
+                    class="litecaptcha-bridge"
+                    src="<?= htmlspecialchars($litecaptchaEmbedUrl, ENT_QUOTES, 'UTF-8') ?>"
+                    title="LiteCaptcha"
+                    loading="eager"
+                    referrerpolicy="no-referrer"
+                    allow="clipboard-write"
+                ></iframe>
+            </div>
+
+            <button type="submit" id="btn-modal-download" disabled class="block w-full text-center bg-[#6D2323] text-[#FEF9E1] px-6 py-4 font-bold uppercase font-syne hover:bg-black transition-colors border-2 border-[#6D2323] hover:border-black shadow-[4px_4px_0px_rgba(109,35,35,0.3)] hover:shadow-none hover:translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed">
+                İNDİRMEYİ BAŞLAT [↓]
+            </button>
+        </form>
+    </dialog>
+
+    <script type="module" nonce="<?= CSP_NONCE ?>">
+        import { LiteCaptchaWidget } from '/assets/js/litecaptcha.mjs';
+        new LiteCaptchaWidget({
+            containerSelector: '#litecaptcha-check-row',
+            onSuccess: (tokens) => {
+                document.getElementById('lc_rt').value = tokens.rt;
+                document.getElementById('lc_sig').value = tokens.sig;
+                document.getElementById('lc_exp').value = tokens.exp;
+                const btn = document.getElementById('btn-modal-download');
+                if (btn) btn.disabled = false;
+            }
+        });
+    </script>
+    <?php endif; ?>
+
+    <script nonce="<?= CSP_NONCE ?>">
         const metaBtn = document.getElementById('mobile-meta-btn');
         const metaContent = document.getElementById('mobile-metadata-content');
         const arrow = metaBtn.querySelector('.arrow-icon');
@@ -197,17 +235,20 @@
         });
     </script>
 
-    <script type="module">
-        import * as pdfjsLib from '/assets/js/pdf.mjs';
+    <script type="module" nonce="<?= CSP_NONCE ?>">
+        import * as pdfjsLib from '/assets/js/pdf.js';
 
         const url = '<?php echo $pdfUrl; ?>';
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '/assets/js/pdf.worker.mjs';
-        pdfjsLib.GlobalWorkerOptions.wasmUrl = '/assets/js/pdf.worker.wasm'; 
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/assets/js/pdf.worker.js';
 
         const viewerContainer = document.getElementById('pdf-pages');
         const thumbContainer = document.getElementById('thumbnail-container');
         const loadingBanner = document.getElementById('loading-banner');
-        
+
+        const renderedPages = new Set();
+        const renderingPages = new Map();
+        const renderedThumbs = new Set();
+
         // Masaüstü Scroll Vurgulama
         const observer = new IntersectionObserver(entries => {
             entries.forEach(entry => {
@@ -215,7 +256,7 @@
                     const pageNum = entry.target.dataset.page;
                     document.querySelectorAll('.thumb-wrapper').forEach(w => w.classList.remove('border-[var(--text-accent)]'));
                     document.querySelectorAll('.thumb-wrapper').forEach(w => w.classList.add('border-transparent'));
-                    
+
                     const activeThumb = document.getElementById('thumb-' + pageNum);
                     if(activeThumb) {
                         activeThumb.classList.remove('border-transparent');
@@ -229,74 +270,115 @@
             });
         }, { threshold: 0.3 });
 
-        pdfjsLib.getDocument(url).promise.then(async pdfDoc => {
-            loadingBanner.style.display = 'none';
-            document.getElementById('total-pages-thumb').textContent = pdfDoc.numPages;
+        const pageRenderObserver = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                const pageNum = parseInt(entry.target.dataset.page || '0', 10);
+                if (pageNum > 0) renderPage(pageNum);
+            });
+        }, { rootMargin: '900px 0px', threshold: 0.01 });
 
-            for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-                const page = await pdfDoc.getPage(pageNum);
-                
-                // Yüksek çözünürlük (scale: 2.0) alıp CSS ile daraltarak daha net (retina) görüntü sağlıyoruz
-                const scale = 2.0; 
+        const thumbRenderObserver = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                const pageNum = parseInt(entry.target.dataset.page || '0', 10);
+                if (pageNum > 0) renderThumb(pageNum);
+            });
+        }, { rootMargin: '400px 0px', threshold: 0.01 });
+
+        let loadedPdf = null;
+        const pageWrappers = new Map();
+        const thumbWrappers = new Map();
+
+        async function renderPage(pageNum) {
+            if (!loadedPdf || renderedPages.has(pageNum)) return;
+            if (renderingPages.has(pageNum)) return renderingPages.get(pageNum);
+
+            const task = (async () => {
+                const pageWrapper = pageWrappers.get(pageNum);
+                if (!pageWrapper) return;
+
+                const page = await loadedPdf.getPage(pageNum);
+                const scale = 2.0;
                 const viewport = page.getViewport({ scale });
 
-                const pageWrapper = document.createElement('div');
-                // 'pdf-page-wrapper' sınıfı CSS tarafında responsive davranışı sağlar
-                pageWrapper.className = 'pdf-page-wrapper bg-white border-2 border-[var(--text-main)] shadow-[4px_4px_0px_var(--text-main)] lg:shadow-[8px_8px_0px_var(--text-main)] mb-2';
-                pageWrapper.id = 'page-' + pageNum;
-                pageWrapper.dataset.page = pageNum;
-
+                pageWrapper.innerHTML = '';
                 const canvas = document.createElement('canvas');
                 canvas.className = 'absolute top-0 left-0 w-full h-full object-contain';
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
                 pageWrapper.appendChild(canvas);
 
-                const renderContext = { canvasContext: canvas.getContext('2d'), viewport: viewport };
-                await page.render(renderContext).promise;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
 
-                // TEXT LAYER (Kopyalanabilir Metin)
                 const textContent = await page.getTextContent();
                 const textLayer = document.createElement('div');
                 textLayer.className = 'textLayer';
-                
+
                 textContent.items.forEach(item => {
                     const span = document.createElement('span');
                     span.textContent = item.str + ' ';
-                    
-                    // Metni responsive yapmak için yüzde (%) değerlerine çeviriyoruz
-                    let xPercent = (item.transform[4] * scale / viewport.width) * 100;
-                    let yPercent = ((viewport.height - (item.transform[5] * scale) - (item.height * scale)) / viewport.height) * 100;
-                    let fontHeightPercent = ((item.height * scale) / viewport.height) * 100;
-
+                    const xPercent = (item.transform[4] * scale / viewport.width) * 100;
+                    const yPercent = ((viewport.height - (item.transform[5] * scale) - (item.height * scale)) / viewport.height) * 100;
+                    const fontHeightPercent = ((item.height * scale) / viewport.height) * 100;
                     span.style.left = xPercent + '%';
                     span.style.top = yPercent + '%';
-                    // CSS 'vh' veya yüzde ile font boyutunu ayarlıyoruz (kabaca div yüksekliğine oranla)
                     span.style.height = fontHeightPercent + '%';
                     span.style.fontSize = `calc(var(--wrapper-height) * ${fontHeightPercent / 100})`;
                     span.style.fontFamily = item.fontName;
-                    
                     textLayer.appendChild(span);
                 });
-                
-                pageWrapper.appendChild(textLayer);
-                viewerContainer.appendChild(pageWrapper);
-                observer.observe(pageWrapper);
 
-                // THUMBNAILS (Sadece Sol Panel Açıkken İşlenmesi Mantıklı Ama Cache İçin Oluşturuyoruz)
-                const thumbScale = 0.3;
-                const thumbViewport = page.getViewport({ scale: thumbScale });
-                
+                pageWrapper.appendChild(textLayer);
+                renderedPages.add(pageNum);
+                renderPage(pageNum + 1);
+            })().finally(() => renderingPages.delete(pageNum));
+
+            renderingPages.set(pageNum, task);
+            return task;
+        }
+
+        async function renderThumb(pageNum) {
+            if (!loadedPdf || renderedThumbs.has(pageNum)) return;
+            const thumbWrapper = thumbWrappers.get(pageNum);
+            if (!thumbWrapper || thumbWrapper.offsetParent === null) return;
+
+            const canvas = thumbWrapper.querySelector('canvas');
+            if (!canvas) return;
+
+            const page = await loadedPdf.getPage(pageNum);
+            const thumbViewport = page.getViewport({ scale: 0.3 });
+            canvas.width = thumbViewport.width;
+            canvas.height = thumbViewport.height;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport: thumbViewport }).promise;
+            renderedThumbs.add(pageNum);
+        }
+
+        pdfjsLib.getDocument(url).promise.then(async pdfDoc => {
+            loadedPdf = pdfDoc;
+            loadingBanner.style.display = 'none';
+            document.getElementById('total-pages-thumb').textContent = pdfDoc.numPages;
+
+            for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+                const pageWrapper = document.createElement('div');
+                pageWrapper.className = 'pdf-page-wrapper bg-white border-2 border-[var(--text-main)] shadow-[4px_4px_0px_var(--text-main)] lg:shadow-[8px_8px_0px_var(--text-main)] mb-2';
+                pageWrapper.id = 'page-' + pageNum;
+                pageWrapper.dataset.page = pageNum;
+                pageWrapper.innerHTML = '<div class="absolute inset-0 flex items-center justify-center font-mono text-xs text-[#6D2323]/50">Sayfa yükleniyor...</div>';
+                viewerContainer.appendChild(pageWrapper);
+                pageWrappers.set(pageNum, pageWrapper);
+                observer.observe(pageWrapper);
+                pageRenderObserver.observe(pageWrapper);
+
                 const thumbWrapper = document.createElement('div');
                 thumbWrapper.id = 'thumb-' + pageNum;
+                thumbWrapper.dataset.page = pageNum;
                 thumbWrapper.className = 'thumb-wrapper cursor-pointer border-4 border-transparent hover:border-[var(--text-main)] transition-colors bg-white shadow-[4px_4px_0px_rgba(0,0,0,0.1)] relative';
                 thumbWrapper.onclick = () => pageWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
                 const thumbCanvas = document.createElement('canvas');
                 thumbCanvas.className = 'w-full h-auto block';
-                thumbCanvas.width = thumbViewport.width;
-                thumbCanvas.height = thumbViewport.height;
-                
+
                 const pageNumberBadge = document.createElement('div');
                 pageNumberBadge.className = 'absolute bottom-0 right-0 bg-[var(--text-main)] text-[var(--bg-paper)] font-mono text-[10px] px-2 py-1 z-10';
                 pageNumberBadge.textContent = pageNum;
@@ -304,16 +386,22 @@
                 thumbWrapper.appendChild(thumbCanvas);
                 thumbWrapper.appendChild(pageNumberBadge);
                 thumbContainer.appendChild(thumbWrapper);
-
-                page.render({ canvasContext: thumbCanvas.getContext('2d'), viewport: thumbViewport });
+                thumbWrappers.set(pageNum, thumbWrapper);
+                thumbRenderObserver.observe(thumbWrapper);
             }
+
+            renderPage(1);
+            renderThumb(1);
 
         }).catch(err => {
             console.error("PDF Yükleme Hatası:", err);
-            loadingBanner.textContent = '// BELGE YÜKLENEMEDİ: BAĞLANTI HATASI.';
+            loadingBanner.textContent = '// BELGE YÜKLENEMEDİ: CORS VEYA ERİŞİM HATASI.';
             loadingBanner.classList.remove('animate-pulse');
             loadingBanner.classList.add('bg-red-600', 'text-white');
         });
     </script>
+    <script nonce="<?= CSP_NONCE ?>">
+(function(){var m=document.getElementById('downloadModal');if(m){var b1=document.getElementById('dl-trigger-1'),b2=document.getElementById('dl-trigger-2'),bc=document.getElementById('dl-close');if(b1)b1.addEventListener('click',function(){m.showModal()});if(b2)b2.addEventListener('click',function(){m.showModal()});if(bc)bc.addEventListener('click',function(){m.close()})}})();
+</script>
 </body>
 </html>

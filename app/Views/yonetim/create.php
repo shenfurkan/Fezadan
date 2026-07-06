@@ -455,7 +455,7 @@
         // 1. Heartbeat: Her 10 dakikada bir sunucuya "Ben buradayım" sinyali gönder (Oturumu canlı tut)
         setInterval(() => {
             fetch('/yonetim/dashboard', { method: 'HEAD' })
-                .catch(() => console.log('Ping başarısız, internet bağlantısı kopmuş olabilir.'));
+                .catch(() => {});
         }, 10 * 60 * 1000); // 10 dakika
 
         // 2. Tarayıcıya Oto-Kayıt: Her 30 saniyede bir yazıyı yazarın bilgisayarına yedekle

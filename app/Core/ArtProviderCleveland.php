@@ -21,7 +21,7 @@ class ArtProviderCleveland extends ArtProvider {
             if (!empty($json['data']) && isset($json['data'][0])) {
                 $item = $json['data'][0];
 
-                // Check for excluded words in title to filter out non-art objects if necessary (though type=Painting usually helps)
+                // Sanat dışı nesneleri filtrelemek için başlıkta hariç kelimeleri kontrol et (type=Painting genelde yeterli)
                 $titleLower = strtolower($item['title'] ?? '');
                 $techniqueLower = strtolower($item['technique'] ?? '');
                 $typeLower = strtolower($item['type'] ?? '');
@@ -29,7 +29,7 @@ class ArtProviderCleveland extends ArtProvider {
                 $excludeWords = ['vase', 'pottery', 'ceramic', 'vessel', 'bowl', 'plate', 'fragment', 'sword', 'shield', 'album leaf', 'fan', 'calligraphy', 'manuscript', 'textile'];
                 foreach ($excludeWords as $word) {
                     if (strpos($haystack, $word) !== false) {
-                        return null; // Reject this one, let the orchestrator retry
+                        return null; // Bunu reddet, düzenleyici tekrar denesin
                     }
                 }
 
@@ -46,7 +46,7 @@ class ArtProviderCleveland extends ArtProvider {
                 if (!$imageUrl) return null;
 
                 $description = $item['description'] ?? $item['did_you_know'] ?? null;
-                // Cleveland API returns descriptions wrapped in HTML tags sometimes, strip them for deepL/wiki mapping.
+                // Cleveland API açıklamaları bazen HTML etiketleriyle sarılı olarak döner, deepL/wiki eşleme için temizle.
                 if ($description) {
                     $description = strip_tags($description);
                 }

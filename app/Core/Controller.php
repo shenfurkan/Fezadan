@@ -1,4 +1,13 @@
 <?php
+
+/**
+ * View render ve slug yardımcılarını sağlayan temel controller.
+ *
+ * Tüm uygulama controller'ları bu sınıfı genişleterek şunlara erişir:
+ * - view()         — app/Views/ altındaki PHP şablonunu render eder
+ * - createSlug()   — Türkçe karakter güvenli URL slug'ı üretir
+ * - uniqueSlug()   — veritabanı benzersizlik kontrollü slug üretir
+ */
 class Controller {
     public function view($view, $data = []) {
         if (file_exists(ROOT . '/app/Views/' . $view . '.php')) {
@@ -70,6 +79,40 @@ class Controller {
             if ($suffix > 1000) {
                 return $base . '-' . substr(bin2hex(random_bytes(3)), 0, 6);
             }
+        }
+    }
+
+    // --- RSS / XML yardımcı metodları ---
+
+    protected function xmlEscape(string $s): string {
+        return htmlspecialchars($s, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+    }
+
+    protected function cdata(string $s): string {
+        $safe = str_replace(']]>', ']]]]><![CDATA[>', $s);
+        return '<![CDATA[' . $safe . ']]>';
+    }
+
+    protected function absoluteUrl(string $url, string $siteBase): string {
+        $url = trim($url);
+        if ($url === '') return '';
+        if (preg_match('#^https?://#i', $url)) return $url;
+        if (strpos($url, '//') === 0) return 'https:' . $url;
+        if ($url[0] !== '/') $url = '/' . $url;
+        return $siteBase . $url;
+    }
+
+    protected function guessMime(string $url): string {
+        $ext = strtolower(pathinfo(parse_url($url, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
+        switch ($ext) {
+            case 'jpg':
+            case 'jpeg': return 'image/jpeg';
+            case 'png':  return 'image/png';
+            case 'gif':  return 'image/gif';
+            case 'webp': return 'image/webp';
+            case 'avif': return 'image/avif';
+            case 'svg':  return 'image/svg+xml';
+            default:     return 'image/jpeg';
         }
     }
 }

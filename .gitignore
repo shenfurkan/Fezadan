@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+app/Config/.security_salt
 
 # Dependencies / build
 vendor/
@@ -16,6 +17,20 @@ access-logs/
 tmp/
 storage/
 lscache/
+.cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.phpunit.cache/
+.phpunit.result.cache
+geckodriver.log
+
+# Generated sitemap files (production'da yeniden uretilir)
+public_html/sitemap.xml
+public_html/sitemap_main.xml
+public_html/sitemap_notes.xml
 
 # cPanel / hosting system files
 .cagefs/
@@ -50,6 +65,9 @@ public_ftp/
 
 # IDE / local settings
 .vscode/
+.opencode/
+.codex/
+.agents/
 
 # Backup/sync copies
 backups/
@@ -63,15 +81,29 @@ Fezadan-Previous/
 public_html/error_log
 public_html/uploads/
 public_html/assets/uploads/
-
-# Sunucu tani scripti - commit edilmemeli, kullandiktan sonra elle sil
 public_html/debug_server.php
+
+# Generated repository inventories
+all_files*.txt
+/d*Fezadan*
 
 # Local test/snapshot folders
 snapshot/
 previous/
 Fezadan-main/
 degisiklik_raporu*.md
+scripts/screenshots/
+playwright-report/
+test-results/
+blob-report/
+coverage/
+.nyc_output/
+.playwright/
+.idea/
+
+# Test tooling (dev only)
+playwright.config.ts
+tests/
 
 # Docker and local dev files
 Dockerfile
@@ -83,3 +115,92 @@ docker-php-config.php
 migration_galeri.php
 test_apis.php
 test_deepl.php
+
+# Database dumps (exclude root SQL dumps, keep migrations)
+/*.sql
+/*.sql.gz
+/*.dump
+/*.sqlite
+/*.sqlite3
+/*.db
+fezadano5_site.sql
+localhost.sql
+
+# Local archives, backups, and editor merge leftovers
+/*.zip
+/*.tar
+/*.tar.gz
+/*.tgz
+/*.rar
+/*.7z
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+*.tmp
+*.temp
+*~
+*.swp
+*.swo
+
+# OS metadata
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Additional debug / package manager logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.yarn/
+.pnpm-store/
+.turbo/
+.vite/
+.parcel-cache/
+
+# Next.js portfolio sandbox artifacts
+Portfolio/.next/
+Portfolio/out/
+Portfolio/build/
+Portfolio/tsconfig.tsbuildinfo
+Portfolio/.codex-dev-logs/
+
+# Local CAPTCHA testing sandbox
+scripts/*redteam*.py
+scripts/*bypass*.py
+scripts/*attack*.py
+scripts/test-captcha.py
+scripts/bypass-captcha.py
+scripts/test-honeypot.py
+scripts/advanced-bypass.py
+scripts/load-test-captcha.py
+scripts/test-keyboard-bypass.py
+scripts/robot-redteam.py
+
+# Local browser test scripts (contain credentials)
+scripts/check-site.py
+scripts/admin-editor-functional-check.py
+
+# Deploy automation (contains server paths)
+scripts/autodeploy-fezadan.sh
+scripts/autodeploy-litecaptcha.sh
+scripts/server-cleanup-dry-run.sh
+scripts/migrate_uploads_to_r2.php
+public_html/scripts/deploy-logic.php
+
+# Ignore temporary plan and brainstorm markdown files at root
+/*.md
+!/README.md
+!/AGENTS.md
+cron_dosyalar.txt
+tum_dosyalar.txt
+devammetni.ini
+cpanel_baglan.bat
+cpanel_baglan.ps1

@@ -1,5 +1,5 @@
 <?php 
-// Prepare JSON-LD for VisualArtwork
+// VisualArtwork için JSON-LD hazırla
 $jsonld = [
     "@context" => "https://schema.org",
     "@type" => "VisualArtwork",

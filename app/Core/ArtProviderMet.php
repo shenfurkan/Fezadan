@@ -5,7 +5,7 @@ require_once ROOT . '/app/Core/ArtProvider.php';
 class ArtProviderMet extends ArtProvider {
 
     public function fetchArtwork() {
-        // Step 1: Get a list of Object IDs for Paintings with images
+        // Adım 1: Görselli tablolar için Object ID listesini al
         $searchUrl = "https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=Painting";
         
         $ch = curl_init();
@@ -20,7 +20,7 @@ class ArtProviderMet extends ArtProvider {
             $searchJson = json_decode($searchResponse, true);
             if (!empty($searchJson['objectIDs'])) {
                 $objectIDs = $searchJson['objectIDs'];
-                // Try a few IDs only; this runs during web requests.
+                // Yalnızca birkaç ID dene; bu web istekleri sırasında çalışır.
                 for ($i = 0; $i < 3; $i++) {
                     $randomId = $objectIDs[array_rand($objectIDs)];
                     

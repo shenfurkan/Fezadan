@@ -3,18 +3,22 @@ $siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
 $authorSlug = $author['slug'] ?? '';
 $authorBio  = trim(strip_tags($author['bio'] ?? ''));
 
-$page_title       = ($author['name'] ?? 'Yazar') . ' — Yazar Profili | FEZADAN';
+$isEn = (App::getLang() === 'EN');
+$page_title       = ($author['name'] ?? 'Yazar') . ($isEn ? ' — Author Profile | FEZADAN' : ' — Yazar Profili | FEZADAN');
 $page_description = !empty($authorBio)
     ? mb_substr($authorBio, 0, 160)
-    : ($author['name'] ?? 'Yazar') . ' — FEZADAN yazar profili, makaleleri ve biyografisi.';
-$page_canonical   = $siteBase . '/yazar/' . $authorSlug;
+    : ($author['name'] ?? 'Yazar') . ($isEn ? ' — FEZADAN author profile, articles and biography.' : ' — FEZADAN yazar profili, makaleleri ve biyografisi.');
+$page_canonical   = authorUrl($authorSlug);
 $og_url           = $page_canonical;
 $og_type          = 'profile';
-$og_image         = !empty($author['image_url'])
+$author_image_url = !empty($author['image_url'])
     ? Upload::assetUrl($author['image_url'])
+    : '';
+$og_image = $author_image_url !== '' && !preg_match('/\.webp(\?|$)/i', $author_image_url)
+    ? $author_image_url
     : $siteBase . '/cdn/notlar-social-preview.png';
 
-// Person schema
+// Kişi şeması
 $personSchema = [
     '@context' => 'https://schema.org',
     '@type'    => 'Person',
@@ -26,7 +30,7 @@ if (!empty($author['image_url']))  $personSchema['image']       = $og_image;
 $personSchema['worksFor'] = [
     '@type' => 'Organization',
     'name'  => 'FEZADAN',
-    'url'   => $siteBase . '/',
+    'url'   => langUrl('/'),
 ];
 
 // Yazarın makaleleri için CollectionPage + ItemList
@@ -35,7 +39,7 @@ foreach (($all_articles ?? []) as $i => $a) {
     $itemList[] = [
         '@type'    => 'ListItem',
         'position' => $i + 1,
-        'url'      => $siteBase . '/makale/' . $a['slug'],
+        'url'      => articleUrl($authorSlug, $a['slug'], $contentLang),
         'name'     => $a['title'],
     ];
 }
@@ -55,8 +59,8 @@ $breadcrumb = [
     '@context' => 'https://schema.org',
     '@type'    => 'BreadcrumbList',
     'itemListElement' => [
-        ['@type' => 'ListItem', 'position' => 1, 'name' => 'Anasayfa', 'item' => $siteBase . '/'],
-        ['@type' => 'ListItem', 'position' => 2, 'name' => 'Makaleler','item' => $siteBase . '/makaleler'],
+        ['@type' => 'ListItem', 'position' => 1, 'name' => (App::getLang() === 'EN' ? 'Home' : 'Anasayfa'), 'item' => langUrl('/')],
+        ['@type' => 'ListItem', 'position' => 2, 'name' => (App::getLang() === 'EN' ? 'Articles' : 'Makaleler'), 'item' => langUrl(App::getLang() === 'EN' ? '/articles' : '/makaleler')],
         ['@type' => 'ListItem', 'position' => 3, 'name' => $author['name'], 'item' => $page_canonical],
     ],
 ];
@@ -167,15 +171,15 @@ require_once ROOT . '/app/Views/inc/header.php';
             <section>
                 <div class="flex items-baseline justify-between border-b-2 border-[var(--text-main)] pb-4 mb-8">
                     <h2 class="font-syne text-3xl font-bold uppercase tracking-wide text-[var(--text-main)]">
-                        Seçkiler
+                        <?= $isEn ? 'Selected Works' : 'Seçkiler' ?>
                     </h2>
-                    <span class="font-mono text-xs tracking-widest opacity-50 uppercase">Öne Çıkanlar</span>
+                    <span class="font-mono text-xs tracking-widest opacity-50 uppercase"><?= $isEn ? 'Featured' : 'Öne Çıkanlar' ?></span>
                 </div>
 
                 <?php if (!empty($featured_articles)): ?>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <?php foreach ($featured_articles as $article): ?>
-                            <a href="/makale/<?php echo $article['slug']; ?>" class="brutalist-card bg-[var(--bg-paper)] group block">
+                            <a href="<?php echo articleUrl($authorSlug, $article['slug'], $contentLang); ?>" class="brutalist-card bg-[var(--bg-paper)] group block">
                                 <?php if (!empty($article['image_url'])): ?>
                                     <div class="aspect-video w-full overflow-hidden border-b-2 border-[var(--line-color)]">
                                         <img src="<?php echo htmlspecialchars(Upload::assetUrl($article['image_url']), ENT_QUOTES, 'UTF-8'); ?>" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500">
@@ -197,7 +201,7 @@ require_once ROOT . '/app/Views/inc/header.php';
                     </div>
                 <?php else: ?>
                     <div class="p-8 border-2 border-dashed border-[var(--line-color)] opacity-50 font-mono text-sm text-center">
-                        // Yazar henüz öne çıkan bir makale seçmedi.
+                        <?= $isEn ? '// No featured English articles yet.' : '// Yazar henüz öne çıkan bir makale seçmedi.' ?>
                     </div>
                 <?php endif; ?>
             </section>
@@ -205,15 +209,15 @@ require_once ROOT . '/app/Views/inc/header.php';
             <section>
                 <div class="flex items-baseline justify-between border-b border-[var(--line-color)] pb-4 mb-8">
                     <h2 class="font-syne text-2xl font-bold uppercase tracking-wide text-[var(--text-main)]">
-                        Tüm Makaleler
+                        <?= $isEn ? 'All Articles' : 'Tüm Makaleler' ?>
                     </h2>
-                    <span class="font-mono text-xs tracking-widest opacity-50 uppercase">Arşiv</span>
+                    <span class="font-mono text-xs tracking-widest opacity-50 uppercase"><?= $isEn ? 'Archive' : 'Arşiv' ?></span>
                 </div>
 
                 <?php if (!empty($all_articles)): ?>
                     <div class="flex flex-col gap-4">
                         <?php foreach ($all_articles as $article): ?>
-                            <a href="/makale/<?php echo $article['slug']; ?>" class="group flex flex-col md:flex-row md:items-center justify-between p-4 border border-transparent hover:border-[var(--line-color)] hover:bg-[var(--bg-secondary)]/10 transition-all gap-4">
+                            <a href="<?php echo articleUrl($authorSlug, $article['slug'], $contentLang); ?>" class="group flex flex-col md:flex-row md:items-center justify-between p-4 border border-transparent hover:border-[var(--line-color)] hover:bg-[var(--bg-secondary)]/10 transition-all gap-4">
                                 <div class="flex-grow">
                                     <h3 class="font-syne text-lg font-bold group-hover:text-[var(--text-accent)] transition-colors">
                                         <?php echo htmlspecialchars($article['title']); ?>
@@ -224,14 +228,14 @@ require_once ROOT . '/app/Views/inc/header.php';
                                 </div>
                                 <div class="font-mono text-xs text-[var(--text-accent)] font-bold shrink-0 md:text-right">
                                     <?php echo date('d.m.Y', strtotime($article['created_at'])); ?> <br>
-                                    <span class="opacity-50 text-[10px]"><?php echo $article['reads']; ?> OKUNMA</span>
+                                    <span class="opacity-50 text-[10px]"><?php echo $article['reads']; ?> <?= $isEn ? 'READS' : 'OKUNMA' ?></span>
                                 </div>
                             </a>
                         <?php endforeach; ?>
                     </div>
                 <?php else: ?>
                     <div class="font-mono text-sm opacity-50">
-                        // Bu yazarın henüz yayında olan bir makalesi bulunmuyor.
+                        <?= $isEn ? '// This author has no published English articles yet.' : '// Bu yazarın henüz yayında olan bir makalesi bulunmuyor.' ?>
                     </div>
                 <?php endif; ?>
             </section>

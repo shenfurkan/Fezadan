@@ -10,7 +10,8 @@ class RssController extends Controller {
             $pdo = $this->getPDO();
 
             $sql = "SELECT a.id, a.slug, a.title, a.short_desc, a.content, a.image_url,
-                           a.created_at, a.updated_at, au.name AS author_name
+                           a.created_at, a.updated_at, a.lang,
+                           au.name AS author_name, au.slug AS author_slug
                     FROM articles a
                     LEFT JOIN authors au ON au.id = a.author_id
                     WHERE a.status = 'published'
@@ -46,8 +47,8 @@ class RssController extends Controller {
             header('Cache-Control: public, max-age=900');
             header('Last-Modified: ' . $lastModifiedHttp);
 
-            $channelTitle = 'FEZADAN — Özgür Bilgi Platformu';
-            $channelDesc  = 'Veri ve estetik arasındaki sessiz çatışma. FEZADAN — bilim, estetik ve fikir üzerine bağımsız bir yayın.';
+            $channelTitle = 'FEZADAN - Özgür Bilgi Platformu';
+            $channelDesc  = 'Veri ve estetik arasındaki sessiz çatışma. FEZADAN - bilim, estetik ve fikir üzerine bağımsız bir yayın.';
             $feedSelf     = $siteBase . '/rss';
 
             echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
@@ -60,7 +61,7 @@ class RssController extends Controller {
     <title><?= $this->xmlEscape($channelTitle) ?></title>
     <link><?= $this->xmlEscape($siteBase . '/') ?></link>
     <description><?= $this->xmlEscape($channelDesc) ?></description>
-    <language>tr-TR</language>
+    <language>tr</language>
     <lastBuildDate><?= $this->xmlEscape($lastBuild) ?></lastBuildDate>
     <atom:link href="<?= $this->xmlEscape($feedSelf) ?>" rel="self" type="application/rss+xml" />
     <image>
@@ -69,7 +70,8 @@ class RssController extends Controller {
       <link><?= $this->xmlEscape($siteBase . '/') ?></link>
     </image>
 <?php foreach ($articles as $a):
-        $link    = $siteBase . '/makale/' . rawurlencode($a['slug']);
+        // Kanonik URL — /{lang}/{yazar_slug}/{makale_slug}
+        $link    = articleUrl($a['author_slug'] ?? 'yazar', $a['slug'], strtolower($a['lang'] ?? 'tr'));
         $pubDate = date(DATE_RSS, strtotime($a['created_at']));
         $img     = $this->absoluteUrl($a['image_url'] ?? '', $siteBase);
 ?>
@@ -89,43 +91,11 @@ class RssController extends Controller {
     </item>
 <?php endforeach; ?>
   </channel>
-</rss>
+    </rss>
 <?php
         } catch (\PDOException $e) {
             throw new \Exception("RSS Hatası: " . $e->getMessage());
         }
     }
 
-    private function xmlEscape(string $s): string {
-        return htmlspecialchars($s, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-    }
-
-    private function cdata(string $s): string {
-        // CDATA içinde "]]>" geçerse güvenli şekilde böl
-        $safe = str_replace(']]>', ']]]]><![CDATA[>', $s);
-        return '<![CDATA[' . $safe . ']]>';
-    }
-
-    private function absoluteUrl(string $url, string $siteBase): string {
-        $url = trim($url);
-        if ($url === '') return '';
-        if (preg_match('#^https?://#i', $url)) return $url;
-        if (strpos($url, '//') === 0) return 'https:' . $url;
-        if ($url[0] !== '/') $url = '/' . $url;
-        return $siteBase . $url;
-    }
-
-    private function guessMime(string $url): string {
-        $ext = strtolower(pathinfo(parse_url($url, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
-        switch ($ext) {
-            case 'jpg':
-            case 'jpeg': return 'image/jpeg';
-            case 'png':  return 'image/png';
-            case 'gif':  return 'image/gif';
-            case 'webp': return 'image/webp';
-            case 'avif': return 'image/avif';
-            case 'svg':  return 'image/svg+xml';
-            default:     return 'image/jpeg';
-        }
-    }
 }

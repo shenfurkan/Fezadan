@@ -103,7 +103,7 @@ Fezadan, medya dosyalarını doğrudan web sunucusundan değil, Cloudflare R2 ü
 3. **Format Optimizasyonu:** Yüklenen JPEG ve PNG formatındaki görseller, arka planda otomatik olarak yeni nesil WebP formatına çevrilir. Dosyalar R2 bucket'ına aktarıldıktan sonra sunucudaki tüm geçici kalıntılar temizlenir.
 4. **AWS S3 SDK Entegrasyonu:** `R2Storage.php` sınıfı, AWS SDK for PHP (`aws/aws-sdk-php`) kullanılarak S3 uyumlu API üzerinden R2 ile iletişim kurar. Singleton pattern kullanılarak tek bir bağlantı örneği yönetilir.
 5. **PDF Yönetimi:** Notlar modülü için PDF dosyaları R2'ye yüklenir, stream edilebilir ve indirilebilir. `streamView()` methodu HTTP Range header'larını destekleyerek partially content (206) yanıtları verebilir.
-6. **Cache Stratejisi:** Statik medya dosyaları için `Cache-Control: public, max-age=31536000, immutable` header'ı uygulanarak一年 boyunca tarayıcı önbelleğinde tutulur.
+6. **Cache Stratejisi:** Statik medya dosyaları için `Cache-Control: public, max-age=31536000, immutable` header'ı uygulanarak bir yıl boyunca tarayıcı önbelleğinde tutulur.
 7. **Path Validation:** Dosya yollarında `..` ve diğer path traversal girişimleri engellenir. Sadece izinli uzantılar (webp, jpeg, png, gif, pdf) ve belirli dizinlere erişime izin verilir.
 
 ---
@@ -113,7 +113,7 @@ Fezadan, medya dosyalarını doğrudan web sunucusundan değil, Cloudflare R2 ü
 Sistem, harici API'ler aracılığıyla kendi sanatsal içeriklerini üretebilecek bir yapılandırmaya sahiptir:
 
 - **Müze API Entegrasyonları:** The Met, Art Institute of Chicago ve Cleveland Museum of Art API'lerinden günlük periyotlarla yeni sanatsal veriler çekilir. `ArtProviderMet.php`, `ArtProviderChicago.php`, ve `ArtProviderCleveland.php` sınıfları her bir müze API'si ile iletişim kurar.
-- **Çeviri Mekanizması:** Çekilen yabancı dildeki metinler DeepL API ile otomatik olarak Türkçe'ye çevrilir. DeepL servisinin limitlerinin dolması veya yanıt vermemesi durumunda sistem kesintiye uğramaz; yedek mekanizma (failover) devreye girerek çeviriyi Gemini AI API üzerinden tamamlar.
+- **Ceviri Mekanizmasi:** Cekilen yabanci dildeki metinler DeepL API ile otomatik olarak Turkce'ye cevrilir.
 - **Daily Artwork Sistemi:** `DailyArtwork.php` sınıfı, günlük sanat eserlerini yönetir. Her gün için unique slug oluşturur, Türkçe karakterleri URL-friendly formata çevirir, ve veritabanında saklar. Schema migrations otomatik olarak gerçekleştirilir.
 - **Cron Job Entegrasyonu:** `cron/` dizinindeki scriptler, günlük içerik çekme işlemlerini otomatikleştirir. Sistem, her gün yeni bir sanat eseri çekip veritabanına kaydeder.
 - **Wikipedia Entegrasyonu:** Sanat eserleri için Wikipedia'dan ek bilgi çekilebilir. `description_source` field'ı içeriğin kaynağını (wikipedia, museum, template, manual) belirler.
@@ -134,7 +134,7 @@ Sistem, harici API'ler aracılığıyla kendi sanatsal içeriklerini üretebilec
 Sistem, özel bir MVC (Model-View-Controller) mimarisi kullanır:
 
 * **App.php:** Merkezi router ve dispatcher. URL parsing, controller loading, method dispatching işlemlerini yönetir. Subdomain routing (notlar.fezadan.org) desteği vardır.
-* **Controllers:** HTTP isteklerini karşılar, iş mantığını uygular ve view'ları render eder. Örnek: `HomeController`, `GaleriController`, `YonetimController`.
+* **Controllers:** HTTP isteklerini karşılar, iş mantığını uygular ve view'ları render eder. Örnek: `HomeController`, `ArticlesController`, `AdminController`.
 * **Models:** Veritabanı işlemlerini kapsüller. `Post.php`, `User.php` gibi modeller veri erişim katmanını sağlar.
 * **Views:** HTML/PHP şablonları. `app/Views/` dizininde organize edilir. Frontend ve admin view'ları ayrılmıştır.
 * **Core Classes:** `Db.php` (singleton PDO connection), `Csrf.php` (CSRF protection), `Auth.php` (authentication), `R2Storage.php` (cloud storage), `DailyArtwork.php` (artwork management).
@@ -154,8 +154,6 @@ Fezadan/
 │   ├── Config/        # Ayar ve veritabanı bağlantı dosyaları
 │   ├── Controllers/   # HTTP request yöneticileri
 │   ├── Core/          # Temel iş mantığı sınıfları (Db, Upload, Csrf vb.)
-│   ├── Models/        # Veritabanı modelleri
-│   ├── Services/      # Hizmet sınıfları (ImageHandler, WordParser vb.)
 │   └── Views/         # HTML/PHP arayüz şablonları
 ├── public_html/       # Kök web dizini (Document Root)
 │   ├── assets/        # Derlenmiş CSS ve JS dosyaları
@@ -183,8 +181,7 @@ Fezadan/
 - Composer
 - Apache veya Nginx
 - Cloudflare R2 hesabı (medya depolama için)
-- DeepL API Key (opsiyonel - çeviri için)
-- Gemini API Key (opsiyonel - yedek çeviri için)
+- DeepL API Key (opsiyonel - ceviri icin)
 
 ### Kurulum
 
@@ -220,7 +217,7 @@ nano .env  # veya düzenleyiciniz
 **.env dosyasında gerekli ayarları yapın:**
 - Veritabanı bağlantı bilgileri
 - Cloudflare R2 API anahtarları
-- API anahtarları (DeepL, Gemini)
+- API anahtarlari (DeepL)
 - Güvenlik anahtarları
 
 **Web sunucusu yapılandırması:**
@@ -305,7 +302,7 @@ Deployment için:
 
 ## 10. Geliştiriciler
 
-* **Furkan Şen:** Projenin mimari tasarım aşamaları, MVC Core yapısının oluşturulması, güvenlik katmanlarının tasarımı, Cloudflare R2 entegrasyonu, yapay zeka (Gemini/DeepL) altyapısının kurulması ve otonom sistem algoritmalarının kodlanması.
+* **Furkan Şen:** Projenin mimari tasarım aşamaları, MVC Core yapısının oluşturulması, güvenlik katmanlarının tasarımı, Cloudflare R2 entegrasyonu ve otonom sistem algoritmalarının kodlanması.
 * **Suat Işık:** Projenin Notlar modülü altyapısı, frontend hata düzeltmeleri ve sistem genelindeki operasyonel eklentilerin tamamlanması.
 
 

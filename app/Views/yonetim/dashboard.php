@@ -1,10 +1,10 @@
 <?php
-// Sorting link
+// Sıralama bağlantısı
 function sortLink($col, $currentSort) {
     $params = $_GET;
     unset($params['page']);
     
-    // Sorting order
+    // Sıralama yönü
     $newOrder = 'DESC';
     if ($currentSort['column'] == $col && $currentSort['order'] == 'DESC') {
         $newOrder = 'ASC';

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./article-reader.css";
 
 /* Fezadan Renk Tanımlamaları */
 @theme {
@@ -13,5 +14,164 @@
         --text-main: #6D2323;
         --line-color: #6D2323;
         --text-accent: #A31D1D;
+    }
+}
+
+@layer components {
+    /* LiteCaptcha Widget Styles */
+    .litecaptcha-check-row {
+        width: 100%;
+        border: 1px solid rgba(240, 240, 240, 0.18);
+        background: rgba(255, 255, 255, 0.025);
+        color: var(--text-main);
+        padding: 0.875rem 1rem;
+        overflow: hidden;
+    }
+
+    /* Light mode override for public site */
+    :root .litecaptcha-check-row {
+        border: 1px solid var(--text-main);
+        background: var(--bg-paper);
+    }
+    .dark .litecaptcha-check-row,
+    .bg-\[var\(--bg-paper\)\] .litecaptcha-check-row {
+        /* When inside admin dark or explicitly set, handled by context */
+    }
+
+    .litecaptcha-mini-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.7rem;
+        border-bottom: 1px solid rgba(109, 35, 35, 0.2);
+        font-size: 0.76rem;
+        font-weight: 800;
+        color: var(--text-main);
+    }
+
+    .litecaptcha-mini-brand svg {
+        width: 0.95rem;
+        height: 0.95rem;
+        color: var(--text-main);
+        flex: 0 0 auto;
+    }
+
+    .litecaptcha-mini-secure {
+        margin-left: auto;
+        font-size: 0.64rem;
+        font-weight: 700;
+        color: var(--text-main);
+        opacity: 0.6;
+    }
+
+    .litecaptcha-check-label {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        font-weight: 700;
+        text-transform: none;
+        cursor: pointer;
+        color: var(--text-main);
+    }
+
+    .litecaptcha-check-label input {
+        width: 1.15rem;
+        height: 1.15rem;
+        padding: 0;
+        flex: 0 0 auto;
+        accent-color: var(--text-main);
+    }
+
+    .litecaptcha-check-status {
+        display: block;
+        margin-top: 0.65rem;
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-main);
+        opacity: 0.7;
+    }
+
+    .litecaptcha-detail-pop {
+        display: none;
+        margin-top: 0.75rem;
+        padding: 0.75rem 0.8rem;
+        border: 1px solid rgba(109, 35, 35, 0.2);
+        background: rgba(109, 35, 35, 0.05);
+        font-size: 0.78rem;
+        line-height: 1.45;
+        color: var(--text-main);
+        overflow-wrap: anywhere;
+    }
+
+    .litecaptcha-check-row.is-active .litecaptcha-detail-pop,
+    .litecaptcha-check-row.is-done .litecaptcha-detail-pop,
+    .litecaptcha-check-row.is-error .litecaptcha-detail-pop {
+        display: block;
+    }
+
+    .litecaptcha-check-row.is-error {
+        border-color: rgba(255, 80, 80, 0.6);
+        background: rgba(255, 80, 80, 0.05);
+    }
+
+    .litecaptcha-check-row.is-done {
+        border-color: rgba(120, 255, 170, 0.8);
+        background: rgba(120, 255, 170, 0.1);
+    }
+
+    .litecaptcha-bridge {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        border: 0;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .litecaptcha-page-btn {
+        position: fixed;
+        z-index: 99999;
+        width: auto !important;
+        min-width: 7rem;
+        min-height: 3.25rem;
+        padding: 0.9rem 1.4rem;
+        border: 2px solid var(--text-main);
+        background: var(--bg-paper);
+        color: var(--text-main);
+        font-size: 1rem;
+        font-weight: 800;
+        font-family: 'Space Grotesk', sans-serif;
+        text-transform: none;
+        cursor: pointer;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+        -webkit-user-select: none;
+        box-shadow: 4px 4px 0px var(--text-main);
+        transition: transform 0.1s, box-shadow 0.1s;
+    }
+
+    .litecaptcha-page-btn:active {
+        transform: translate(2px, 2px);
+        box-shadow: 2px 2px 0px var(--text-main);
+    }
+
+    /* Native Dialog Modal Styles */
+    dialog.fezadan-modal {
+        margin: auto;
+        padding: 0;
+        border: 2px solid var(--text-main);
+        background: var(--bg-paper);
+        color: var(--text-main);
+        box-shadow: 8px 8px 0px var(--text-main);
+        max-width: 90vw;
+        width: 400px;
+    }
+
+    dialog.fezadan-modal::backdrop {
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(4px);
     }
 }

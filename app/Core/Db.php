@@ -22,7 +22,9 @@ class Db
                 \PDO::ATTR_EMULATE_PREPARES   => false,
                 \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
             ]);
+
         }
+
         return self::$pdo;
     }
 

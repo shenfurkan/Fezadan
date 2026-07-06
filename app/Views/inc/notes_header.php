@@ -5,7 +5,7 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <script>
+    <script nonce="<?= CSP_NONCE ?>">
         (function () {
             const userTheme = localStorage.getItem('theme');
             if (userTheme === 'dark') {
@@ -15,7 +15,7 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FEZADAN NOTLAR | <?php echo $page_title ?? 'Akademik Veri Havuzu'; ?></title>
+    <title>FEZADAN NOTLAR | <?php echo htmlspecialchars($page_title ?? 'Akademik PDF Veri Havuzu', ENT_QUOTES, 'UTF-8'); ?></title>
     
     <link rel="icon" type="image/x-icon" href="/cdn/light-favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/cdn/light-favicon-32x32.png">
@@ -25,23 +25,31 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/cdn/light-android-chrome-192x192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/cdn/light-android-chrome-512x512.png">
     
-    <meta name="description" content="<?php echo htmlspecialchars($page_description ?? 'Fezadan PDF Veri Havuzu. Astronomi, bilim ve teknoloji üzerine akademik notlar, makaleler ve araştırmalar.'); ?>">
-    <meta name="robots" content="index, follow">
+    <meta name="description" content="<?php echo htmlspecialchars($page_description ?? 'Fezadan PDF Veri Havuzu. Astronomi, bilim ve teknoloji üzerine akademik notlar, makaleler ve araştırmalar.', ENT_QUOTES, 'UTF-8'); ?>">
+    <meta name="robots" content="index, follow, noai, noimageai">
     
-    <?php $current_url = "https://notlar.fezadan.org" . parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH); ?>
-    <link rel="canonical" href="<?php echo $current_url; ?>">
+    <?php
+        $notesBaseUrl = defined('NOTES_SITE_URL') ? rtrim(NOTES_SITE_URL, '/') : 'https://notlar.fezadan.org';
+        $current_url = $canonical_url ?? ($notesBaseUrl . (parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/'));
+    ?>
+    <link rel="canonical" href="<?php echo htmlspecialchars($current_url, ENT_QUOTES, 'UTF-8'); ?>">
 
     <meta property="og:site_name" content="FEZADAN NOTLAR">
     <meta property="og:type" content="<?php echo isset($is_note) ? 'article' : 'website'; ?>">
     <meta property="og:title" content="FEZADAN NOTLAR | <?php echo htmlspecialchars($page_title ?? 'Akademik Veri Havuzu'); ?>">
     <meta property="og:description" content="<?php echo htmlspecialchars($page_description ?? 'Fezadan PDF Veri Havuzu.'); ?>">
-    <meta property="og:url" content="<?php echo $current_url; ?>">
+    <meta property="og:url" content="<?php echo htmlspecialchars($current_url, ENT_QUOTES, 'UTF-8'); ?>">
     <meta property="og:image" content="https://fezadan.org/cdn/notlar-social-preview.png">
-    <meta name="twitter:image" content="https://fezadan.org/cdn/notlar-social-preview.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
     <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="FEZADAN NOTLAR | <?php echo htmlspecialchars($page_title ?? 'Akademik Veri Havuzu'); ?>">
+    <meta name="twitter:description" content="<?php echo htmlspecialchars($page_description ?? 'Fezadan PDF Veri Havuzu.'); ?>">
+    <meta name="twitter:image" content="https://fezadan.org/cdn/notlar-social-preview.png">
     
-    <link rel="stylesheet" href="/assets/css/yonetim.css?v=<?php echo filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/css/yonetim.css'); ?>">
-    <link rel="stylesheet" href="/assets/css/fonts.css">
+    <link rel="stylesheet" href="/assets/css/style.css?v=<?php echo filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/css/style.css'); ?>">
+    <link rel="preload" href="/assets/css/fonts.css?v=<?= filemtime(ROOT . '/public_html/assets/css/fonts.css') ?>" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/assets/css/fonts.css?v=<?= filemtime(ROOT . '/public_html/assets/css/fonts.css') ?>"></noscript>
     
     <style>
         .skip-to-content {
@@ -51,8 +59,9 @@
             font-size: 0.85rem; text-decoration: none;
         }
         .skip-to-content:focus { left: 12px; top: 12px; outline: 3px solid #FEF9E1; outline-offset: 2px; }
-        :focus-visible { outline: 2px solid #A31D1D; outline-offset: 2px; }
-        a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
+        :focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; }
+        :focus:not(:focus-visible) { outline: none; }
+        html:focus, body:focus, html:focus-visible, body:focus-visible { outline: none !important; }
 
         :root {
             --bg-paper: #FEF9E1; 
@@ -65,7 +74,7 @@
         [data-theme="dark"] {
             --bg-paper: #120A0A;
             --bg-secondary: #1F1212;
-            --text-main: #E5D0AC;
+            --text-main: #E1C89E;
             --text-accent: #FF5C5C;
             --line-color: #3D1F1F;
         }
@@ -176,7 +185,7 @@
             <a href="<?php echo $main_site_url; ?>" class="group flex items-center gap-2 border-2 border-[var(--text-main)] px-4 py-2 hover:bg-[var(--text-main)] transition-all">
                 <span class="font-bold text-[18px] text-[var(--text-main)] group-hover:text-[var(--bg-paper)] group-hover:-translate-x-1 transition-transform leading-none mb-1">←</span>
                 <span class="font-syne font-bold uppercase text-[10px] md:text-xs text-[var(--text-main)] group-hover:text-[var(--bg-paper)] tracking-widest">
-                    MERKEZE DÖN
+                    ANA SAYFAYA DON
                 </span>
             </a>
 
@@ -203,7 +212,7 @@
     <div id="mobile-menu">
         <div class="flex flex-col gap-8 text-center items-center"> 
             <a href="/" class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">NOTLAR</a>
-            <a href="<?php echo $main_site_url; ?>" class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">MERKEZ</a>
+            <a href="<?php echo $main_site_url; ?>" class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">FEZADAN</a>
             
             <div class="theme-switch-wrapper group scale-125 mt-4" role="button" tabindex="0" aria-label="Temayı Değiştir">
                 <svg class="theme-icon sun-icon opacity-50 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -221,7 +230,7 @@
         </div>
     </div>
 
-    <script>
+    <script nonce="<?= CSP_NONCE ?>">
         const navbar = document.getElementById('main-navbar');
         const hamburgerBtn = document.getElementById('hamburger-btn');
         const mobileMenu = document.getElementById('mobile-menu');

@@ -3,6 +3,7 @@
 class AdminLog
 {
     private const MAX_BYTES = 1048576;
+    private const MAX_AGE_ROTATED = 2592000;
 
     public static function write(string $level, string $message, array $context = []): void
     {
@@ -15,6 +16,7 @@ class AdminLog
         $file = self::file();
         if (is_file($file) && filesize($file) > self::MAX_BYTES) {
             @rename($file, $dir . '/admin-' . date('Ymd-His') . '.log');
+            self::cleanupRotated();
         }
 
         $entry = [
@@ -22,7 +24,7 @@ class AdminLog
             'level' => strtoupper($level),
             'message' => $message,
             'user' => $_SESSION['admin_user'] ?? null,
-            'ip' => $_SERVER['REMOTE_ADDR'] ?? null,
+            'ip' => isset($_SERVER['REMOTE_ADDR']) ? hash('sha256', $_SERVER['REMOTE_ADDR'] . date('Y-m-d') . (defined('APP_SALT') ? APP_SALT : '')) : null,
             'uri' => $_SERVER['REQUEST_URI'] ?? null,
             'context' => self::safeContext($context),
         ];
@@ -37,22 +39,46 @@ class AdminLog
             return [];
         }
 
-        $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        if (!is_array($lines)) {
+        $handle = @fopen($file, 'r');
+        if (!$handle) {
             return [];
         }
 
-        $lines = array_reverse($lines);
         $rows = [];
-        foreach ($lines as $line) {
-            $decoded = json_decode($line, true);
-            if (is_array($decoded) && self::matchesFilters($decoded, $filters)) {
-                $rows[] = $decoded;
-                if (count($rows) >= max(1, $limit)) {
-                    break;
+        $max = max(1, $limit);
+        $buffer = '';
+        $pos = filesize($file);
+        $chunkSize = 8192;
+
+        while ($pos > 0 && count($rows) < $max) {
+            $readLen = min($chunkSize, $pos);
+            $pos -= $readLen;
+            fseek($handle, $pos);
+            $chunk = fread($handle, $readLen);
+            if ($chunk === false) {
+                break;
+            }
+            $buffer = $chunk . $buffer;
+
+            $lines = explode("\n", $buffer);
+            $buffer = array_shift($lines);
+
+            for ($i = count($lines) - 1; $i >= 0; $i--) {
+                $line = trim($lines[$i]);
+                if ($line === '') {
+                    continue;
+                }
+                $decoded = json_decode($line, true);
+                if (is_array($decoded) && self::matchesFilters($decoded, $filters)) {
+                    $rows[] = $decoded;
+                    if (count($rows) >= $max) {
+                        break 2;
+                    }
                 }
             }
         }
+
+        fclose($handle);
         return $rows;
     }
 
@@ -87,6 +113,61 @@ class AdminLog
         }
 
         return true;
+    }
+
+    public static function countByLevel(string $level, int $secondsBack = 86400): int
+    {
+        $file = self::file();
+        if (!is_file($file) || !is_readable($file)) {
+            return 0;
+        }
+
+        $handle = @fopen($file, 'r');
+        if (!$handle) {
+            return 0;
+        }
+
+        $cutoff = time() - $secondsBack;
+        $level = strtoupper($level);
+        $count = 0;
+
+        while (($line = fgets($handle)) !== false) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            $decoded = json_decode($line, true);
+            if (!is_array($decoded)) {
+                continue;
+            }
+            if (strtoupper((string)($decoded['level'] ?? '')) !== $level) {
+                continue;
+            }
+            $entryTime = isset($decoded['time']) ? strtotime($decoded['time']) : 0;
+            if ($entryTime >= $cutoff) {
+                $count++;
+            }
+        }
+
+        fclose($handle);
+        return $count;
+    }
+
+    private static function cleanupRotated(): void
+    {
+        $dir = self::dir();
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        $cutoff = time() - self::MAX_AGE_ROTATED;
+        $pattern = $dir . '/admin-*.log';
+
+        foreach (glob($pattern) as $rotatedFile) {
+            if (is_file($rotatedFile) && filemtime($rotatedFile) < $cutoff) {
+                @unlink($rotatedFile);
+            }
+        }
     }
 
     private static function safeContext(array $context): array

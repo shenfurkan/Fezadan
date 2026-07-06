@@ -1,21 +1,29 @@
 <?php
 $siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
 $slug     = $article['slug'] ?? '';
+$isEn     = (App::getLang() === 'EN');
 
 // --- Meta / OG (header.php'nin standart değişkenleri) ---
-$page_title       = ($article['title'] ?? 'Makale') . ' | FEZADAN';
-$page_description = !empty($article['short_desc'])
-    ? $article['short_desc']
-    : mb_substr(trim(strip_tags($article['content'] ?? '')), 0, 160);
-$page_canonical   = $siteBase . '/makale/' . $slug;
+$page_title       = !empty($article['seo_title']) ? $article['seo_title'] : (($article['title'] ?? 'Makale') . ' | FEZADAN');
+$page_description = !empty($article['seo_description'])
+    ? $article['seo_description']
+    : (!empty($article['short_desc'])
+        ? $article['short_desc']
+        : mb_substr(trim(strip_tags($article['content'] ?? '')), 0, 160));
+$page_canonical   = $page_canonical ?? articleUrl($article['author_slug'] ?? 'yazar', $slug, $contentLang);
 $og_url           = $page_canonical;
 $og_type          = 'article';
-$og_image         = !empty($article['image_url'])
+$hero_image_url = !empty($article['image_url'])
     ? Upload::assetUrl($article['image_url'])
-    : $siteBase . '/cdn/notlar-social-preview.png';
+    : '';
 
-// LCP: Hero görselini önceden indir
-$preload_image = $og_image;
+$og_image = !empty($article['og_image'])
+    ? Upload::assetUrl($article['og_image'])
+    : ($hero_image_url !== '' && !preg_match('/\.webp(\?|$)/i', $hero_image_url)
+        ? $hero_image_url
+        : $siteBase . '/cdn/notlar-social-preview.png');
+
+$preload_image = $hero_image_url !== '' ? $hero_image_url : $og_image;
 
 $article_published_time = !empty($article['created_at']) ? date('c', strtotime($article['created_at'])) : null;
 $article_modified_time  = !empty($article['updated_at']) ? date('c', strtotime($article['updated_at'])) : $article_published_time;
@@ -48,6 +56,18 @@ if (!function_exists('fezadan_is_own_upload_image')) {
             ($siteHost !== '' && strcasecmp($host, $siteHost) === 0)
             || ($cdnHost !== '' && strcasecmp($host, $cdnHost) === 0)
         );
+    }
+}
+
+if (!function_exists('fezadan_sanitize_article_html')) {
+    function fezadan_sanitize_article_html(string $html): string
+    {
+        $dangerousTags = '<(script|iframe|object|embed|form|input|select|textarea|button|applet|audio|video|source|track|link|style|meta|base|frame|frameset)\b[^>]*>.*?</\1>|<(script|iframe|object|embed|form|input|select|textarea|button|applet|audio|video|source|track|link|style|meta|base|frame|frameset)\b[^>]*/?\s*>';
+        $html = preg_replace('@' . $dangerousTags . '@is', '', $html);
+        $html = preg_replace('/\s+on\w+\s*=\s*(["\'])(?:(?!\1).)*\1/is', '', $html);
+        $html = preg_replace('/\s+on\w+\s*=\s*[^\s>]+/is', '', $html);
+        $html = preg_replace('/\s+href\s*=\s*(["\'])javascript:/is', ' href=$1#', $html);
+        return $html;
     }
 }
 
@@ -88,7 +108,7 @@ $blogPosting = [
     'author' => [
         '@type' => 'Person',
         'name'  => $article['author_name'] ?? 'FEZADAN',
-        'url'   => !empty($article['author_slug']) ? $siteBase . '/yazar/' . $article['author_slug'] : $siteBase,
+        'url'   => !empty($article['author_slug']) ? authorUrl($article['author_slug']) : langUrl('/'),
     ],
     'publisher' => [
         '@type' => 'Organization',
@@ -102,21 +122,21 @@ $blogPosting = [
         '@type' => 'WebPage',
         '@id'   => $page_canonical,
     ],
-    'inLanguage' => 'tr-TR',
+    'inLanguage' => $isEn ? 'en-US' : 'tr-TR',
     'wordCount'  => $wordCount,
 ];
 if (!empty($article_section))      $blogPosting['articleSection'] = $article_section;
 if (!empty($article_tags))         $blogPosting['keywords']       = implode(', ', $article_tags);
 
 $breadcrumbItems = [
-    ['@type' => 'ListItem', 'position' => 1, 'name' => 'Anasayfa',  'item' => $siteBase . '/'],
-    ['@type' => 'ListItem', 'position' => 2, 'name' => 'Makaleler', 'item' => $siteBase . '/makaleler'],
+    ['@type' => 'ListItem', 'position' => 1, 'name' => (App::getLang() === 'EN' ? 'Home' : 'Anasayfa'),  'item' => langUrl('/')],
+    ['@type' => 'ListItem', 'position' => 2, 'name' => (App::getLang() === 'EN' ? 'Articles' : 'Makaleler'), 'item' => langUrl(App::getLang() === 'EN' ? '/articles' : '/makaleler')],
 ];
 if (!empty($categories[0]['id'])) {
     $breadcrumbItems[] = [
         '@type' => 'ListItem', 'position' => 3,
         'name'  => $categories[0]['name'],
-        'item'  => $siteBase . '/makaleler?cat=' . (int)$categories[0]['id'],
+        'item'  => langUrl(App::getLang() === 'EN' ? '/articles' : '/makaleler') . '?cat=' . (int)$categories[0]['id'],
     ];
     $breadcrumbItems[] = ['@type' => 'ListItem', 'position' => 4, 'name' => $article['title'] ?? '', 'item' => $page_canonical];
 } else {
@@ -136,624 +156,15 @@ $word_count = $wordCount;
 $reading_time = max(1, (int)ceil($word_count / 200));
 $total_seconds = $reading_time * 60;
 $threshold_seconds = max(10, (int)ceil($total_seconds * 0.20));
+$previousArticleUrl = !empty($previousArticle['slug'])
+    ? articleUrl($previousArticle['author_slug'] ?? 'yazar', $previousArticle['slug'], $contentLang)
+    : null;
+$nextArticleUrl = !empty($nextArticle['slug'])
+    ? articleUrl($nextArticle['author_slug'] ?? 'yazar', $nextArticle['slug'], $contentLang)
+    : null;
 
-require_once ROOT . '/app/Controllers/MakaleController.php';
 ?>
 
-<style>
-    .font-body {
-        font-family: 'EB Garamond', serif;
-    }
-
-    .texture-overlay {
-        position: fixed;
-        inset: 0;
-        pointer-events: none;
-        z-index: 0;
-        opacity: 0.06;
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
-        mix-blend-mode: multiply;
-    }
-
-    #progress-bar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        height: 4px;
-        background: #A31D1D;
-        width: 0%;
-        z-index: 9999;
-        transition: width 0.1s;
-    }
-
-    .journal-text {
-        font-size: 1.25rem;
-        line-height: 1.8;
-        color: #1a1a1a;
-    }
-
-    [data-theme="dark"] .journal-text {
-        color: var(--text-main);
-    }
-
-    .journal-text h1 {
-        color: var(--text-main) !important;
-    }
-
-    .journal-text h2,
-    .journal-text h3 {
-        font-family: 'Space Grotesk', sans-serif;
-        font-weight: 700;
-        text-transform: uppercase;
-        margin-top: 2.5rem;
-        margin-bottom: 1rem;
-        color: var(--text-accent);
-        letter-spacing: -0.02em;
-        scroll-margin-top: 100px;
-    }
-
-    .main-article-title {
-        color: #1a1a1a;
-    }
-
-    [data-theme="dark"] .main-article-title {
-        color: var(--text-main);
-    }
-
-    ::selection {
-        background: var(--text-accent);
-        color: var(--bg-paper);
-    }
-
-    .journal-text ul {
-        list-style-type: disc;
-        padding-left: 1.5em;
-        margin-bottom: 1.5em;
-        marker: #A31D1D;
-    }
-
-    .journal-text blockquote {
-        border-left: 4px solid var(--text-accent);
-        padding-left: 1.5rem;
-        font-style: italic;
-        color: var(--text-main);
-        margin: 1.5rem 0;
-    }
-
-    ::selection {
-        background: #A31D1D;
-        color: #FEF9E1;
-    }
-
-    .reference-highlight {
-        background-color: rgba(163, 29, 29, 0.1) !important;
-        border: 1px solid rgba(163, 29, 29, 0.3) !important;
-        transition: all 0.5s ease;
-    }
-
-    [data-theme="dark"] .reference-highlight {
-        background-color: rgba(255, 92, 92, 0.15) !important;
-        border: 1px solid rgba(255, 92, 92, 0.3) !important;
-    }
-
-    /* ===== ToC ===== */
-
-    .article-grid {
-        display: grid;
-        grid-template-columns: 1fr;
-        max-width: 1920px;
-        margin: 0 auto;
-        position: relative;
-        z-index: 10;
-    }
-
-    @media (min-width: 1280px) {
-        .article-grid {
-            grid-template-columns: 1fr 56rem 1fr;
-        }
-    }
-
-    /* Masaüstü ToC */
-    #toc-sidebar {
-        display: none;
-        position: sticky;
-        top: 100px;
-        justify-self: end;
-        max-height: calc(100vh - 120px);
-        overflow-y: auto;
-        padding-right: 2rem;
-        padding-top: 1.5rem;
-        width: 15rem;
-        /* Hide scrollbar */
-        scrollbar-width: none;
-        -ms-overflow-style: none;
-    }
-
-    #toc-sidebar::-webkit-scrollbar {
-        display: none;
-    }
-
-    @media (min-width: 1280px) {
-        #toc-sidebar {
-            display: block;
-        }
-    }
-
-    .toc-title {
-        font-family: 'Syne', sans-serif;
-        font-size: 1.05rem;
-        font-weight: 700;
-        color: var(--text-accent);
-        cursor: pointer;
-        margin-bottom: 1.25rem;
-        line-height: 1.3;
-        transition: color 0.2s;
-        text-decoration: none;
-        display: block;
-    }
-
-    .toc-title:hover {
-        opacity: 0.8;
-    }
-
-    .toc-list {
-        position: relative;
-        list-style: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    .toc-track {
-        position: absolute;
-        right: -1rem;
-        top: 0;
-        width: 2px;
-        background: var(--line-color);
-        opacity: 0.4;
-        border-radius: 1px;
-    }
-
-    .toc-progress {
-        position: absolute;
-        right: -1rem;
-        top: 0;
-        width: 2px;
-        height: 0%;
-        background: var(--text-accent);
-        border-radius: 1px;
-        transition: height 0.15s ease-out;
-        z-index: 1;
-    }
-
-    .toc-item {
-        position: relative;
-        margin-bottom: 0.15rem;
-    }
-
-    .toc-link {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.35rem 1rem 0.35rem 0;
-        text-decoration: none;
-        color: var(--text-main);
-        opacity: 0.25;
-        font-size: 0.95rem;
-        font-family: 'Space Grotesk', sans-serif;
-        font-weight: 600;
-        line-height: 1.35;
-        transition: all 0.2s ease;
-        text-align: right;
-        justify-content: flex-end;
-    }
-
-    [data-theme="dark"] .toc-link {
-        opacity: 0.2;
-    }
-
-    .toc-link:hover {
-        opacity: 0.7;
-        color: var(--text-accent);
-    }
-
-    .toc-item[data-level="3"] .toc-link {
-        font-size: 0.85rem;
-        padding-right: 0.5rem;
-        opacity: 0.2;
-    }
-
-    [data-theme="dark"] .toc-item[data-level="3"] .toc-link {
-        opacity: 0.15;
-    }
-
-    .toc-dot {
-        position: absolute;
-        right: calc(-1rem - 3px);
-        top: 50%;
-        transform: translateY(-50%);
-        width: 8px;
-        height: 8px;
-        box-sizing: border-box;
-        border-radius: 50%;
-        background: var(--line-color);
-        border: 2px solid var(--bg-paper);
-        z-index: 2;
-        transition: all 0.2s ease;
-        flex-shrink: 0;
-    }
-
-    .toc-item[data-level="3"] .toc-dot {
-        width: 6px;
-        height: 6px;
-        right: calc(-1rem - 2px);
-    }
-
-    .toc-item.toc-active .toc-link {
-        opacity: 1;
-        color: var(--text-accent);
-    }
-
-    [data-theme="dark"] .toc-item.toc-active .toc-link {
-        opacity: 1;
-        color: var(--text-accent);
-    }
-
-    .toc-item.toc-active .toc-dot {
-        background: var(--text-accent);
-        box-shadow: 0 0 0 3px rgba(163, 29, 29, 0.2);
-    }
-
-    [data-theme="dark"] .toc-item.toc-active .toc-dot {
-        box-shadow: 0 0 0 3px rgba(255, 92, 92, 0.3);
-    }
-
-    .toc-item.toc-passed .toc-dot {
-        background: var(--text-accent);
-    }
-
-    .toc-item.toc-passed .toc-link {
-        opacity: 0.6;
-        color: var(--text-accent);
-    }
-
-    [data-theme="dark"] .toc-item.toc-passed .toc-link {
-        opacity: 0.5;
-        color: var(--text-accent);
-    }
-
-    .toc-item[data-level="1"] .toc-link {
-        font-family: 'Syne', sans-serif;
-        font-size: 1.05rem;
-        font-weight: 700;
-        color: var(--text-accent);
-        opacity: 1;
-        line-height: 1.3;
-        padding-right: 2rem;
-        padding-bottom: 0.5rem;
-    }
-
-    [data-theme="dark"] .toc-item[data-level="1"] .toc-link {
-        opacity: 1;
-        color: var(--text-accent);
-    }
-
-    .toc-item[data-level="1"] .toc-dot {
-        width: 10px;
-        height: 10px;
-        right: calc(-1rem - 4px);
-        background: var(--text-accent);
-        border: none;
-    }
-
-    .toc-refs-item .toc-dot,
-    .toc-refs-item .toc-mobile-dot {
-        width: 10px;
-        height: 10px;
-        background: var(--line-color);
-        border: none;
-    }
-
-    .toc-refs-item .toc-dot {
-        right: calc(-1rem - 4px);
-    }
-
-    .toc-refs-item .toc-mobile-dot {
-        left: calc(0.5rem - 4px);
-    }
-
-    .toc-refs-item.toc-active .toc-dot,
-    .toc-refs-item.toc-active .toc-mobile-dot {
-        background: var(--text-accent);
-    }
-
-    /* ===== Mobil ToC ===== */
-    #toc-mobile-overlay {
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.5);
-        z-index: 998;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.3s ease;
-    }
-
-    #toc-mobile-overlay.toc-drawer-open {
-        opacity: 1;
-        pointer-events: auto;
-    }
-
-    #toc-mobile-drawer {
-        position: fixed;
-        top: 0;
-        right: 0;
-        width: 85%;
-        max-width: 320px;
-        height: 100dvh;
-        background: var(--bg-paper);
-        border-left: 1px solid var(--line-color);
-        z-index: 999;
-        transform: translateX(100%);
-        transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-        overflow-y: auto;
-        padding: 2rem 1.5rem 2rem 1.5rem;
-        display: flex;
-        flex-direction: column;
-    }
-
-    #toc-mobile-drawer.toc-drawer-open {
-        transform: translateX(0);
-    }
-
-    .toc-drawer-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 1.5rem;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid var(--line-color);
-    }
-
-    .toc-drawer-label {
-        font-family: 'Syne', sans-serif;
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.15em;
-        color: var(--text-accent);
-    }
-
-    .toc-drawer-close {
-        background: none;
-        border: none;
-        color: var(--text-main);
-        cursor: pointer;
-        padding: 0.25rem;
-        opacity: 0.6;
-        transition: opacity 0.2s;
-    }
-
-    .toc-drawer-close:hover {
-        opacity: 1;
-    }
-
-    /* Mobile ToC list styling */
-    .toc-mobile-list {
-        position: relative;
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        flex: 1;
-    }
-
-    .toc-mobile-track {
-        position: absolute;
-        left: 0.5rem;
-        top: 0;
-        width: 2px;
-        background: var(--line-color);
-        opacity: 0.4;
-        border-radius: 1px;
-    }
-
-    .toc-mobile-progress {
-        position: absolute;
-        left: 0.5rem;
-        top: 0;
-        width: 2px;
-        height: 0%;
-        background: var(--text-accent);
-        border-radius: 1px;
-        transition: height 0.15s ease-out;
-        z-index: 1;
-    }
-
-    .toc-mobile-item {
-        position: relative;
-        margin-bottom: 0.1rem;
-    }
-
-    .toc-mobile-link {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.4rem 0 0.4rem 2rem;
-        text-decoration: none;
-        color: var(--text-main);
-        opacity: 0.25;
-        font-size: 1rem;
-        font-family: 'Space Grotesk', sans-serif;
-        font-weight: 600;
-        line-height: 1.35;
-        transition: all 0.2s ease;
-    }
-
-    [data-theme="dark"] .toc-mobile-link {
-        opacity: 0.2;
-    }
-
-    .toc-mobile-link:hover {
-        opacity: 0.7;
-        color: var(--text-accent);
-    }
-
-    .toc-mobile-item[data-level="3"] .toc-mobile-link {
-        font-size: 0.88rem;
-        padding-left: 2.75rem;
-        opacity: 0.2;
-    }
-
-    [data-theme="dark"] .toc-mobile-item[data-level="3"] .toc-mobile-link {
-        opacity: 0.15;
-    }
-
-    .toc-mobile-dot {
-        position: absolute;
-        left: calc(0.5rem - 3px);
-        top: 50%;
-        transform: translateY(-50%);
-        width: 8px;
-        height: 8px;
-        box-sizing: border-box;
-        border-radius: 50%;
-        background: var(--line-color);
-        border: 2px solid var(--bg-paper);
-        z-index: 2;
-        transition: all 0.2s ease;
-        flex-shrink: 0;
-    }
-
-    .toc-mobile-item[data-level="3"] .toc-mobile-dot {
-        width: 6px;
-        height: 6px;
-        left: calc(0.5rem - 2px);
-    }
-
-    .toc-mobile-item.toc-active .toc-mobile-link {
-        opacity: 1;
-        color: var(--text-accent);
-    }
-
-    [data-theme="dark"] .toc-mobile-item.toc-active .toc-mobile-link {
-        opacity: 1;
-        color: var(--text-accent);
-    }
-
-    .toc-mobile-item.toc-active .toc-mobile-dot {
-        background: var(--text-accent);
-        box-shadow: 0 0 0 3px rgba(163, 29, 29, 0.2);
-    }
-
-    [data-theme="dark"] .toc-mobile-item.toc-active .toc-mobile-dot {
-        box-shadow: 0 0 0 3px rgba(255, 92, 92, 0.3);
-    }
-
-    .toc-mobile-item.toc-passed .toc-mobile-dot {
-        background: var(--text-accent);
-    }
-
-    .toc-mobile-item.toc-passed .toc-mobile-link {
-        opacity: 0.6;
-        color: var(--text-accent);
-    }
-
-    [data-theme="dark"] .toc-mobile-item.toc-passed .toc-mobile-link {
-        opacity: 0.5;
-        color: var(--text-accent);
-    }
-
-    .toc-mobile-item[data-level="1"] .toc-mobile-link {
-        font-family: 'Syne', sans-serif;
-        font-size: 1rem;
-        font-weight: 700;
-        color: var(--text-accent);
-        opacity: 1;
-        line-height: 1.3;
-        padding-left: 1.25rem;
-        padding-bottom: 0.5rem;
-    }
-
-    .toc-mobile-item[data-level="1"] .toc-mobile-dot {
-        width: 10px;
-        height: 10px;
-        left: calc(0.5rem - 4px);
-        background: var(--text-accent);
-        border: none;
-    }
-
-    .toc-mobile-title {
-        font-family: 'Syne', sans-serif;
-        font-size: 0.85rem;
-        font-weight: 700;
-        color: var(--text-accent);
-        cursor: pointer;
-        margin-bottom: 1rem;
-        line-height: 1.3;
-        text-decoration: none;
-        display: block;
-        padding-left: 1.5rem;
-    }
-
-    .toc-mobile-title:hover {
-        opacity: 0.8;
-    }
-
-    @media (min-width: 1280px) {
-        #scrollTopBtn .toc-toggle-icon {
-            display: none;
-        }
-
-        #scrollTopBtn .scroll-top-icon {
-            display: block;
-        }
-    }
-
-    @media (max-width: 1279px) {
-        #scrollTopBtn .toc-toggle-icon {
-            display: block;
-        }
-
-        #scrollTopBtn .scroll-top-icon {
-            display: none;
-        }
-    }
-
-    #toggle-refs {
-        cursor: pointer;
-    }
-
-    /* ===== İçerik görseli caption ===== */
-    .journal-text figure {
-        margin: 2rem 0;
-        display: block;
-    }
-
-    .journal-text figure img {
-        display: block;
-        max-width: 100%;
-        height: auto;
-    }
-
-    .journal-text figure figcaption {
-        display: block;
-        margin-top: 0.5rem;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.78rem;
-        line-height: 1.5;
-        color: var(--text-accent);
-        opacity: 0.7;
-        font-style: italic;
-        padding-left: 0.75rem;
-        border-left: 2px solid var(--text-accent);
-    }
-
-    .journal-text figure figcaption:empty {
-        display: none;
-    }
-
-    [data-theme="dark"] .journal-text figure figcaption {
-        opacity: 0.6;
-    }
-</style>
 
 <div id="progress-bar"></div>
 <div class="texture-overlay"></div>
@@ -762,8 +173,8 @@ require_once ROOT . '/app/Controllers/MakaleController.php';
 
 <div id="toc-mobile-drawer">
     <div class="toc-drawer-header">
-        <span class="toc-drawer-label">İçindekiler</span>
-        <button class="toc-drawer-close" id="toc-drawer-close-btn" aria-label="Kapat">
+        <span class="toc-drawer-label"><?= $isEn ? 'Table of Contents' : 'İçindekiler' ?></span>
+        <button class="toc-drawer-close" id="toc-drawer-close-btn" aria-label="<?= $isEn ? 'Close' : 'Kapat' ?>">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
@@ -800,7 +211,7 @@ require_once ROOT . '/app/Controllers/MakaleController.php';
                     <div class="flex gap-3">
                         <?php if (!empty($categories)): ?>
                         <?php foreach ($categories as $cat): ?>
-                        <a href="/makaleler?cat=<?php echo $cat['id']; ?>"
+                        <a href="<?php echo langUrl((App::getLang() === 'EN' ? 'articles' : 'makaleler') . '?cat=' . $cat['id']); ?>"
                             class="hover:text-[var(--text-main)] hover:underline decoration-2 underline-offset-4 transition-all cursor-pointer">
                             <?php echo htmlspecialchars($cat['name']); ?>
                         </a>
@@ -817,14 +228,14 @@ require_once ROOT . '/app/Controllers/MakaleController.php';
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
-                        <?php echo isset($reading_time) ? $reading_time : '1'; ?> DK OKUMA
+                        <?php echo isset($reading_time) ? $reading_time : '1'; ?> <?= $isEn ? 'MIN READ' : 'DK OKUMA' ?>
                     </span>
 
                 </div>
 
                 <h1 id="article-top"
                     class="main-article-title font-syne text-5xl md:text-7xl font-bold leading-[0.9] tracking-tight mb-8">
-                    <?php echo isset($article['title']) ? htmlspecialchars($article['title']) : 'Başlık Yok'; ?>
+                    <?php echo isset($article['title']) ? htmlspecialchars($article['title']) : ($isEn ? 'No Title' : 'Başlık Yok'); ?>
                 </h1>
 
                 <?php if (!empty($article['short_desc'])): ?>
@@ -834,13 +245,50 @@ require_once ROOT . '/app/Controllers/MakaleController.php';
                     <?php echo htmlspecialchars($article['short_desc']); ?>"
                 </p>
                 <?php endif; ?>
+
+                <?php if (!empty($articleAuthors)): ?>
+                <div class="flex flex-wrap items-center gap-2 font-mono text-[11px] uppercase tracking-wider mt-4">
+                    <span class="opacity-60"><?= $isEn ? 'AUTHORS:' : 'YAZARLAR:' ?></span>
+                    <?php foreach ($articleAuthors as $i => $aut): ?>
+                        <?php if ($i > 0): ?><span class="opacity-40">&</span><?php endif; ?>
+                        <a href="<?php echo authorUrl($aut['slug'] ?? $aut['id']); ?>" class="font-bold hover:text-[var(--text-accent)] hover:underline">
+                            <?php echo htmlspecialchars($aut['name']); ?>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
             </header>
+
+            <div class="reader-tools" aria-label="<?= $isEn ? 'Reading preferences' : 'Okuma tercihleri' ?>">
+                <button type="button" class="reader-tool" data-reader-size="small" aria-label="<?= $isEn ? 'Decrease font size' : 'Yazi boyutunu kucult' ?>" title="<?= $isEn ? 'Decrease font size' : 'Yazi boyutunu kucult' ?>">A-</button>
+                <button type="button" class="reader-tool" data-reader-size="medium" aria-label="<?= $isEn ? 'Default font size' : 'Varsayilan yazi boyutu' ?>" title="<?= $isEn ? 'Default font size' : 'Varsayilan yazi boyutu' ?>">A</button>
+                <button type="button" class="reader-tool" data-reader-size="large" aria-label="<?= $isEn ? 'Increase font size' : 'Yazi boyutunu buyut' ?>" title="<?= $isEn ? 'Increase font size' : 'Yazi boyutunu buyut' ?>">A+</button>
+                <button type="button" class="reader-tool" id="print-article-btn" aria-label="<?= $isEn ? 'Print' : 'Yazdir' ?>" title="<?= $isEn ? 'Print' : 'Yazdir' ?>">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v7H6z"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <?php if (!empty($article['audio_url'])): ?>
+            <div class="tts-player-wrapper mb-8 p-4 flex flex-col sm:flex-row items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <span class="text-xl">🎙️</span>
+                    <div class="text-left">
+                        <span class="block font-syne text-[10px] font-bold uppercase tracking-widest text-[var(--text-accent)]"><?= $isEn ? 'AUDIO ARTICLE' : 'SESLİ MAKALE' ?></span>
+                        <span class="block font-mono text-[9px] opacity-65"><?= $isEn ? 'AI voice narration' : 'Yapay zeka seslendirmesi' ?></span>
+                    </div>
+                </div>
+                <audio src="<?php echo \App\Core\Upload::assetUrl($article['audio_url']); ?>" controls class="flex-grow w-full"></audio>
+            </div>
+            <?php endif; ?>
+
             <div class="journal-text font-body">
                 <?php if (!empty($article['image_url'])):
                     $coverRel  = '/' . ltrim($article['image_url'], '/');
                     $coverUrl  = Upload::assetUrl($coverRel);
                     $coverWebp = Upload::webpUrl($coverRel);
-                    $coverAlt  = !empty($article['title']) ? htmlspecialchars($article['title'], ENT_QUOTES, 'UTF-8') . ' — kapak görseli' : 'Kapak görseli';
+                    $coverAlt  = !empty($article['title']) ? htmlspecialchars($article['title'], ENT_QUOTES, 'UTF-8') . ($isEn ? ' — cover image' : ' — kapak görseli') : ($isEn ? 'Cover image' : 'Kapak görseli');
                 ?>
                 <figure class="my-12">
                     <div class="p-2 border border-[#2B1B17] bg-[var(--bg-secondary)]/20">
@@ -853,8 +301,7 @@ require_once ROOT . '/app/Controllers/MakaleController.php';
                                     class="w-full h-full object-cover mix-blend-multiply contrast-110"
                                     alt="<?= $coverAlt ?>"
                                     width="1200" height="675"
-                                    fetchpriority="high"
-                                    decoding="async">
+                                    fetchpriority="high">
                             </picture>
                         </div>
                     </div>
@@ -872,17 +319,37 @@ if (isset($article['content'])) {
         }
         return '<sup class="reference-sup"><a href="#ref-item-' . $refNum . '" ' . $idAttr . ' class="text-[var(--text-accent)] hover:underline" style="scroll-margin-top: 250px;">[' . $refNum . ']</a></sup>';
     }, $article['content']);
-    // Editörden gelen figcaption'lardaki contenteditable attribute'unu temizle
     $processedContent = preg_replace('/(<figcaption)\s+contenteditable="true"/', '$1', $processedContent);
     $processedContent = preg_replace('/(<figcaption)\s+data-placeholder="[^"]*"/', '$1', $processedContent);
     $processedContent = fezadan_normalize_article_images($processedContent);
+    $processedContent = fezadan_sanitize_article_html($processedContent);
+    $processedContent = preg_replace('/<img\s(?!.*\bloading\b)/i', '<img loading="lazy" decoding="async" ', $processedContent);
     echo $processedContent;
 }
 else {
-    echo '<p>İçerik yükleniyor...</p>';
+    echo $isEn ? '<p>Content loading...</p>' : '<p>İçerik yükleniyor...</p>';
 }
 ?>
             </div>
+
+            <?php if (!empty($corrections)): ?>
+            <div class="my-8 p-6 border-2 border-dashed border-[var(--text-accent)]/40 bg-[var(--bg-secondary)]/5">
+                <span class="block font-syne font-bold uppercase text-xs text-[var(--text-accent)] tracking-wider mb-4 flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 bg-[var(--text-accent)] rounded-full"></span>
+                    <?= $isEn ? 'CORRECTIONS & UPDATE HISTORY' : 'DÜZELTME VE GÜNCELLEME GEÇMİŞİ' ?>
+                </span>
+                <ul class="space-y-3 font-mono text-xs text-[var(--text-main)]/90">
+                    <?php foreach ($corrections as $corr): ?>
+                    <li class="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 border-b border-[var(--line-color)]/10 pb-2">
+                        <span class="text-[var(--text-accent)] font-bold flex-shrink-0">
+                            [<?php echo date('d.m.Y H:i', strtotime($corr['created_at'])); ?>]
+                        </span>
+                        <span><?php echo htmlspecialchars($corr['correction_text']); ?></span>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <?php endif; ?>
 
             <?php if (!empty($article['refs'])): ?>
             <?php
@@ -920,7 +387,7 @@ else {
                     <span
                         class="font-syne font-bold uppercase text-sm tracking-widest text-[var(--text-accent)] flex items-center gap-2">
                         <span class="w-2 h-2 bg-[var(--text-accent)] rounded-full"></span>
-                        KAYNAKÇA VE NOTLAR
+                        <?= $isEn ? 'REFERENCES & NOTES' : 'KAYNAKÇA VE NOTLAR' ?>
                     </span>
                     <span id="ref-icon" class="font-mono text-xl block">+</span>
                 </button>
@@ -970,8 +437,8 @@ else {
             </div>
             <?php endif; ?>
             
-            <div class="mt-12 mb-8 flex items-center justify-center md:justify-start gap-4 border-y border-[var(--line-color)] py-6">
-                <span class="font-syne text-xs font-bold uppercase tracking-widest text-[var(--text-accent)]">Paylaş:</span>
+            <div class="article-share mt-12 mb-8 flex items-center justify-center md:justify-start gap-4 border-y border-[var(--line-color)] py-6">
+                <span class="font-syne text-xs font-bold uppercase tracking-widest text-[var(--text-accent)]"><?= $isEn ? 'Share:' : 'Paylaş:' ?></span>
                 
                 <a href="https://twitter.com/intent/tweet?text=<?php echo urlencode($article['title']); ?>&url=<?php echo urlencode($og_url); ?>" 
                 target="_blank" 
@@ -990,33 +457,62 @@ else {
                 class="p-2 border border-[var(--line-color)] hover:bg-[var(--text-accent)] hover:text-[#FEF9E1] transition-all">
                     <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.72.94 3.659 1.437 5.634 1.437h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"></path></svg>
                 </a>
+
+                <a href="<?php echo langUrl((App::getLang() === 'EN' ? 'article' : 'makale') . '/qr/' . htmlspecialchars($slug, ENT_QUOTES, 'UTF-8')); ?>"
+                target="_blank"
+                title="<?= $isEn ? 'Share via QR Code' : 'QR Kod ile Paylaş' ?>"
+                class="p-2 border border-[var(--line-color)] hover:bg-[var(--text-accent)] hover:text-[#FEF9E1] transition-all">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" stroke-linejoin="miter"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="5" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="16" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="5" y="16" width="3" height="3" fill="currentColor" stroke="none"/><line x1="14" y1="14" x2="14" y2="14"/><line x1="17" y1="14" x2="17" y2="14"/><line x1="20" y1="14" x2="20" y2="14"/><line x1="14" y1="17" x2="14" y2="17"/><line x1="20" y1="17" x2="20" y2="17"/><line x1="14" y1="20" x2="14" y2="20"/><line x1="17" y1="20" x2="20" y2="20"/><line x1="17" y1="17" x2="17" y2="17"/></svg>
+                </a>
+
+                <button id="native-share-btn"
+                title="<?= $isEn ? 'Share' : 'Paylaş' ?>"
+                class="p-2 border border-[var(--line-color)] hover:bg-[var(--text-accent)] hover:text-[#FEF9E1] transition-all"
+                style="display:none">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+                    </svg>
+                </button>
+
+                <button id="copy-link-btn"
+                title="<?= $isEn ? 'Copy Link' : 'Bağlantıyı Kopyala' ?>"
+                class="p-2 border border-[var(--line-color)] hover:bg-[var(--text-accent)] hover:text-[#FEF9E1] transition-all">
+                    <svg class="w-5 h-5 copy-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
+                    </svg>
+                    <svg class="w-5 h-5 check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:none">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </button>
             </div>                                    
 
-            <div class="mt-12">
+            <?php if (!empty($articleAuthors)): ?>
+            <div class="article-author-box mt-12 space-y-6">
+                <?php foreach ($articleAuthors as $aut): ?>
                 <div class="flex flex-col md:flex-row items-center md:items-start gap-8 bg-[var(--bg-secondary)]/10 p-8 border border-[var(--line-color)]">
 
-                    <a href="<?php echo SITE_URL; ?>/yazar/<?php echo $article['author_slug'] ?? $article['author_id']; ?>"
+                    <a href="<?php echo authorUrl($aut['slug'] ?? $aut['id']); ?>"
                         class="w-24 h-24 flex-shrink-0 border-2 border-[var(--text-accent)] rounded-full overflow-hidden p-1 group cursor-pointer block">
-                        <img src="<?php echo !empty($article['author_img']) ? SITE_URL . '/' . ltrim($article['author_img'], '/') : SITE_URL . '/assets/default-avatar.jpg'; ?>"
+                        <img src="<?php echo !empty($aut['image_url']) ? SITE_URL . '/' . ltrim($aut['image_url'], '/') : SITE_URL . '/assets/default-avatar.jpg'; ?>"
                             class="w-full h-full object-cover rounded-full grayscale group-hover:grayscale-0 transition-all duration-500"
-                            alt="<?php echo htmlspecialchars($article['author_name']); ?>">
+                            alt="<?php echo htmlspecialchars($aut['name']); ?>">
                     </a>
 
                     <div class="text-center md:text-left flex-grow">
-                        <span class="block font-syne text-xs uppercase tracking-widest text-[var(--text-accent)] mb-2 font-bold">MAKALE YAZARI</span>
+                        <span class="block font-syne text-xs uppercase tracking-widest text-[var(--text-accent)] mb-2 font-bold"><?= $isEn ? 'ARTICLE AUTHOR' : 'MAKALE YAZARI' ?></span>
 
-                        <a href="<?php echo SITE_URL; ?>/yazar/<?php echo $article['author_slug'] ?? $article['author_id']; ?>"
+                        <a href="<?php echo authorUrl($aut['slug'] ?? $aut['id']); ?>"
                             class="font-syne text-2xl font-bold mb-2 text-[var(--text-main)] hover:text-[var(--text-accent)] hover:underline decoration-2 underline-offset-4 transition-colors inline-block">
-                            <?php echo htmlspecialchars($article['author_name'] ?: 'Fezadan Editörü'); ?>
+                            <?php echo htmlspecialchars($aut['name'] ?: ($isEn ? 'Fezadan Editor' : 'Fezadan Editörü')); ?>
                         </a>
 
                         <p class="font-body text-lg text-[var(--text-main)]/80 leading-relaxed max-w-lg mx-auto md:mx-0">
-                            <?php echo htmlspecialchars($article['author_bio'] ?: 'Veri ve estetik arasındaki sessiz çatışmayı inceleyen bir gözlemci.'); ?>
+                            <?php echo htmlspecialchars($aut['bio'] ?: ($isEn ? 'An observer examining the quiet conflict between data and aesthetics.' : 'Veri ve estetik arasındaki sessiz çatışmayı inceleyen bir gözlemci.')); ?>
                         </p>
 
-                        <a href="<?php echo SITE_URL; ?>/yazar/<?php echo $article['author_slug'] ?? $article['author_id']; ?>"
+                        <a href="<?php echo authorUrl($aut['slug'] ?? $aut['id']); ?>"
                             class="inline-flex items-center gap-2 mt-4 text-xs font-bold uppercase tracking-widest text-[var(--text-accent)] hover:bg-[var(--text-accent)] hover:text-[#FEF9E1] px-3 py-1 border border-[var(--text-accent)] transition-all">
-                            <span>Yazarın Profilini İncele</span>
+                            <span><?= $isEn ? 'View Author Profile' : 'Yazarın Profilini İncele' ?></span>
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
                             </svg>
@@ -1024,18 +520,38 @@ else {
                     </div>
 
                 </div>
+                <?php endforeach; ?>
             </div>
+            <?php endif; ?>
+
+            <?php if ($previousArticleUrl || $nextArticleUrl): ?>
+            <nav class="article-neighbors" aria-label="<?= $isEn ? 'Article navigation' : 'Makale gezinme' ?>">
+                <?php if ($previousArticleUrl): ?>
+                    <a class="article-neighbor previous" rel="prev" href="<?= htmlspecialchars($previousArticleUrl, ENT_QUOTES, 'UTF-8') ?>">
+                        <span class="article-neighbor-label"><?= $isEn ? 'Previous article' : 'Onceki makale' ?></span>
+                        <span class="article-neighbor-title"><?= htmlspecialchars($previousArticle['title'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
+                    </a>
+                <?php endif; ?>
+
+                <?php if ($nextArticleUrl): ?>
+                    <a class="article-neighbor next" rel="next" href="<?= htmlspecialchars($nextArticleUrl, ENT_QUOTES, 'UTF-8') ?>">
+                        <span class="article-neighbor-label"><?= $isEn ? 'Next article' : 'Sonraki makale' ?></span>
+                        <span class="article-neighbor-title"><?= htmlspecialchars($nextArticle['title'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
+                    </a>
+                <?php endif; ?>
+            </nav>
+            <?php endif; ?>
         </article>
 
         <?php if (!empty($related)): ?>
-        <section aria-labelledby="related-heading" class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 mt-16 mb-12">
+        <section aria-labelledby="related-heading" class="related-articles max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 mt-16 mb-12">
             <h2 id="related-heading" class="text-xs uppercase tracking-[0.3em] font-bold text-[var(--text-accent)] border-b border-[var(--line-color)] pb-3 mb-8">
-                İlgili Makaleler
+                <?= $isEn ? 'Related Articles' : 'İlgili Makaleler' ?>
             </h2>
             <ul class="grid grid-cols-1 md:grid-cols-3 gap-8 list-none p-0">
                 <?php foreach ($related as $rel): ?>
                     <?php
-                        $relUrl   = $siteBase . '/makale/' . $rel['slug'];
+                        $relUrl   = articleUrl($rel['author_slug'] ?? 'yazar', $rel['slug'], $contentLang);
                         $relImg   = !empty($rel['image_url'])
                             ? Upload::assetUrl($rel['image_url'])
                             : $siteBase . '/cdn/notlar-social-preview.png';
@@ -1051,7 +567,7 @@ else {
                                          alt="<?= htmlspecialchars($rel['title'], ENT_QUOTES, 'UTF-8') ?>"
                                          loading="lazy" decoding="async"
                                          width="800" height="500"
-                                         class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                         class="w-full h-full object-cover transition-transform duration-500"
                                          style="filter: var(--img-filter); mix-blend-mode: var(--img-blend); opacity: var(--img-opacity);">
                                 </div>
                                 <h3 class="font-syne text-lg font-bold leading-tight text-[var(--text-main)] group-hover:text-[var(--text-accent)] transition-colors">
@@ -1089,417 +605,14 @@ else {
     </svg>
 </button>
 
-<script>
-    (function () {
-        // ===== ToC =====
-
-        const articleTitle = document.querySelector('#article-top');
-        const contentDiv = document.querySelector('.journal-text');
-        const tocList = document.getElementById('toc-list');
-        const tocTitle = document.getElementById('toc-title');
-        const tocProgress = document.getElementById('toc-progress');
-        const tocMobileList = document.getElementById('toc-mobile-list');
-        const tocMobileTitle = document.getElementById('toc-mobile-title');
-        const tocMobileProgress = document.getElementById('toc-mobile-progress');
-        const mobileDrawer = document.getElementById('toc-mobile-drawer');
-        const mobileOverlay = document.getElementById('toc-mobile-overlay');
-        const drawerCloseBtn = document.getElementById('toc-drawer-close-btn');
-        const scrollTopBtn = document.getElementById('scrollTopBtn');
-
-        let headings = [];
-        let tocItems = [];
-        let tocMobileItems = [];
-        let activeIndex = -1;
-
-        function buildToc() {
-            if (!contentDiv || !tocList) return;
-
-            const headingEls = contentDiv.querySelectorAll('h2, h3');
-            if (headingEls.length === 0) return;
-
-            const titleText = articleTitle ? articleTitle.textContent.trim() : '';
-
-            if (tocTitle) tocTitle.style.display = 'none';
-            if (tocMobileTitle) tocMobileTitle.style.display = 'none';
-
-            const addItem = (level, text, targetId, isMobile) => {
-                const isH1 = level === 1;
-                const isRefs = targetId === 'refs-section';
-                
-                const li = document.createElement('li');
-                li.className = isMobile ? 'toc-mobile-item' : 'toc-item';
-                if (isRefs) li.classList.add('toc-refs-item');
-                li.setAttribute('data-level', level);
-
-                const a = document.createElement('a');
-                a.className = isMobile ? 'toc-mobile-link' : 'toc-link';
-                a.href = '#' + targetId;
-                a.textContent = text;
-
-                a.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    if (isMobile) closeMobileDrawer();
-                    
-                    const scrollAction = () => {
-                        if (isH1) {
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                        } else {
-                            const target = document.getElementById(targetId);
-                            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }
-                    };
-                    isMobile ? setTimeout(scrollAction, 100) : scrollAction();
-                });
-
-                const dot = document.createElement('span');
-                dot.className = isMobile ? 'toc-mobile-dot' : 'toc-dot';
-
-                if (isMobile) {
-                    li.appendChild(dot);
-                    li.appendChild(a);
-                    tocMobileList.appendChild(li);
-                    tocMobileItems.push(li);
-                } else {
-                    li.appendChild(a);
-                    li.appendChild(dot);
-                    tocList.appendChild(li);
-                    tocItems.push(li);
-                }
-            };
-
-            if (titleText) {
-                if (articleTitle) headings.push({ el: articleTitle, id: 'article-top', level: 1, text: titleText });
-                addItem(1, titleText, 'article-top', false); // Masaüstü
-                addItem(1, titleText, 'article-top', true);  // Mobil
-            }
-
-            headingEls.forEach((el, i) => {
-                if (!el.id) el.id = 'heading-' + i;
-                const level = parseInt(el.tagName.charAt(1));
-                const text = el.textContent.trim();
-                
-                headings.push({ el: el, id: el.id, level: level, text: text });
-                addItem(level, text, el.id, false);
-                addItem(level, text, el.id, true);
-            });
-
-            const refsSection = document.getElementById('refs-section');
-            if (refsSection) {
-                const refsText = 'Kaynakça ve Notlar';
-                headings.push({ el: refsSection, id: 'refs-section', level: 2, text: refsText });
-                addItem(2, refsText, 'refs-section', false);
-                addItem(2, refsText, 'refs-section', true);
-            }
-        }
-
-        
-        function updateScrollSpy() {
-            if (headings.length === 0) return;
-
-            const scrollY = window.scrollY;
-            const offset = 120; 
-            let currentIdx = -1;
-
-            if ((window.innerHeight + Math.ceil(window.scrollY)) >= document.documentElement.scrollHeight - 10) {
-                currentIdx = headings.length - 1;
-            } else {
-                for (let i = headings.length - 2; i >= 0; i--) {
-                    const headingTop = headings[i].el.getBoundingClientRect().top + scrollY - offset;
-                    if (scrollY >= headingTop) {
-                        currentIdx = i;
-                        break;
-                    }
-                }
-            }
-
-            if (currentIdx === activeIndex) return;
-            activeIndex = currentIdx;
-
-            [tocItems, tocMobileItems].forEach(list => {
-                list.forEach((item, i) => {
-                    item.classList.remove('toc-active', 'toc-passed');
-                    if (i === activeIndex) item.classList.add('toc-active');
-                    else if (i < activeIndex) item.classList.add('toc-passed');
-                });
-            });
-
-            updateProgressLine();
-        }
-
-        function updateProgressLine() {
-            if (headings.length === 0 || activeIndex < 0) {
-                if (tocProgress) tocProgress.style.height = '0%';
-                if (tocMobileProgress) tocMobileProgress.style.height = '0%';
-                return;
-            }
-
-            const updateTrack = (listNode, itemsArr, progressNode) => {
-                if (!listNode || !progressNode || itemsArr.length === 0) return;
-                const activeItem = itemsArr[activeIndex];
-                if (!activeItem) return;
-
-                const listRect = listNode.getBoundingClientRect();
-                const itemRect = activeItem.getBoundingClientRect();
-                const dotCenter = itemRect.top + itemRect.height / 2 - listRect.top;
-
-                const firstRect = itemsArr[0].getBoundingClientRect();
-                const startTop = firstRect.top + firstRect.height / 2 - listRect.top;
-
-                const height = Math.max(0, dotCenter - startTop);
-                progressNode.style.top = startTop + 'px';
-                progressNode.style.height = height + 'px';
-            };
-
-            updateTrack(tocList, tocItems, tocProgress);
-            updateTrack(tocMobileList, tocMobileItems, tocMobileProgress);
-        }
-
-        function openMobileDrawer() {
-            if (mobileDrawer) mobileDrawer.classList.add('toc-drawer-open');
-            if (mobileOverlay) mobileOverlay.classList.add('toc-drawer-open');
-            document.documentElement.style.overflow = 'hidden';
-            document.body.style.overflow = 'hidden';
-            setTimeout(updateProgressLine, 50);
-        }
-
-        function closeMobileDrawer() {
-            if (mobileDrawer) mobileDrawer.classList.remove('toc-drawer-open');
-            if (mobileOverlay) mobileOverlay.classList.remove('toc-drawer-open');
-            document.documentElement.style.overflow = '';
-            document.body.style.overflow = '';
-        }
-
-        if (scrollTopBtn) {
-            scrollTopBtn.addEventListener('click', function () {
-                const isDesktop = window.innerWidth >= 1280;
-                if (isDesktop || scrollTopBtn.getAttribute('data-no-toc') === 'true') {
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                } else {
-                    // Toggle mobile drawer
-                    if (mobileDrawer && mobileDrawer.classList.contains('toc-drawer-open')) {
-                        closeMobileDrawer();
-                    } else {
-                        openMobileDrawer();
-                    }
-                }
-            });
-        }
-
-        if (mobileOverlay) {
-            mobileOverlay.addEventListener('click', closeMobileDrawer);
-        }
-
-        if (drawerCloseBtn) {
-            drawerCloseBtn.addEventListener('click', closeMobileDrawer);
-        }
-
-        let isScrolling = false;
-        window.addEventListener('scroll', function () {
-            if (!isScrolling) {
-                window.requestAnimationFrame(function () {
-                    const scrollTop = window.scrollY || document.documentElement.scrollTop;
-                    const scrollHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
-                    const scrolled = (scrollTop / scrollHeight) * 100;
-                    const progressBar = document.getElementById("progress-bar");
-                    if (progressBar) progressBar.style.width = scrolled + "%";
-
-                    if (scrollTopBtn) {
-                        if (scrollTop > 300) {
-                            scrollTopBtn.classList.remove('opacity-0', 'pointer-events-none');
-                            scrollTopBtn.classList.add('opacity-100', 'translate-y-0');
-                        } else {
-                            scrollTopBtn.classList.add('opacity-0', 'pointer-events-none');
-                            scrollTopBtn.classList.remove('opacity-100', 'translate-y-0');
-                        }
-                    }
-
-                    updateScrollSpy();
-                    
-                    isScrolling = false;
-                });
-                isScrolling = true;
-            }
-        }, { passive: true });
-
-        document.addEventListener("DOMContentLoaded", function () {
-            const refsContent = document.getElementById('refs-content');
-            const toggleBtn = document.getElementById('toggle-refs');
-            const refIcon = document.getElementById('ref-icon');
-
-            if (contentDiv && refsContent) {
-                document.querySelectorAll('.reference-sup a').forEach(link => {
-                    link.addEventListener('click', function (e) {
-                        const refId = this.innerText.replace(/\[|\]/g, '');
-                        const targetItem = document.getElementById('ref-item-' + refId);
-
-                        if (refsContent.classList.contains('hidden')) {
-                            toggleReferences(true);
-                        }
-
-                        if (targetItem) {
-                            targetItem.classList.add('reference-highlight');
-                            setTimeout(() => {
-                                targetItem.classList.remove('reference-highlight');
-                            }, 2000);
-                        }
-                    });
-                });
-
-                document.querySelectorAll('.ref-link').forEach(link => {
-                    link.addEventListener('click', function (e) {
-                        e.preventDefault();
-                        const refId = this.getAttribute('data-id');
-                        const targetItem = document.getElementById('ref-item-' + refId);
-
-                        if (refsContent.classList.contains('hidden')) {
-                            toggleReferences(true);
-                        }
-
-                        if (targetItem) {
-                            targetItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            targetItem.classList.add('reference-highlight');
-                            setTimeout(() => {
-                                targetItem.classList.remove('reference-highlight');
-                            }, 2000);
-                        }
-                    });
-                });
-
-                function toggleReferences(forceOpen = false) {
-                    const isHidden = refsContent.classList.contains('hidden');
-
-                    if (forceOpen || isHidden) {
-                        refsContent.classList.remove('hidden');
-                        refIcon.innerText = "-";
-                    } else {
-                        refsContent.classList.add('hidden');
-                        refIcon.innerText = "+";
-                    }
-                }
-
-                if (toggleBtn) {
-                    toggleBtn.addEventListener('click', () => toggleReferences());
-                }
-            }
-
-            if (toggleBtn) {
-                var refsWrapper = toggleBtn.closest('div');
-                if (refsWrapper) {
-                    refsWrapper.setAttribute('id', 'refs-section');
-                    refsWrapper.style.scrollMarginTop = '100px';
-                }
-            }
-
-            buildToc();
-
-            if (headings.length === 0 && scrollTopBtn) {
-                var tocIcon = scrollTopBtn.querySelector('.toc-toggle-icon');
-                var scrollIcon = scrollTopBtn.querySelector('.scroll-top-icon');
-                if (tocIcon) tocIcon.style.display = 'none';
-                if (scrollIcon) scrollIcon.style.display = 'block';
-                scrollTopBtn.setAttribute('data-no-toc', 'true');
-            }
-
-            requestAnimationFrame(function () {
-                var desktopTrack = document.querySelector('.toc-track');
-                if (desktopTrack && tocItems.length > 0 && tocList) {
-                    var listRect = tocList.getBoundingClientRect();
-
-                    var firstItem = tocItems[0];
-                    var firstRect = firstItem.getBoundingClientRect();
-                    var startTop = firstRect.top + firstRect.height / 2 - listRect.top;
-
-                    var lastItem = tocItems[tocItems.length - 1];
-                    var lastRect = lastItem.getBoundingClientRect();
-                    var endTop = lastRect.top + lastRect.height / 2 - listRect.top;
-
-                    var offset = 0;
-                    if (lastItem.classList.contains('toc-refs-item')) {
-                        offset = 5;
-                    }
-
-                    desktopTrack.style.top = startTop + 'px';
-                    desktopTrack.style.height = Math.max(0, endTop - startTop - offset) + 'px';
-                }
-
-                var mobileTrack = document.querySelector('.toc-mobile-track');
-                if (mobileTrack && tocMobileItems.length > 0 && tocMobileList) {
-                    var origOpen = openMobileDrawer;
-                    openMobileDrawer = function () {
-                        origOpen();
-                        setTimeout(function () {
-                            requestAnimationFrame(function () {
-                                var mListRect = tocMobileList.getBoundingClientRect();
-
-                                var mFirstItem = tocMobileItems[0];
-                                var mFirstRect = mFirstItem.getBoundingClientRect();
-                                var mStartTop = mFirstRect.top + mFirstRect.height / 2 - mListRect.top;
-
-                                var mLastItem = tocMobileItems[tocMobileItems.length - 1];
-                                var mLastRect = mLastItem.getBoundingClientRect();
-                                var mEndTop = mLastRect.top + mLastRect.height / 2 - mListRect.top;
-
-                                var mOffset = 0;
-                                if (mLastItem.classList.contains('toc-refs-item')) {
-                                    mOffset = 5;
-                                }
-
-                                mobileTrack.style.top = mStartTop + 'px';
-                                mobileTrack.style.height = Math.max(0, mEndTop - mStartTop - mOffset) + 'px';
-                            });
-                        }, 100);
-                    };
-                }
-            });
-
-            updateScrollSpy();
-        });
-    })();
+<script nonce="<?= CSP_NONCE ?>">
+    window.FezadanArticleData = {
+        articleId: <?= (int)($article['id'] ?? 0) ?>,
+        shareUrl: <?= json_encode($og_url, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+        shareTitle: <?= json_encode($article['title'] ?? '', JSON_UNESCAPED_UNICODE) ?>,
+        previousArticleUrl: <?= json_encode($previousArticleUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+        nextArticleUrl: <?= json_encode($nextArticleUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>
+    };
 </script>
-<?php /* JSON-LD artık header.php'de $extra_jsonld dizisi üzerinden basılıyor */ ?>
-<script>
-    document.addEventListener("DOMContentLoaded", function () {
-        const articleId = <?php echo $article['id']; ?>;
-        const targetSeconds = <?php echo $threshold_seconds; ?>;
-
-        const token = "<?php echo MakaleController::readToken((int)$article['id']); ?>";
-
-        let timeSpent = 0; 
-        let isRead = false;
-        let timerInterval;
-
-        function handleVisibility() {
-            clearInterval(timerInterval);
-            
-            if (!document.hidden && !isRead) {
-                timerInterval = setInterval(() => {
-                    timeSpent++;
-
-                    if (timeSpent >= targetSeconds) {
-                        sendReadData();
-                        clearInterval(timerInterval);
-                    }
-                }, 1000);
-            }
-        }
-
-        function sendReadData() {
-            if (isRead) return;
-            
-            fetch('/makale/count', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: articleId, token: token }),
-                keepalive: true
-            }).then(() => {
-                isRead = true;
-            }).catch(err => console.error(err));
-        }
-
-        document.addEventListener("visibilitychange", handleVisibility);
-        
-        handleVisibility();
-    });
-</script>
-
+<script src="/assets/js/article-reader.js?v=<?= filemtime(ROOT . '/public_html/assets/js/article-reader.js') ?>" nonce="<?= CSP_NONCE ?>"></script>
 <?php require_once ROOT . '/app/Views/inc/footer.php'; ?>
