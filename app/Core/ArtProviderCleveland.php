@@ -46,7 +46,7 @@ class ArtProviderCleveland extends ArtProvider {
                 if (!$imageUrl) return null;
 
                 $description = $item['description'] ?? $item['did_you_know'] ?? null;
-                // Cleveland API açıklamaları bazen HTML etiketleriyle sarılı olarak döner, deepL/wiki eşleme için temizle.
+                // Cleveland API açıklamaları bazen HTML etiketleriyle sarılı olarak döner, wiki eşleme için temizle.
                 if ($description) {
                     $description = strip_tags($description);
                 }

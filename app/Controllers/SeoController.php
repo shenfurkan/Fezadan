@@ -152,7 +152,6 @@ class SeoController extends Controller {
             $xmlMain .= "  <url><loc>" . htmlspecialchars(langUrl($lang === 'en' ? 'articles' : 'makaleler', $lang), ENT_XML1) . "</loc><lastmod>{$todayIso}</lastmod><changefreq>daily</changefreq><priority>0.9</priority></url>" . PHP_EOL;
             $xmlMain .= "  <url><loc>" . htmlspecialchars(pageUrl('about', $lang), ENT_XML1) . "</loc><lastmod>{$todayIso}</lastmod><changefreq>monthly</changefreq><priority>0.5</priority></url>" . PHP_EOL;
             $xmlMain .= "  <url><loc>" . htmlspecialchars(pageUrl('manifesto', $lang), ENT_XML1) . "</loc><lastmod>{$todayIso}</lastmod><changefreq>monthly</changefreq><priority>0.5</priority></url>" . PHP_EOL;
-            $xmlMain .= "  <url><loc>" . htmlspecialchars(pageUrl('donate', $lang), ENT_XML1) . "</loc><lastmod>{$todayIso}</lastmod><changefreq>monthly</changefreq><priority>0.5</priority></url>" . PHP_EOL;
             $xmlMain .= "  <url><loc>" . htmlspecialchars(pageUrl('privacy', $lang), ENT_XML1) . "</loc><lastmod>{$todayIso}</lastmod><changefreq>monthly</changefreq><priority>0.5</priority></url>" . PHP_EOL;
             $xmlMain .= "  <url><loc>" . htmlspecialchars(pageUrl('verification', $lang), ENT_XML1) . "</loc><lastmod>{$todayIso}</lastmod><changefreq>monthly</changefreq><priority>0.5</priority></url>" . PHP_EOL;
         }

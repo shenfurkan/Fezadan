@@ -13,9 +13,6 @@ class PageController extends Controller {
             case 'privacy':
                 $page_alternates = ['tr' => '/tr/gizlilik-politikasi', 'en' => '/en/privacy'];
                 break;
-            case 'donate':
-                $page_alternates = ['tr' => '/tr/bagis', 'en' => '/en/donate'];
-                break;
             case 'verification':
                 $page_alternates = ['tr' => '/tr/teyit', 'en' => '/en/verification'];
                 break;

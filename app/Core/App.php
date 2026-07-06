@@ -444,8 +444,6 @@ class App {
             'manifesto' => 'manifesto',
             'privacy' => 'privacy',
             'gizlilik-politikasi' => 'privacy',
-            'donate' => 'donate',
-            'bagis' => 'donate',
             'verification' => 'verification',
             'teyit' => 'verification',
         ];

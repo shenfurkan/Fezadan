@@ -9,8 +9,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/PHP-8.0%2B-777BB4?logo=php&logoColor=white" alt="PHP"/>
   <img src="https://img.shields.io/badge/MySQL-5.7%2B-4479A1?logo=mysql&logoColor=white" alt="MySQL"/>
+  <img src="https://img.shields.io/badge/Tailwind%20CSS-v4-06B6D4?logo=tailwindcss&logoColor=white" alt="Tailwind"/>
   <img src="https://img.shields.io/badge/Cloudflare%20R2-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare R2"/>
-  <img src="https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white" alt="Docker"/>
   <img src="https://img.shields.io/badge/License-GPL--3.0-A42E2B?logo=gnu&logoColor=white" alt="GPL-3.0"/>
 </p>
 
@@ -66,7 +66,7 @@ Google Fonts kullanımı, bu projede kasıtlı olarak reddedilmiştir ve bunun n
 Yetkilendirme ve veri bütünlüğü, siber saldırılara karşı aşağıdaki katmanlarla korunur:
 
 * **İzole Panel Rotası:** Standart bot saldırılarını ve otomatik zafiyet taramalarını engellemek için yaygın panel uzantıları kullanılmaz. Yönetim arayüzüne doğrudan izole edilmiş `/yonetim` rotası üzerinden erişilir.
-* **Brute Force Koruması:** Yönetim paneline yapılan başarısız giriş denemelerinde IP adresleri `sha256` algoritması ile hashlenerek kaydedilir. Art arda yapılan 3 başarısız denemede ilgili IP adresi 3 saat süreyle engellenir.
+* **Brute Force Koruması:** Yönetim paneline yapılan başarısız giriş denemelerinde IP adresleri `sha256` algoritması ile hashlenerek kaydedilir. 3 saat içinde aynı IP veya kullanıcı adıyla 10 başarısız denemede ilgili adres engellenir.
 * **Session Fixation Koruması:** Oturum açma işleminin başarıyla tamamlanmasının ardından mevcut oturum kimliği (`session_id`) sıfırlanır ve yenilenir.
 * **CSRF (Cross-Site Request Forgery) Koruması:** Veri manipülasyonu içeren tüm POST isteklerinde, `Csrf.php` sınıfı aracılığıyla token doğrulaması zorunlu tutulur. Tokenlar `random_bytes(32)` ile üretilir ve `hash_equals()` ile güvenli şekilde doğrulanır.
 * **Gelişmiş Hata Yönetimi:** Üretim (production) ortamında, sistem topolojisini ele verebilecek PHP hata detayları tamamen gizlenir. İstekler durumuna göre sistemin kendi oluşturduğu `404` veya `500` HTTP hata sayfaları ile karşılanır.
@@ -113,7 +113,7 @@ Fezadan, medya dosyalarını doğrudan web sunucusundan değil, Cloudflare R2 ü
 Sistem, harici API'ler aracılığıyla kendi sanatsal içeriklerini üretebilecek bir yapılandırmaya sahiptir:
 
 - **Müze API Entegrasyonları:** The Met, Art Institute of Chicago ve Cleveland Museum of Art API'lerinden günlük periyotlarla yeni sanatsal veriler çekilir. `ArtProviderMet.php`, `ArtProviderChicago.php`, ve `ArtProviderCleveland.php` sınıfları her bir müze API'si ile iletişim kurar.
-- **Ceviri Mekanizmasi:** Cekilen yabanci dildeki metinler DeepL API ile otomatik olarak Turkce'ye cevrilir.
+- **Ceviri Mekanizmasi:** Cekilen yabanci dildeki metinler otomatik olarak Turkce'ye cevrilir.
 - **Daily Artwork Sistemi:** `DailyArtwork.php` sınıfı, günlük sanat eserlerini yönetir. Her gün için unique slug oluşturur, Türkçe karakterleri URL-friendly formata çevirir, ve veritabanında saklar. Schema migrations otomatik olarak gerçekleştirilir.
 - **Cron Job Entegrasyonu:** `cron/` dizinindeki scriptler, günlük içerik çekme işlemlerini otomatikleştirir. Sistem, her gün yeni bir sanat eseri çekip veritabanına kaydeder.
 - **Wikipedia Entegrasyonu:** Sanat eserleri için Wikipedia'dan ek bilgi çekilebilir. `description_source` field'ı içeriğin kaynağını (wikipedia, museum, template, manual) belirler.
@@ -137,7 +137,7 @@ Sistem, özel bir MVC (Model-View-Controller) mimarisi kullanır:
 * **Controllers:** HTTP isteklerini karşılar, iş mantığını uygular ve view'ları render eder. Örnek: `HomeController`, `ArticlesController`, `AdminController`.
 * **Models:** Veritabanı işlemlerini kapsüller. `Post.php`, `User.php` gibi modeller veri erişim katmanını sağlar.
 * **Views:** HTML/PHP şablonları. `app/Views/` dizininde organize edilir. Frontend ve admin view'ları ayrılmıştır.
-* **Core Classes:** `Db.php` (singleton PDO connection), `Csrf.php` (CSRF protection), `Auth.php` (authentication), `R2Storage.php` (cloud storage), `DailyArtwork.php` (artwork management).
+* **Core Classes:** `Db.php` (singleton PDO connection), `Csrf.php` (CSRF protection), `R2Storage.php` (cloud storage), `WebAuthn.php` (passkey authentication), `DailyArtwork.php` (artwork management).
 
 ### 5.3 Routing Sistemi
 
@@ -154,6 +154,8 @@ Fezadan/
 │   ├── Config/        # Ayar ve veritabanı bağlantı dosyaları
 │   ├── Controllers/   # HTTP request yöneticileri
 │   ├── Core/          # Temel iş mantığı sınıfları (Db, Upload, Csrf vb.)
+│   ├── Services/      # Servis katmanı (SystemHealth, Sitemap, Media, Author)
+│   ├── Translations/  # Dil dosyaları (tr.php, en.php)
 │   └── Views/         # HTML/PHP arayüz şablonları
 ├── public_html/       # Kök web dizini (Document Root)
 │   ├── assets/        # Derlenmiş CSS ve JS dosyaları
@@ -163,14 +165,12 @@ Fezadan/
 │   ├── cdn/           # Lokal statik medya (logolar, faviconlar)
 │   └── index.php      # Gelen isteklerin karşılandığı yönlendirici
 ├── cron/              # Otomatik görev scriptleri
+├── documents/         # Dokümantasyon
 ├── migrations/        # Veritabanı migration dosyaları
 ├── scripts/           # Yardımcı scriptler
 ├── vendor/            # Composer dependencies (AWS SDK)
-├── .env               # Ortam değişkenleri (gitignore'da)
 ├── .env.example       # Ortam değişkenleri taslağı
 ├── composer.json      # PHP dependency yönetimi
-├── Dockerfile         # Docker container yapılandırması
-├── docker-compose.yml # Docker Compose yapılandırması
 └── README.md
 ```
 
@@ -181,43 +181,24 @@ Fezadan/
 - Composer
 - Apache veya Nginx
 - Cloudflare R2 hesabı (medya depolama için)
-- DeepL API Key (opsiyonel - ceviri icin)
 
 ### Kurulum
 
-#### Yöntem 1: Docker (Önerilen)
-
 ```bash
 # Projeyi klonlayın
 git clone https://github.com/shenfurkan/Fezadan.git
 cd Fezadan
 
-# .env dosyasını oluşturun ve düzenleyin
-cp .env.example .env
-
-# Docker ile başlatın
-docker-compose up -d
-```
-
-#### Yöntem 2: Manuel Kurulum
-
-```bash
-# Projeyi klonlayın
-git clone https://github.com/shenfurkan/Fezadan.git
-cd Fezadan
-
-# Dependencies yükleyin
+# Bağımlılıkları yükleyin
 composer install
 
 # .env dosyasını oluşturun ve düzenleyin
 cp .env.example .env
-nano .env  # veya düzenleyiciniz
 ```
 
 **.env dosyasında gerekli ayarları yapın:**
 - Veritabanı bağlantı bilgileri
 - Cloudflare R2 API anahtarları
-- API anahtarlari (DeepL)
 - Güvenlik anahtarları
 
 **Web sunucusu yapılandırması:**
@@ -253,8 +234,8 @@ Tüm fontlar WOFF2 formatında, Latin Extended karakter seti ile (Türkçe karak
 
 ### 6.2 CSS ve JavaScript
 
-* **CSS:** Custom CSS kullanılır, framework bağımlılığı yoktur. `style.css` ana stil dosyasıdır.
-* **JavaScript:** Vanilla JavaScript kullanılır. `main.js` genel frontend işlevselliğini, `admin.js` yönetim paneli işlevselliğini sağlar.
+* **CSS:** Tailwind CSS v4 CLI ile oluşturulur. `input.css` kaynak, `style.css` derlenmiş çıktıdır.
+* **JavaScript:** Vanilla JavaScript kullanılır. `admin.js` ve `article-reader.js` frontend işlevselliğini, `admin-editor.js` yönetim paneli editörünü sağlar.
 * **PDF.js:** Notlar modülü için PDF görüntüleme amacıyla PDF.js kütüphanesi yerel olarak barındırılır.
 
 ### 6.3 Responsive Tasarım
@@ -274,18 +255,11 @@ Sistem, mobil-first yaklaşım ile responsive tasarıma sahiptir. Tüm view'lar 
 
 ---
 
-## 8. Docker ve Deployment
+## 8. Deployment
 
-Proje, Docker ile containerize edilebilir:
+Proje cPanel Git Deployment ile canlıya alınacak şekilde yapılandırılmıştır. `.cpanel.yml` dosyası deploy sırasında hangi dizinlerin kopyalanacağını ve kurulum sonrası temizlik adımlarını tanımlar.
 
-* **Dockerfile:** PHP 8.x tabanlı Docker image. Gerekli PHP extension'ları (pdo_mysql, mbstring, curl vb.) yüklenir.
-* **docker-compose.yml:** MySQL container ve PHP container'ı birlikte çalıştırır.
-* **docker-entrypoint.sh:** Container başlangıç script'i.
-
-Deployment için:
-1. Docker image'ı build edin: `docker build -t fezadan .`
-2. Docker Compose ile çalıştırın: `docker-compose up -d`
-3. Alternatif olarak, traditional VPS deployment da desteklenir (Apache/Nginx + PHP-FPM).
+Detaylı kurulum ve deploy rehberi için `documents/07-installation-and-deploy.md` dosyasına bakın.
 
 ---
 

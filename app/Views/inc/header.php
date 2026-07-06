@@ -76,8 +76,6 @@ function getLanguageSwitchUrl($lang) {
         'manifesto' => ['tr' => 'manifesto', 'en' => 'manifesto'],
         'gizlilik-politikasi' => ['tr' => 'gizlilik-politikasi', 'en' => 'privacy'],
         'privacy' => ['tr' => 'gizlilik-politikasi', 'en' => 'privacy'],
-        'bagis' => ['tr' => 'bagis', 'en' => 'donate'],
-        'donate' => ['tr' => 'bagis', 'en' => 'donate'],
         'teyit' => ['tr' => 'teyit', 'en' => 'verification'],
         'verification' => ['tr' => 'teyit', 'en' => 'verification'],
         'makaleler' => ['tr' => 'makaleler', 'en' => 'articles'],
