@@ -2,107 +2,11 @@
 
 abstract class ArtProvider
 {
-    protected $deepLKey;
-    protected $geminiKey;
-
-    public function __construct()
-    {
-        $this->deepLKey = $_ENV['DEEPL_API_KEY'] ?? getenv('DEEPL_API_KEY');
-        $this->geminiKey = $_ENV['GEMINI_API_KEY'] ?? getenv('GEMINI_API_KEY');
-    }
-
     abstract public function fetchArtwork();
 
     protected function sanitizeId($id)
     {
         return preg_replace('/[^a-zA-Z0-9_.-]/', '', (string)$id);
-    }
-
-    protected function getDeepLTranslation($text)
-    {
-        if (empty($this->deepLKey) || empty(trim((string)$text))) {
-            return null;
-        }
-
-        $ch = curl_init('https://api-free.deepl.com/v2/translate');
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => http_build_query([
-                'text' => $text,
-                'source_lang' => 'EN',
-                'target_lang' => 'TR',
-            ]),
-            CURLOPT_HTTPHEADER => [
-                'Authorization: DeepL-Auth-Key ' . $this->deepLKey,
-                'Content-Type: application/x-www-form-urlencoded',
-            ],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 3,
-            CURLOPT_TIMEOUT => 7,
-        ]);
-
-        $response = curl_exec($ch);
-        curl_close($ch);
-
-        $json = $response ? json_decode($response, true) : null;
-        return $json['translations'][0]['text'] ?? null;
-    }
-
-    protected function getGeminiDescription($title, $artist, $date, $medium, $descriptionEn)
-    {
-        if (empty($this->geminiKey) || empty(trim((string)$descriptionEn))) {
-            return null;
-        }
-
-        $prompt = "GÖREV: Aşağıdaki İngilizce metni Türkçeye çevir ve müze kataloğu formatında yeniden yaz.\n\n"
-            . "Kurallar:\n"
-            . "- Sadece verilen metindeki bilgileri kullan.\n"
-            . "- Metinde olmayan bilgi, tarih, yorum veya detay ekleme.\n"
-            . "- Akıcı, doğal Türkçe kullan.\n"
-            . "- Sadece çevrilmiş metni yaz.\n\n"
-            . "Eser: {$title}\n"
-            . "Sanatçı: {$artist}\n"
-            . "Tarih: {$date}\n"
-            . "Teknik: {$medium}\n\n"
-            . "Çevrilecek metin:\n{$descriptionEn}";
-
-        $payload = json_encode([
-            'contents' => [['parts' => [['text' => $prompt]]]],
-            'generationConfig' => [
-                'temperature' => 0.4,
-                'maxOutputTokens' => 500,
-            ],
-        ], JSON_UNESCAPED_UNICODE);
-
-        $ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent');
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $payload,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-                'X-goog-api-key: ' . $this->geminiKey,
-            ],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 3,
-            CURLOPT_TIMEOUT => 10,
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200 || !$response) {
-            error_log("Gemini galeri açıklaması alınamadı: HTTP {$httpCode}");
-            return null;
-        }
-
-        $json = json_decode($response, true);
-        $text = $json['candidates'][0]['content']['parts'][0]['text'] ?? null;
-        if ($text && mb_strlen(trim($text), 'UTF-8') >= 40) {
-            return trim($text);
-        }
-
-        return null;
     }
 
     protected function searchWikipedia($title, $artist)
@@ -270,21 +174,6 @@ abstract class ArtProvider
                 if (empty($artwork['artist_bio'])) {
                     $artwork['artist_bio'] = $wikiData['text'];
                 }
-            }
-
-            $descEn = $artwork['description_en'] ?? '';
-            $descTr = $provider->getGeminiDescription(
-                $artwork['title'] ?? '',
-                $artwork['artist'] ?? '',
-                $artwork['date_display'] ?? '',
-                $artwork['medium'] ?? '',
-                $descEn
-            );
-            if (!$descTr && $descEn !== '') {
-                $descTr = $provider->getDeepLTranslation($descEn);
-            }
-            if ($descTr) {
-                $descSource = 'museum';
             }
         }
 

@@ -67,7 +67,6 @@ define('APP_SALT', $appSalt);
 define('APP_DEBUG', filter_var(env_value('APP_DEBUG', '0'), FILTER_VALIDATE_BOOLEAN));
 define('CDN_URL', env_value('CDN_URL', env_value('R2_PUBLIC_URL', SITE_URL)));
 define('LITECAPTCHA_ENABLED', filter_var(env_value('LITECAPTCHA_ENABLED', '1'), FILTER_VALIDATE_BOOLEAN));
-define('MONERO_ADDRESS', env_value('MONERO_ADDRESS', '44AFFq5kSiGbGDi1n6noSM5tBw1p25r4m5tBw1p25r4m5tBw1p25r4m5tBw1p25r4m5tBw1p25r4m5tBw1p25r4m5tBw1p2'));
 
 /**
  * Generates a language-prefixed URL.
@@ -86,8 +85,6 @@ function pageUrl(string $page, ?string $lang = null): string {
         'hakkinda' => ['tr' => 'hakkinda', 'en' => 'about'],
         'manifesto' => ['tr' => 'manifesto', 'en' => 'manifesto'],
         'privacy' => ['tr' => 'gizlilik-politikasi', 'en' => 'privacy'],
-        'donate' => ['tr' => 'bagis', 'en' => 'donate'],
-        'bagis' => ['tr' => 'bagis', 'en' => 'donate'],
         'verification' => ['tr' => 'teyit', 'en' => 'verification'],
         'teyit' => ['tr' => 'teyit', 'en' => 'verification'],
     ];
