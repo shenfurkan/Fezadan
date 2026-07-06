@@ -1,31 +1,67 @@
 {
-  "name": "FEZADAN",
+  "id": "/",
+  "name": "FEZADAN - Bilim, Estetik ve Fikir",
   "short_name": "FEZADAN",
-  "description": "Bilim, estetik ve fikir üzerine bağımsız yayın.",
+  "description": "Bilim, estetik ve fikir \u00fczerine ba\u011f\u0131ms\u0131z yay\u0131n.",
   "lang": "tr",
-  "start_url": "/",
+  "dir": "ltr",
+  "start_url": "/tr",
   "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#FEF9E1",
   "theme_color": "#6D2323",
+  "categories": ["education", "books", "news"],
   "icons": [
     {
       "src": "/cdn/light-android-chrome-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "/cdn/light-android-chrome-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "/cdn/light-apple-touch-icon.png",
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Makaleler",
+      "short_name": "Makaleler",
+      "description": "FEZADAN makale ar\u015fivini a\u00e7.",
+      "url": "/tr/makaleler",
+      "icons": [{ "src": "/cdn/light-android-chrome-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "RSS",
+      "short_name": "RSS",
+      "description": "Son yay\u0131nlar\u0131 RSS ile takip et.",
+      "url": "/rss",
+      "icons": [{ "src": "/cdn/light-android-chrome-192x192.png", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/cdn/notlar-social-preview.png",
+      "sizes": "1200x630",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "FEZADAN yay\u0131n \u00f6nizlemesi"
+    },
+    {
+      "src": "/cdn/light-android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "FEZADAN mobil simgesi"
     }
   ]
 }

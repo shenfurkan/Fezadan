@@ -2,39 +2,124 @@
 $current_uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 function isActive($uri, $target)
 {
-    if ($uri == $target
-        || ($target !== '/' && strpos($uri, '/makale') === 0 && $target == '/makaleler')
-        || ($target !== '/' && strpos($uri, '/galeri') === 0 && $target == '/galeri')) {
-        return 'border-b-2 border-[var(--text-accent)] !text-[var(--text-accent)]';
+    $path = preg_replace('#^/(tr|en)(/|$)#i', '/', $uri);
+    $path = rtrim($path, '/');
+    if ($path === '') {
+        $path = '/';
     }
+
+    if ($target === '/makaleler') {
+        return (in_array($path, ['/makaleler', '/articles'], true) || strpos($path, '/makale/') === 0 || strpos($path, '/article/') === 0)
+            ? 'border-b-2 border-[var(--text-accent)] !text-[var(--text-accent)]'
+            : '';
+    }
+
+    if ($target === '/manifesto') {
+        return ($path === '/manifesto')
+            ? 'border-b-2 border-[var(--text-accent)] !text-[var(--text-accent)]'
+            : '';
+    }
+
+    if ($target === '/hakkinda') {
+        return (in_array($path, ['/hakkinda', '/about'], true))
+            ? 'border-b-2 border-[var(--text-accent)] !text-[var(--text-accent)]'
+            : '';
+    }
+
+    if ($target === '/') {
+        return ($path === '/')
+            ? 'border-b-2 border-[var(--text-accent)] !text-[var(--text-accent)]'
+            : '';
+    }
+
     return '';
 }
 function ariaCurrent($uri, $target)
 {
-    return $uri == $target ? 'aria-current="page"' : '';
+    $path = preg_replace('#^/(tr|en)(/|$)#i', '/', $uri);
+    $path = rtrim($path, '/');
+    if ($path === '') {
+        $path = '/';
+    }
+    return $path === $target ? 'aria-current="page"' : '';
+}
+function getLanguageSwitchUrl($lang) {
+    global $page_alternates;
+    $targetLang = strtolower($lang);
+    
+    if (!empty($page_alternates) && isset($page_alternates[$targetLang])) {
+        return $page_alternates[$targetLang];
+    }
+    
+    $currentUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    
+    // Query string'i ayrıştır ve dahili apache rewrite 'url' parametresini kaldır
+    $queryParams = [];
+    parse_str($_SERVER['QUERY_STRING'] ?? '', $queryParams);
+    unset($queryParams['url']);
+    
+    $queryString = !empty($queryParams) ? '?' . http_build_query($queryParams) : '';
+    
+    $segments = explode('/', ltrim($currentUri, '/'));
+    $pathSegments = $segments;
+    if (isset($segments[0]) && in_array(strtolower($segments[0]), ['tr', 'en'])) {
+        $pathSegments = array_slice($segments, 1);
+        $segments[0] = $targetLang;
+    } else {
+        array_unshift($segments, $targetLang);
+    }
+
+    $staticPaths = [
+        '' => ['tr' => '', 'en' => ''],
+        'hakkinda' => ['tr' => 'hakkinda', 'en' => 'about'],
+        'about' => ['tr' => 'hakkinda', 'en' => 'about'],
+        'manifesto' => ['tr' => 'manifesto', 'en' => 'manifesto'],
+        'gizlilik-politikasi' => ['tr' => 'gizlilik-politikasi', 'en' => 'privacy'],
+        'privacy' => ['tr' => 'gizlilik-politikasi', 'en' => 'privacy'],
+        'bagis' => ['tr' => 'bagis', 'en' => 'donate'],
+        'donate' => ['tr' => 'bagis', 'en' => 'donate'],
+        'teyit' => ['tr' => 'teyit', 'en' => 'verification'],
+        'verification' => ['tr' => 'teyit', 'en' => 'verification'],
+        'makaleler' => ['tr' => 'makaleler', 'en' => 'articles'],
+        'articles' => ['tr' => 'makaleler', 'en' => 'articles'],
+    ];
+
+    if (count($pathSegments) <= 1) {
+        $key = strtolower($pathSegments[0] ?? '');
+        if (isset($staticPaths[$key])) {
+            $localized = $staticPaths[$key][$targetLang];
+            return '/' . $targetLang . ($localized !== '' ? '/' . $localized : '') . $queryString;
+        }
+    }
+    
+    return '/' . implode('/', $segments) . $queryString;
 }
 
 // ============================================================
-// META / SEO Defaults — view'lar override edebilir
+// META / SEO Varsayılanları — view'lar geçersiz kılabilir
 // ============================================================
 $siteBase        = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
-$page_title      = $page_title      ?? 'FEZADAN — Bilim ve Estetik';
-$page_description = $page_description ?? 'Veri ve estetik arasındaki sessiz çatışma. FEZADAN — bilim, estetik ve fikir üzerine bağımsız bir yayın.';
+$isEnHead        = (App::getLang() === 'EN');
+$page_title      = $page_title      ?? ($isEnHead ? 'FEZADAN — Science, Aesthetics, and Independent Thought' : 'FEZADAN — Bilim, Estetik ve Bağımsız Düşünce');
+$page_description = $page_description ?? ($isEnHead 
+    ? 'The silent conflict between data and aesthetics. FEZADAN — an independent publication on science, aesthetics, and thought.'
+    : 'Veri ve estetik arasındaki sessiz çatışma. FEZADAN — bilim, estetik ve fikir üzerine bağımsız bir yayın.');
 $og_type         = $og_type         ?? 'website';
 $og_image        = $og_image        ?? ($siteBase . '/cdn/notlar-social-preview.png');
-// Canonical: controller/view sabit slug-bazlı URL set etmediyse mevcut path'e düş
+// Kanonik: controller/view sabit slug-bazlı URL belirlemediyse mevcut path'e düş
 $page_canonical  = $page_canonical  ?? ($siteBase . parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
 $og_url          = $og_url          ?? $page_canonical;
-$page_robots     = $page_robots     ?? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
+$page_robots     = $page_robots     ?? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1, noai, noimageai';
 $extra_jsonld    = $extra_jsonld    ?? [];
 ?>
 
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="<?= strtolower(App::getLang()) ?>">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="yandex-verification" content="b6e1d10c17e7147c">
     <meta name="theme-color" content="#6D2323" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#120A0A" media="(prefers-color-scheme: dark)">
     <title><?= htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8') ?></title>
@@ -48,12 +133,33 @@ $extra_jsonld    = $extra_jsonld    ?? [];
     <link rel="icon" type="image/png" sizes="512x512" href="/cdn/light-android-chrome-512x512.png">
 
     <meta name="description" content="<?= htmlspecialchars($page_description, ENT_QUOTES, 'UTF-8') ?>">
+    <?php if (!empty($page_keywords)): ?>
+        <meta name="keywords" content="<?= htmlspecialchars($page_keywords, ENT_QUOTES, 'UTF-8') ?>">
+    <?php endif; ?>
     <meta name="robots" content="<?= htmlspecialchars($page_robots, ENT_QUOTES, 'UTF-8') ?>">
     <link rel="canonical" href="<?= htmlspecialchars($page_canonical, ENT_QUOTES, 'UTF-8') ?>">
+    <?php
+    if (empty($page_alternates)) {
+        $page_alternates = [];
+        $siteBaseUrl = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
+        $trSwitch = getLanguageSwitchUrl('tr');
+        $enSwitch = getLanguageSwitchUrl('en');
+        $page_alternates['tr'] = preg_match('#^https?://#i', $trSwitch) ? $trSwitch : rtrim($siteBaseUrl . $trSwitch, '/');
+        $page_alternates['en'] = preg_match('#^https?://#i', $enSwitch) ? $enSwitch : rtrim($siteBaseUrl . $enSwitch, '/');
+    }
+    if (!empty($page_alternates) && empty($page_alternates['x-default'])) {
+        $page_alternates['x-default'] = $page_alternates['tr'] ?? $page_alternates['en'] ?? $page_canonical;
+    }
+    ?>
+    <?php if (!empty($page_alternates)): ?>
+        <?php foreach ($page_alternates as $lang => $url): ?>
+            <link rel="alternate" hreflang="<?= htmlspecialchars($lang, ENT_QUOTES, 'UTF-8') ?>" href="<?= htmlspecialchars($url, ENT_QUOTES, 'UTF-8') ?>">
+        <?php endforeach; ?>
+    <?php endif; ?>
     <link rel="alternate" type="application/rss+xml" title="FEZADAN RSS" href="/rss">
 
     <meta property="og:site_name" content="FEZADAN">
-    <meta property="og:locale" content="tr_TR">
+    <meta property="og:locale" content="<?= $isEnHead ? 'en_US' : 'tr_TR' ?>">
     <meta property="og:type" content="<?= htmlspecialchars($og_type, ENT_QUOTES, 'UTF-8') ?>">
     <meta property="og:title" content="<?= htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8') ?>">
     <meta property="og:description" content="<?= htmlspecialchars($page_description, ENT_QUOTES, 'UTF-8') ?>">
@@ -92,11 +198,66 @@ $extra_jsonld    = $extra_jsonld    ?? [];
         <link rel="preload" as="image" href="<?= htmlspecialchars($preload_image, ENT_QUOTES, 'UTF-8') ?>" fetchpriority="high">
     <?php endif; ?>
 
-    <link rel="stylesheet" href="<?= $siteBase ?>/assets/css/yonetim.css?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/css/yonetim.css') ?: time() ?>">
-    <link rel="stylesheet" href="/assets/css/fonts.css">
+    <link rel="stylesheet" href="<?= $siteBase ?>/assets/css/style.css?v=<?= @filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/css/style.css') ?: time() ?>">
+    <link rel="preload" href="/assets/css/fonts.css?v=<?= filemtime(ROOT . '/public_html/assets/css/fonts.css') ?>" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/assets/css/fonts.css?v=<?= filemtime(ROOT . '/public_html/assets/css/fonts.css') ?>"></noscript>
+    <?php
+    $cdnOrigin = (defined('CDN_URL') && CDN_URL !== '' && CDN_URL !== $siteBase) ? rtrim(CDN_URL, '/') : '';
+    if ($cdnOrigin !== ''): ?>
+        <link rel="preconnect" href="<?= htmlspecialchars($cdnOrigin, ENT_QUOTES, 'UTF-8') ?>">
+        <link rel="dns-prefetch" href="<?= htmlspecialchars($cdnOrigin, ENT_QUOTES, 'UTF-8') ?>">
+    <?php endif; ?>
 
-    <?php foreach ($extra_jsonld as $jsonld): ?>
-        <script type="application/ld+json"><?= json_encode($jsonld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
+    <?php
+    // Varsayılan JSON-LD: WebSite + Breadcrumb ($extra_jsonld ile geçersiz kılınabilir)
+    if (empty($extra_jsonld)) {
+        $defaultBreadcrumb = [
+            ['@type' => 'ListItem', 'position' => 1, 'name' => (App::getLang() === 'EN' ? 'Home' : 'Anasayfa'), 'item' => langUrl('/')],
+        ];
+        $currentPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+        $segments = array_values(array_filter(explode('/', ltrim($currentPath, '/'))));
+        if (isset($segments[1])) {
+            $seg1 = strtolower($segments[1]);
+            if ($seg1 === 'makaleler' || $seg1 === 'articles') {
+                $defaultBreadcrumb[] = [
+                    '@type' => 'ListItem', 
+                    'position' => 2, 
+                    'name' => (App::getLang() === 'EN' ? 'Articles' : 'Makaleler'), 
+                    'item' => langUrl(App::getLang() === 'EN' ? '/articles' : '/makaleler')
+                ];
+            } elseif ($seg1 === 'yazar' || $seg1 === 'author') {
+                $authorNameVal = (App::getLang() === 'EN' ? 'Author' : 'Yazar');
+                $defaultBreadcrumb[] = [
+                    '@type' => 'ListItem', 
+                    'position' => 2, 
+                    'name' => $authorNameVal, 
+                    'item' => authorUrl($segments[2] ?? '')
+                ];
+            } else {
+                $defaultBreadcrumb[] = ['@type' => 'ListItem', 'position' => 2, 'name' => ucfirst($segments[1]), 'item' => $page_canonical];
+            }
+        }
+        $extra_jsonld = [
+            [
+                '@context' => 'https://schema.org',
+                '@type' => 'WebSite',
+                'name' => 'FEZADAN',
+                'url' => $siteBase,
+                'potentialAction' => [
+                    '@type' => 'SearchAction',
+                    'target' => $siteBase . '/tr/makaleler?q={search_term_string}',
+                    'query-input' => 'required name=search_term_string',
+                ],
+            ],
+            [
+                '@context' => 'https://schema.org',
+                '@type' => 'BreadcrumbList',
+                'itemListElement' => $defaultBreadcrumb,
+            ],
+        ];
+    }
+    foreach ($extra_jsonld as $jsonld): ?>
+        <script type="application/ld+json" nonce="<?= CSP_NONCE ?>"><?= json_encode($jsonld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
     <?php endforeach; ?>
 
     <style>
@@ -127,9 +288,11 @@ $extra_jsonld    = $extra_jsonld    ?? [];
             outline: 2px solid var(--text-accent);
             outline-offset: 2px;
         }
-        a:focus:not(:focus-visible),
-        button:focus:not(:focus-visible) {
+        :focus:not(:focus-visible) {
             outline: none;
+        }
+        html:focus, body:focus, html:focus-visible, body:focus-visible {
+            outline: none !important;
         }
 
         :root {
@@ -146,7 +309,7 @@ $extra_jsonld    = $extra_jsonld    ?? [];
         [data-theme="dark"] {
             --bg-paper: #120A0A;
             --bg-secondary: #1F1212;
-            --text-main: #E5D0AC;
+            --text-main: #E1C89E;
             --text-accent: #FF5C5C;
             --line-color: #3D1F1F;
             --img-blend: normal;
@@ -251,23 +414,8 @@ $extra_jsonld    = $extra_jsonld    ?? [];
             transition: color 0.3s ease;
         }
 
-        .nav-link::after {
-            content: '';
-            position: absolute;
-            width: 0;
-            height: 2px;
-            bottom: -2px;
-            left: 0;
-            background-color: var(--text-accent); 
-            transition: width 0.3s ease;
-        }
-
         .nav-link:hover {
             color: var(--text-accent); 
-        }
-
-        .nav-link:hover::after {
-            width: 100%;
         }
 
         #main-navbar {
@@ -332,7 +480,7 @@ $extra_jsonld    = $extra_jsonld    ?? [];
             transform: translateY(-6px) rotate(-45deg);
         }
     </style>
-    <script>
+    <script nonce="<?= CSP_NONCE ?>">
         (function () {
             const userTheme = localStorage.getItem('theme');
             const htmlElement = document.documentElement;
@@ -353,7 +501,7 @@ $extra_jsonld    = $extra_jsonld    ?? [];
     <nav id="main-navbar" class="flex justify-between items-center px-3 py-5 md:px-6 h-[85px]" aria-label="Ana gezinme">
 
         <div class="relative z-50">
-            <a href="/" class="flex items-center gap-2" aria-label="Anasayfa">
+            <a href="<?= langUrl() ?>" class="flex items-center gap-2" aria-label="Anasayfa">
                 <img src="/cdn/logo-light.png" 
                     alt="Fezadan Logo" 
                     width="150" height="40"
@@ -370,27 +518,23 @@ $extra_jsonld    = $extra_jsonld    ?? [];
         </div>
 
         <div class="hidden md:flex gap-8 items-center pt-1">
-            <a href="<?php echo SITE_URL; ?>/makaleler"
+            <a href="<?= langUrl(App::getLang() === 'EN' ? '/articles' : '/makaleler') ?>"
                 class="nav-link <?php echo isActive($current_uri, '/makaleler'); ?>"
-                <?php echo ariaCurrent($current_uri, '/makaleler'); ?>>Makaleler</a>
-            
-            <a href="<?php echo SITE_URL; ?>/galeri"
-                class="nav-link <?php echo isActive($current_uri, '/galeri'); ?>"
-                <?php echo ariaCurrent($current_uri, '/galeri'); ?>>Galeri</a>
+                <?php echo ariaCurrent($current_uri, '/makaleler'); ?>><?= App::getLang() === 'EN' ? 'Articles' : 'Makaleler' ?></a>
             
             <?php 
                 $host = str_replace('www.', '', $_SERVER['HTTP_HOST']);
                 $notlar_url = (isset($_SERVER['HTTPS']) ? "https://" : "http://") . (strpos($host, 'notlar.') === 0 ? $host : "notlar." . $host);
             ?>
-            <a href="<?php echo $notlar_url; ?>" class="nav-link">Notlar</a>
+            <a href="<?php echo $notlar_url; ?>" class="nav-link"><?= App::getLang() === 'EN' ? 'Notes' : 'Notlar' ?></a>
             
-            <a href="<?php echo SITE_URL; ?>/hakkinda"
-                class="nav-link <?php echo isActive($current_uri, '/hakkinda'); ?>"
-                <?php echo ariaCurrent($current_uri, '/hakkinda'); ?>>Hakkında</a>
-                
-            <a href="<?php echo SITE_URL; ?>/manifesto"
+            <a href="<?= pageUrl('manifesto') ?>"
                 class="nav-link <?php echo isActive($current_uri, '/manifesto'); ?>"
-                <?php echo ariaCurrent($current_uri, '/manifesto'); ?>>Manifesto</a>
+                <?php echo ariaCurrent($current_uri, '/manifesto'); ?>><?= App::getLang() === 'EN' ? 'Manifesto' : 'Manifesto' ?></a>
+                
+            <a href="<?= pageUrl('about') ?>"
+                class="nav-link <?php echo isActive($current_uri, '/hakkinda'); ?>"
+                <?php echo ariaCurrent($current_uri, '/hakkinda'); ?>><?= App::getLang() === 'EN' ? 'About' : 'Hakkında' ?></a>
 
             <div id="theme-toggle" class="theme-switch-wrapper group" role="button" tabindex="0" aria-label="Temayı Değiştir" aria-pressed="false">
                 <svg class="theme-icon sun-icon opacity-50 group-hover:opacity-100 transition-opacity" fill="none"
@@ -421,18 +565,17 @@ $extra_jsonld    = $extra_jsonld    ?? [];
 
     <div id="mobile-menu">
         <div class="flex flex-col gap-8 text-center items-center"> 
-            <a href="/"
-                class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">ANASAYFA</a>
-            <a href="/makaleler"
-                class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">MAKALELER</a>
-            <a href="/galeri"
-                class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">GALERİ</a>
+            <a href="<?= langUrl() ?>"
+                class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]"><?= App::getLang() === 'EN' ? 'HOME' : 'ANASAYFA' ?></a>
+            <a href="<?= langUrl(App::getLang() === 'EN' ? '/articles' : '/makaleler') ?>"
+                class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]"><?= App::getLang() === 'EN' ? 'ARTICLES' : 'MAKALELER' ?></a>
             <a href="<?php echo $notlar_url; ?>"
-                class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">NOTLAR</a>
-            <a href="/hakkinda"
-                class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">HAKKINDA</a>
-            <a href="/manifesto"
-                class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">MANİFESTO</a>
+                class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]"><?= App::getLang() === 'EN' ? 'NOTES' : 'NOTLAR' ?></a>
+
+            <a href="<?= pageUrl('manifesto') ?>"
+                class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]"><?= App::getLang() === 'EN' ? 'MANIFESTO' : 'MANİFESTO' ?></a>
+            <a href="<?= pageUrl('about') ?>"
+                class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]"><?= App::getLang() === 'EN' ? 'ABOUT' : 'HAKKINDA' ?></a>
             <div class="theme-switch-wrapper group scale-125 mt-4" role="button" tabindex="0" aria-label="Temayı Değiştir">
                 <svg class="theme-icon sun-icon opacity-50 group-hover:opacity-100 transition-opacity" fill="none"
                     stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -452,10 +595,10 @@ $extra_jsonld    = $extra_jsonld    ?? [];
         </div>
 
         <div class="mt-12 opacity-50 text-xs tracking-widest uppercase">
-            Bilim ve Estetik
+            <?= App::getLang() === 'EN' ? 'Science and Aesthetics' : 'Bilim ve Estetik' ?>
         </div>
     </div>
-    <script>
+    <script nonce="<?= CSP_NONCE ?>">
         const navbar = document.getElementById('main-navbar');
         let lastScrollY = window.scrollY;
 

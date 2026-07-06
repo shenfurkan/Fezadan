@@ -1,0 +1,40 @@
+var PHOTOGRAPHY_IMAGES = [
+    "assets/images/09920a6a682f7d1d30ff4f051f046894.jpg",
+    "assets/images/0ee6cc401cdac6d1b717d65695532624.jpg",
+    "assets/images/1fb25750329d0a6f909bcd5e31e5fab6.jpg",
+    "assets/images/2245ef235e9df06e9aec198da328dbab.jpg",
+    "assets/images/2a19243a70d8dea6df6ba09ff9c04d9a.jpg",
+    "assets/images/37a2bed65cbdd0e178fc4e91b2c26991.jpg",
+    "assets/images/39478fd1142e9470eda150828cab9f81.jpg",
+    "assets/images/4680dea2246f1ce8f4aef82c40b3ac3e.jpg",
+    "assets/images/476fea790695073624f2b110ad90b3c8.jpg",
+    "assets/images/48082bec0c1b65f7464915d83dcc29da.jpg",
+    "assets/images/50c5ee4f75345cdd81140e332b6f8fe5.jpg",
+    "assets/images/53a217da2015f559e06a282903283ceb.jpg",
+    "assets/images/56e29143a7a005c7635fb128c8348ef8.jpg",
+    "assets/images/5bb0cd2759f9bf873311fcb001bed679.jpg",
+    "assets/images/7085488f0ba0736bc98d8ad8a084741d.jpg",
+    "assets/images/9376f31da8e1b40b95bc26c928da516a.jpg",
+    "assets/images/97305ece67d09f0818d4937fbf298853.jpg",
+    "assets/images/b114ab1099fb6b617b80782f7a364c33.jpg",
+    "assets/images/bdaa6674085c63cef46aa6b5e8845002.jpg",
+    "assets/images/c72b18dbb017f41feaee2a709b31812d.jpg",
+    "assets/images/d074269bd7413e4090139349d155bb86.jpg",
+    "assets/images/e08e459954504c900c3531c49b7355fc.jpg",
+    "assets/images/e73a1a2692c4d628a5c3a37773077a63.jpg",
+    "assets/images/eadc68c633aae271b2c2b2ab8fbf56dc.jpg"
+];
+
+var VISUAL_ART_IMAGES = [
+    "assets/images/01b748791c344514c454565d41555aca.webp",
+    "assets/images/0fff3ab1267dcdc00007cbc404b3854f.webp",
+    "assets/images/352140fcde35f084415e454ac1d7db34.webp",
+    "assets/images/3986d3ca34b9a55447198ee8f34f46f6.webp",
+    "assets/images/9a96261c0e14afd3e9b8df0b8ce0fcf7.webp",
+    "assets/images/dde4e9511f05882db4262091159e0726.webp",
+    "assets/images/e658459c09faff1e7bcf17d734d5cfae.webp",
+    "assets/images/f0113acc34d6bb0531348a03592d3cc6.webp",
+    "assets/images/plate_01.webp",
+    "assets/images/plate_02.webp",
+    "assets/images/plate_03.webp"
+];

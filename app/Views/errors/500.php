@@ -18,6 +18,13 @@
 <body>
     <h1>500</h1>
     <p>Sistem geçici olarak yanıt veremiyor</p>
+    <?php if (isset($e) && $e instanceof \Throwable): ?>
+        <div style="background:#fff; color:#a00; padding:15px; border:2px solid #a00; max-width:800px; text-align:left; word-wrap:break-word; margin-bottom: 20px;">
+            <strong>HATA DETAYI:</strong><br>
+            <?= htmlspecialchars($e->getMessage()) ?><br><br>
+            <small><?= htmlspecialchars($e->getFile() . ':' . $e->getLine()) ?></small>
+        </div>
+    <?php endif; ?>
     <a href="/">Merkeze Dön</a>
 </body>
 </html>

@@ -4,7 +4,7 @@ require_once ROOT . '/app/Core/DailyArtwork.php';
 class YonetimController extends Controller
 {
 
-    // Database bağlantı fonksiyonu
+    // Veritabanı bağlantı fonksiyonu
     /** @deprecated Yeni kodda doğrudan Db::pdo() kullanın. */
     private function getPDO()
     {
@@ -367,7 +367,7 @@ class YonetimController extends Controller
                     $params[':id'] = $searchId;
                 }
                 else {
-                    // Title search
+                    // Başlık araması
                     $whereSql .= " AND a.title LIKE :search";
                     $params[':search'] = "%$search%";
                 }
@@ -395,7 +395,7 @@ class YonetimController extends Controller
 
             // Sayfalandırma
             $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-            $limit = 10; // Article per page
+            $limit = 10; // Sayfa başı makale
             $offset = ($page - 1) * $limit;
 
             // Toplam makale sayısı
@@ -565,7 +565,7 @@ class YonetimController extends Controller
 
             // Yazar varlık kontrolü
             $author_id = $this->validateAuthorId($pdo, $author_id);
-            // Kategori whitelist
+            // Kategori beyaz listesi
             $selectedCategories = $this->validateCategoryIds($pdo, $selectedCategories);
 
             $slug = $this->uniqueSlug($pdo, 'articles', $this->createSlug($title));

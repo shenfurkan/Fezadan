@@ -406,7 +406,7 @@
         // 1. Heartbeat: Oturumu canlı tut
         setInterval(() => {
             fetch('/yonetim/dashboard', { method: 'HEAD' })
-                .catch(() => console.log('Ping başarısız.'));
+                .catch(() => {});
         }, 10 * 60 * 1000);
 
         // 2. Tarayıcıya Oto-Kayıt

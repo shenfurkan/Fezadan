@@ -48,7 +48,7 @@ class ArtProviderChicago extends ArtProvider {
                 return [
                     'title' => $item['title'] ?? 'İsimsiz',
                     'artist' => !empty($item['artist_title']) ? $item['artist_title'] : 'Bilinmeyen Sanatçı',
-                    'artist_bio' => null, // Chicago API doesn't easily return this in search
+                    'artist_bio' => null, // Chicago API aramalarda bunu kolay döndürmez
                     'date_display' => $item['date_display'] ?? null,
                     'medium' => $item['medium_display'] ?? null,
                     'dimensions' => $item['dimensions'] ?? null,

@@ -1,5 +1,23 @@
 {
+    "name": "fezadan/fezadan",
+    "description": "Gizlilik odakli, kendi kendine yeten yayin platformu — Privacy-first, self-sufficient publishing platform",
+    "type": "project",
+    "keywords": ["cms", "publishing", "privacy", "blog", "php", "mvc"],
+    "homepage": "https://github.com/shenfurkan/Fezadan",
+    "license": "GPL-3.0-or-later",
+    "authors": [
+        {
+            "name": "Furkan Sen",
+            "role": "Developer"
+        },
+        {
+            "name": "Suat Isik",
+            "role": "Developer"
+        }
+    ],
     "require": {
-        "aws/aws-sdk-php": "^3.378"
+        "php": ">=8.0",
+        "aws/aws-sdk-php": "^3.378",
+        "maxmind-db/reader": "~1.11"
     }
 }

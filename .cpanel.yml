@@ -1,7 +1,25 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/fezadano5
-    - /bin/cp -R * $DEPLOYPATH/
-    - /bin/cp -R .htaccess $DEPLOYPATH/ 2>/dev/null || true
-    - /bin/cp -R .env $DEPLOYPATH/ 2>/dev/null || true
+    - export APPROOT=/home/fezadano5
+    - export WEBROOT=/home/fezadano5/public_html
+    - export REPO_ROOT=$(/bin/pwd -P)
+    - /bin/mkdir -p ${APPROOT}/app ${APPROOT}/cron ${APPROOT}/storage/anonymity ${WEBROOT} ${WEBROOT}/storage/anonymity
+    - if [ "${REPO_ROOT}" != "${APPROOT}" ]; then /bin/cp -Rf app/. ${APPROOT}/app/; /bin/cp -Rf cron/. ${APPROOT}/cron/; /bin/cp -Rf public_html/. ${WEBROOT}/; /bin/cp -f composer.json ${APPROOT}/composer.json; /bin/cp -f composer.lock ${APPROOT}/composer.lock; fi
+    # Install Composer dependencies so vendor/autoload.php exists at runtime
+    - if [ "${REPO_ROOT}" != "${APPROOT}" ]; then cd ${APPROOT} && /usr/local/bin/php /usr/local/bin/composer install --no-dev --no-interaction --optimize-autoloader 2>&1; fi
+    # Cleanup only when deploying to a separate target; never dirty the cPanel repo checkout.
+    - if [ "${REPO_ROOT}" != "${APPROOT}" ]; then /bin/rm -f ${APPROOT}/AGENTS.md ${APPROOT}/README.md ${APPROOT}/readme.md ${APPROOT}/.env.example ${APPROOT}/.gitignore ${APPROOT}/package.json ${APPROOT}/package-lock.json; fi
+    - if [ "${REPO_ROOT}" != "${APPROOT}" ]; then /bin/rm -f ${APPROOT}/Dockerfile ${APPROOT}/docker-compose.yml ${APPROOT}/docker-entrypoint.sh ${APPROOT}/docker-php-config.php; fi
+    - if [ "${REPO_ROOT}" != "${APPROOT}" ]; then /bin/rm -f ${APPROOT}/profesyonellestirme.md ${APPROOT}/yolharitasi.md ${APPROOT}/plan.md ${APPROOT}/analyses.md ${APPROOT}/mindmap.md ${APPROOT}/beyinfirtinasi.md; fi
+    - if [ "${REPO_ROOT}" != "${APPROOT}" ]; then /bin/rm -f ${APPROOT}/app/YazarController.php; fi
+    - if [ "${REPO_ROOT}" != "${APPROOT}" ]; then /bin/rm -rf ${APPROOT}/scripts/ ${APPROOT}/migrations/ ${APPROOT}/documents/ ${APPROOT}/tests/ ${APPROOT}/tmp/; /bin/find ${APPROOT}/storage -mindepth 1 -maxdepth 1 -not -name 'anonymity' -exec /bin/rm -rf {} \; 2>/dev/null; /bin/find ${APPROOT}/storage/anonymity -mindepth 1 -maxdepth 1 -not -name 'GeoLite2-ASN.mmdb' ! -name 'GeoLite2-City.mmdb' ! -name 'dbip-city-lite.mmdb' ! -name 'dbip-asn-lite.mmdb' ! -name '.gitkeep' -exec /bin/rm -rf {} \; 2>/dev/null; fi
+    - if [ "${REPO_ROOT}" != "${APPROOT}" ]; then /bin/rm -f ${WEBROOT}/README.md ${WEBROOT}/readme.md ${WEBROOT}/AGENTS.md ${WEBROOT}/.env.example ${WEBROOT}/.gitignore ${WEBROOT}/composer.json ${WEBROOT}/composer.lock ${WEBROOT}/package.json ${WEBROOT}/package-lock.json; fi
+    - if [ "${REPO_ROOT}" != "${APPROOT}" ]; then /bin/rm -f ${WEBROOT}/Dockerfile ${WEBROOT}/docker-compose.yml ${WEBROOT}/docker-entrypoint.sh ${WEBROOT}/docker-php-config.php; fi
+    - if [ "${REPO_ROOT}" != "${APPROOT}" ]; then /bin/rm -rf ${WEBROOT}/app/ ${WEBROOT}/scripts/ ${WEBROOT}/migrations/ ${WEBROOT}/documents/ ${WEBROOT}/tests/ ${WEBROOT}/tmp/; /bin/find ${WEBROOT}/storage -mindepth 1 -maxdepth 1 -not -name 'anonymity' -exec /bin/rm -rf {} \; 2>/dev/null; /bin/find ${WEBROOT}/storage/anonymity -mindepth 1 -maxdepth 1 -not -name 'GeoLite2-ASN.mmdb' ! -name 'GeoLite2-City.mmdb' ! -name 'dbip-city-lite.mmdb' ! -name 'dbip-asn-lite.mmdb' ! -name '.gitkeep' -exec /bin/rm -rf {} \; 2>/dev/null; fi
+    - if [ "${REPO_ROOT}" != "${APPROOT}" ]; then /bin/rm -f ${WEBROOT}/run_deploy.php ${WEBROOT}/test-deploy.php; fi
+    - /bin/rm -f ${APPROOT}/captcha/public/error_log ${APPROOT}/captcha/error_log
+    - if [ "${REPO_ROOT}" != "${APPROOT}" ]; then /bin/find ${WEBROOT} -name "*.md" -type f -not -path "*/.git/*" -delete; fi
+    - if [ "${REPO_ROOT}" != "${APPROOT}" ]; then /bin/find ${APPROOT}/app -name "*.md" -type f -not -path "*/.git/*" -delete; fi
+    - /bin/find ${WEBROOT} -name "error_log" -type f -delete
+    - echo "Deploy + cleanup complete"

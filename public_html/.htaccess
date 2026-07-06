@@ -5,21 +5,30 @@
     Options -MultiViews -Indexes
 
     # Hassas dosya ve klasorler public web'den okunamaz.
-    RewriteRule ^(?:scripts|logs|backups|backup|vendor|storage|tmp)(?:/|$) - [F,L]
+    RewriteRule ^(?:app|scripts|logs|backups|backup|vendor|storage|tmp)(?:/|$) - [F,L]
     RewriteRule ^(?:\.env|composer\.(?:json|lock)|package(?:-lock)?\.json|docker-compose\.ya?ml|Dockerfile|.*\.(?:sql|sqlite|bak|backup|log|ini|conf|sh|ps1))$ - [F,L]
 
-    RewriteCond %{HTTP_HOST} ^notlar\.fezadan\.org$ [NC]
+    # robots.txt: route dynamically
+    RewriteRule ^robots\.txt$ index.php?url=robots.txt [L,QSA]
+
+    # sitemap.xml: Statik dosya varsa doğrudan sun, yoksa PHP üretsin
+    RewriteCond %{HTTP_HOST} ^notlar\. [NC]
+    RewriteCond %{DOCUMENT_ROOT}/sitemap_notes.xml -f
     RewriteRule ^sitemap\.xml$ sitemap_notes.xml [L]
 
-    RewriteCond %{HTTP_HOST} ^fezadan\.org$ [NC]
-    RewriteRule ^sitemap\.xml$ sitemap_main.xml [L]
+    RewriteCond %{HTTP_HOST} !^notlar\. [NC]
+    RewriteCond %{DOCUMENT_ROOT}/sitemap.xml -f
+    RewriteRule ^sitemap\.xml$ sitemap.xml [L]
 
-    # robots.txt: aynı public_html iki host'a hizmet ediyor — host'a göre ayrı dosya
-    RewriteCond %{HTTP_HOST} ^notlar\.fezadan\.org$ [NC]
-    RewriteRule ^robots\.txt$ robots_notes.txt [L]
+    # sitemap_main.xml / sitemap_notes.xml: statik varsa sun, yoksa PHP üretsin
+    RewriteCond %{DOCUMENT_ROOT}/sitemap_main.xml -f
+    RewriteRule ^sitemap_main\.xml$ sitemap_main.xml [L]
 
-    RewriteCond %{HTTP_HOST} ^(www\.)?fezadan\.org$ [NC]
-    RewriteRule ^robots\.txt$ robots_main.txt [L]
+    RewriteCond %{DOCUMENT_ROOT}/sitemap_notes.xml -f
+    RewriteRule ^sitemap_notes\.xml$ sitemap_notes.xml [L]
+
+    RewriteCond %{DOCUMENT_ROOT}/sitemap_anonymity.xml -f
+    RewriteRule ^sitemap_anonymity\.xml$ sitemap_anonymity.xml [L]
 
     # Kök ikon yolları: bazı crawler'lar HTML'i okumadan bu standart dosyaları dener.
     RewriteRule ^favicon\.ico$ cdn/light-favicon.ico [L]
@@ -29,15 +38,25 @@
     RewriteRule ^android-chrome-192x192\.png$ cdn/light-android-chrome-192x192.png [L]
     RewriteRule ^android-chrome-512x512\.png$ cdn/light-android-chrome-512x512.png [L]
 
+    # Route all requests under /anonymitycheck/ to public_html/anonymitycheck/index.php
+    RewriteRule ^anonymitycheck(?:/(.*))?$ anonymitycheck/index.php [L,QSA]
+
     # SEO friendly URL'ler
     RewriteRule ^privacy$ index.php?url=privacy [L,QSA]
     RewriteRule ^gizlilik-politikasi$ index.php?url=privacy [L,QSA,R=301]
     RewriteRule ^yazar/([a-zA-Z0-9_-]+)$ index.php?url=yazar/index/$1 [L,QSA]
     RewriteRule ^makale/([a-zA-Z0-9_-]+)$ index.php?url=makale/index/$1 [L,QSA]
-    
-    RewriteRule ^galeri$ index.php?url=galeri [L,QSA]
-    RewriteRule ^galeri/arsiv$ index.php?url=galeri/archive [L,QSA]
-    RewriteRule ^galeri/([a-zA-Z0-9_-]+)$ index.php?url=galeri/show/$1 [L,QSA]
+
+    # Lang-prefixed static page shortcuts — explicit routes prevent hosting-level interference
+    RewriteRule ^(tr|en)/hakkinda$ index.php?url=$1/hakkinda [L,QSA]
+    RewriteRule ^(tr|en)/about$ index.php?url=$1/about [L,QSA]
+    RewriteRule ^(tr|en)/manifesto$ index.php?url=$1/manifesto [L,QSA]
+    RewriteRule ^(tr|en)/donate$ index.php?url=$1/donate [L,QSA]
+    RewriteRule ^(tr|en)/bagis$ index.php?url=$1/bagis [L,QSA]
+    RewriteRule ^(tr|en)/teyit$ index.php?url=$1/teyit [L,QSA]
+    RewriteRule ^(tr|en)/verification$ index.php?url=$1/verification [L,QSA]
+    RewriteRule ^(tr|en)/privacy$ index.php?url=$1/privacy [L,QSA]
+    RewriteRule ^(tr|en)/gizlilik-politikasi$ index.php?url=$1/gizlilik-politikasi [L,QSA]
 
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
@@ -82,6 +101,10 @@
 </IfModule>
 
 <IfModule mod_headers.c>
+    # sw.js must be re-fetched frequently so browser/CDN pick up service worker updates
+    <Files "sw.js">
+        Header set Cache-Control "max-age=3600, public"
+    </Files>
     <FilesMatch "\.(js|css|gz)$">
         Header set Cache-Control "max-age=31536000, public, immutable"
     </FilesMatch>
@@ -108,19 +131,46 @@
 </IfModule>
 
 AddType application/javascript .mjs
+AddType application/manifest+json .webmanifest
 
-# PHP Ayarlari — LiteSpeed .user.ini okumaz, buraya yazilmali
-php_value session.save_handler files
-php_value session.save_path "/home/fezadano5/tmp/sessions"
-php_value session.use_strict_mode 1
-php_value session.gc_maxlifetime 1440
+# PHP Ayarlari — Apache mod_php kullanan sunucular icin. 
+# LiteSpeed (LSPHP) ve PHP-FPM sunucular bu blogu es gecer ve dizindeki .user.ini dosyasini okur.
+# Bu sayede LiteSpeed sunucularda 500 Internal Server Error alinmasi engellenir.
+<IfModule mod_php.c>
+    php_value session.save_handler files
+    php_value session.save_path "/home/fezadano5/tmp/sessions"
+    php_value session.use_strict_mode 1
+    php_value session.gc_maxlifetime 1440
+    php_value upload_max_filesize 20M
+    php_value post_max_size 25M
+    php_value memory_limit 256M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+    php_value upload_tmp_dir "/home/fezadano5/tmp"
+</IfModule>
 
-# Upload limitleri — post_max_size 8M'di, resim yuklemeleri sessizce basarisiz oluyordu
-php_value upload_max_filesize 20M
-php_value post_max_size 25M
-php_value memory_limit 256M
-php_value max_execution_time 300
-php_value max_input_time 300
+<IfModule mod_php7.c>
+    php_value session.save_handler files
+    php_value session.save_path "/home/fezadano5/tmp/sessions"
+    php_value session.use_strict_mode 1
+    php_value session.gc_maxlifetime 1440
+    php_value upload_max_filesize 20M
+    php_value post_max_size 25M
+    php_value memory_limit 256M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+    php_value upload_tmp_dir "/home/fezadano5/tmp"
+</IfModule>
 
-# Gecici dizin — LiteSpeed icin acik belirtelim
-php_value upload_tmp_dir "/home/fezadano5/tmp"
+<IfModule mod_php8.c>
+    php_value session.save_handler files
+    php_value session.save_path "/home/fezadano5/tmp/sessions"
+    php_value session.use_strict_mode 1
+    php_value session.gc_maxlifetime 1440
+    php_value upload_max_filesize 20M
+    php_value post_max_size 25M
+    php_value memory_limit 256M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+    php_value upload_tmp_dir "/home/fezadano5/tmp"
+</IfModule>

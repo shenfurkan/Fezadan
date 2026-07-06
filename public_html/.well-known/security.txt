@@ -1,0 +1,5 @@
+Contact: mailto:info@fezadan.org
+Preferred-Languages: tr, en
+Canonical: https://fezadan.org/.well-known/security.txt
+Policy: https://fezadan.org/privacy
+Expires: 2027-06-12T00:00:00Z

@@ -20,7 +20,7 @@ class ErrorHandler
             get_class($e), $e->getMessage(), $e->getFile(), $e->getLine(),
             PHP_EOL, $e->getTraceAsString()
         ));
-        self::renderFatal();
+        self::renderFatal((defined('APP_DEBUG') && APP_DEBUG) ? $e : null);
     }
 
     public static function handleError($severity, $message, $file, $line): bool
@@ -40,11 +40,12 @@ class ErrorHandler
         $err = error_get_last();
         if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
             error_log(sprintf('[Fezadan][Shutdown] %s in %s:%d', $err['message'], $err['file'], $err['line']));
-            self::renderFatal();
+            $fatalE = new \ErrorException($err['message'], 0, $err['type'], $err['file'], $err['line']);
+            self::renderFatal((defined('APP_DEBUG') && APP_DEBUG) ? $fatalE : null);
         }
     }
 
-    private static function renderFatal(): void
+    private static function renderFatal(\Throwable $e = null): void
     {
         if (headers_sent()) return;
         if (ob_get_level()) {
@@ -56,6 +57,9 @@ class ErrorHandler
             require $view;
         } else {
             echo "<h1>500</h1><p>Sistem hatası.</p>";
+            if ($e) {
+                echo "<p style='font-family:monospace;'>" . htmlspecialchars($e->getMessage()) . "</p>";
+            }
         }
         exit;
     }

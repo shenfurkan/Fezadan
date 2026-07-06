@@ -2,20 +2,30 @@
 // --- 1. Oturum ve Başlık Güvenliği ---
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
+ini_set('session.use_strict_mode', 1);
 
 // HTTPS tespiti — Cloudflare proxy veya direkt HTTPS
 $_isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
     || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')
     || (strpos(($_SERVER['HTTP_CF_VISITOR'] ?? ''), '"https"') !== false);
 
-// cookie_secure sadece HTTPS'te aktif — HTTP Docker'da session'i ezmiyordu
-ini_set('session.cookie_secure', $_isHttps ? '1' : '0');
+// cookie_secure: HTTPS'te her zaman açık, localhost dışı ortamlarda da zorla
+$_isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')
+    || (strpos(($_SERVER['HTTP_CF_VISITOR'] ?? ''), '"https"') !== false);
+$_host = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
+$_isLocal = in_array(($_SERVER['REMOTE_ADDR'] ?? ''), ['127.0.0.1', '::1', 'localhost'], true)
+    || preg_match('/(^|\.)localhost(:\d+)?$/', $_host) === 1
+    || preg_match('/^127\.0\.0\.1(:\d+)?$/', $_host) === 1;
+ini_set('session.cookie_secure', ($_isHttps || !$_isLocal) ? '1' : '0');
 ini_set('session.cookie_samesite', 'Lax');
 
-// Session kayıt dizini: .user.ini ayarlı yolu veya home tmp kullan
-$customSessionPath = '/home/fezadano5/tmp/sessions';
-if ((!is_dir($customSessionPath) && !@mkdir($customSessionPath, 0755, true)) || !is_writable($customSessionPath)) {
-    // .user.ini upload_tmp_dir'i dene (cPanel open_basedir uyumlu)
+// Oturum kayıt dizini: önce SESSION_SAVE_PATH env, sonra upload_tmp_dir, sonra sys temp dene
+$customSessionPath = getenv('SESSION_SAVE_PATH') ?: '';
+if ($customSessionPath !== '' && (!is_dir($customSessionPath) && !@mkdir($customSessionPath, 0755, true) || !is_writable($customSessionPath))) {
+    $customSessionPath = '';
+}
+if ($customSessionPath === '') {
     $altBase = ini_get('upload_tmp_dir') ?: ini_get('sys_temp_dir') ?: sys_get_temp_dir();
     $customSessionPath = rtrim($altBase, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'fezadan_sessions';
     if (!is_dir($customSessionPath)) {
@@ -28,13 +38,36 @@ if (is_dir($customSessionPath) && is_writable($customSessionPath)) {
 
 session_start();
 
-header('X-Frame-Options: SAMEORIGIN');
+// Per-request CSP nonce (Faz 5)
+$__csp_nonce = bin2hex(random_bytes(16));
+define('CSP_NONCE', $__csp_nonce);
+
+$_isAnonymityCheckHost = strpos($_host, 'anonymitycheck.') === 0;
+header('X-Frame-Options: ' . ($_isAnonymityCheckHost ? 'DENY' : 'SAMEORIGIN'));
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
-if ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')) {
+header('Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=(), browsing-topics=()');
+if ($_isHttps) {
     header('Strict-Transport-Security: max-age=31536000; includeSubDomains; preload');
 }
-// // // // header("Content-Security-Policy: frame-ancestors 'self'; upgrade-insecure-requests;");
+$__csp_upgrade = ($_isLocal || $_isAnonymityCheckHost) ? '' : ' upgrade-insecure-requests;';
+$__csp_connect = $_isAnonymityCheckHost
+    ? "'self' http://127.0.0.1:* http://localhost:*"
+    : "'self'";
+$__csp_frame_ancestors = $_isAnonymityCheckHost ? "'none'" : "'self'";
+$_isAdminPath = strpos($_SERVER['REQUEST_URI'] ?? '', '/yonetim') !== false;
+$__csp_script = $_isAnonymityCheckHost
+    ? "'self' 'nonce-{$__csp_nonce}'"
+    : "'self' 'nonce-{$__csp_nonce}'";
+$__csp_style = $_isAnonymityCheckHost
+    ? "'self' 'unsafe-inline'"
+    : "'self' 'unsafe-inline'";
+$__csp_img = $_isAnonymityCheckHost ? "'self' data: https://*.tile.openstreetmap.org https://flagcdn.com" : "'self' data: https:";
+$__csp_font = $_isAnonymityCheckHost ? "'self'" : "'self' https://cdn.jsdelivr.net";
+$__csp_frame = $_isAnonymityCheckHost
+    ? "'none'"
+    : "'self' http://localhost:8089 http://127.0.0.1:8089 https://litecaptcha.fezadan.org https://www.openstreetmap.org";
+header("Content-Security-Policy: default-src 'self'; script-src {$__csp_script}; style-src {$__csp_style}; img-src {$__csp_img}; font-src {$__csp_font}; connect-src {$__csp_connect}; media-src 'self'; frame-src {$__csp_frame}; object-src 'none'; frame-ancestors {$__csp_frame_ancestors}; base-uri 'self'; form-action 'self';{$__csp_upgrade}");
 header_remove('X-Powered-By');
 
 // --- 2. Cloudflare IP Doğrulama Fonksiyonu ---
@@ -99,7 +132,8 @@ function ip_in_range($ip, $range) {
 $_SERVER['REMOTE_ADDR'] = get_secure_remote_ip();
 
 // --- 3. Hata Raporlama ---
-if (in_array($_SERVER['REMOTE_ADDR'], ['127.0.0.1', '::1'])) {
+// Yalnizca APP_DEBUG env aciksa localhost'ta hata goster. Production'da ve cPanel testlerinde susar.
+if (in_array($_SERVER['REMOTE_ADDR'], ['127.0.0.1', '::1']) && getenv('APP_DEBUG') === '1') {
     ini_set('display_errors', 1); error_reporting(E_ALL);
 } else {
     ini_set('display_errors', 0); error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED & ~E_STRICT);

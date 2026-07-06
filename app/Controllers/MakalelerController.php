@@ -13,7 +13,7 @@ class MakalelerController extends Controller {
             $catId = isset($_GET['cat']) ? (int)$_GET['cat'] : null;
             $authorId = isset($_GET['author']) ? (int)$_GET['author'] : null;
             $searchQuery = isset($_GET['q']) ? trim($_GET['q']) : '';
-            // Sort whitelist (kullanıcı input'unu hiçbir zaman SQL'e sokmuyoruz)
+            // Sıralama beyaz listesi (kullanıcı input'unu hiçbir zaman SQL'e sokmuyoruz)
             $allowedSorts = ['newest','oldest','az','za'];
             $sortOrder = isset($_GET['sort']) && in_array($_GET['sort'], $allowedSorts, true)
                 ? $_GET['sort']
