@@ -1,11 +1,30 @@
 {
+    "name": "fezadan/fezadan",
+    "description": "Privacy-first publishing platform with articles, PDF archive and admin panel",
+    "type": "project",
+    "license": "GPL-3.0-only",
+    "homepage": "https://fezadan.org",
+    "support": {
+        "issues": "https://github.com/shenfurkan/Fezadan/issues",
+        "source": "https://github.com/shenfurkan/Fezadan"
+    },
     "require": {
+        "php": ">=8.2",
+        "ext-curl": "*",
+        "ext-dom": "*",
+        "ext-fileinfo": "*",
+        "ext-gd": "*",
+        "ext-mbstring": "*",
+        "ext-openssl": "*",
+        "ext-pdo": "*",
+        "ext-pdo_mysql": "*",
         "aws/aws-sdk-php": "^3.378",
         "maxmind-db/reader": "~1.11"
     },
     "config": {
         "platform": {
             "php": "8.2.5"
-        }
+        },
+        "sort-packages": true
     }
 }

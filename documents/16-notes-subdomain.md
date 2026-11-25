@@ -2,12 +2,12 @@
 
 ## Genel Bakış
 
-`notlar.fezadan.org`, Fezadan projesinin PDF doküman paylaşımı için ayrılmış alt alan adıdır. Ana site (`fezadan.org`) ile **aynı kod tabanını** kullanır ancak tamamen farklı bir Controller (`NotlarController`) tarafından yönetilir.
+`notlar.fezadan.org`, Fezadan projesinin PDF doküman paylaşımı için ayrılmış alt alan adıdır. Ana site (`fezadan.org`) ile **aynı kod tabanını** kullanır ancak tamamen farklı bir Controller (`NotesController`) tarafından yönetilir.
 
 | Özellik | Ana Site | Notlar Subdomain |
 |---------|---------|-----------------|
 | Adres | `fezadan.org` | `notlar.fezadan.org` |
-| Controller | Çeşitli (Home, Makale, vb.) | Sadece `NotlarController` |
+| Controller | Çeşitli (Home, Makale, vb.) | Sadece `NotesController` |
 | Dil Prefix'i | Zorunlu (`/tr`, `/en`) | Yok |
 | HTTP Metodları | GET, POST | Sadece GET, HEAD |
 | İçerik Türü | HTML (makaleler) | PDF (dokümanlar) |
@@ -27,8 +27,8 @@ if (strpos($host, 'notlar.') === 0) {
         → 405 Method Not Allowed
     }
 
-    // NotlarController'ı yükle
-    $controller = new NotlarController();
+    // NotesController'ı yükle
+    $controller = new NotesController();
 
     // URL'ye göre method belirle:
     if ($url[0] === 'not') {
@@ -68,7 +68,7 @@ notlar.fezadan.org/not/download/kuantum-fizigi → download('kuantum-fizigi')
 
 ### `index()` — Not Listesi
 
-[app/Controllers/NotlarController.php:index()](https://github.com/shenfurkan/Fezadan/blob/main/app/Controllers/NotlarController.php) şu GET parametrelerini destekler:
+[app/Controllers/NotesController.php:index()](https://github.com/shenfurkan/Fezadan/blob/main/app/Controllers/NotesController.php) şu GET parametrelerini destekler:
 
 | Parametre | Açıklama |
 |-----------|----------|
@@ -77,7 +77,7 @@ notlar.fezadan.org/not/download/kuantum-fizigi → download('kuantum-fizigi')
 | `?lang=TR` veya `?lang=EN` | Dil filtresi |
 | `?page=2` | Sayfalama (12 not/sayfa) |
 
-Görünüm: [app/Views/front/notlar_home.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Views/front/notlar_home.php)
+Görünüm: [app/Views/front/notes_home.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Views/front/notes_home.php)
 
 ---
 
@@ -192,7 +192,7 @@ Eşzamanlı isteklerde limit aşımını önlemek için `SELECT ... FOR UPDATE` 
 
 ## PDF.js — Tarayıcı İçi Görüntüleyici
 
-[public_html/assets/js/pdf.mjs](https://github.com/shenfurkan/Fezadan/blob/main/public_html/assets/js/pdf.mjs) ve [pdf.worker.mjs](https://github.com/shenfurkan/Fezadan/blob/main/public_html/assets/js/pdf.worker.mjs) dosyaları, Mozilla PDF.js kütüphanesinin yerel kopyasıdır. 
+[public_html/assets/js/pdf.js](https://github.com/shenfurkan/Fezadan/blob/main/public_html/assets/js/pdf.js) ve [pdf.worker.js](https://github.com/shenfurkan/Fezadan/blob/main/public_html/assets/js/pdf.worker.js) dosyaları, Mozilla PDF.js kütüphanesinin yerel kopyasıdır.
 
 - Harici CDN'den yüklenmez (CSP uyumlu).
 - `notlar.*/not/{slug}` detay sayfasında, embed edilmiş PDF görüntüleyici olarak çalışır.
@@ -223,4 +223,4 @@ Eşzamanlı isteklerde limit aşımını önlemek için `SELECT ... FOR UPDATE` 
 2. **Not Güncelleme:** `updateNote()` — Eski PDF R2'den silinir, yeni PDF yüklenir, `file_size` güncellenir.
 3. **Not Silme:** `deleteNote()` — Veritabanı kaydı ve R2'deki PDF dosyası silinir.
 
-> Detaylar için [04-yonetim-paneli.md](04-yonetim-paneli.md) belgesine bakın.
+> Detaylar için [04-admin-panel.md](04-admin-panel.md) belgesine bakın.

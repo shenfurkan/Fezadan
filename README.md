@@ -21,7 +21,7 @@
 
 Fezadan; makale yayınlama, PDF arşivleme, medya yönetimi ve yönetim paneli işlevlerini tek bir özel MVC çekirdeğinde toplayan bir PHP uygulamasıdır. Laravel veya Symfony gibi genel amaçlı bir framework kullanmaz; yalnızca ihtiyaç duyduğu katmanları içerir.
 
-Bu depo, projenin **herkese açık kod aynasıdır**. Kişisel portfolyo, webmail kurulumu, yayın sunucusu yapılandırması, testler ve veritabanı dökümleri burada yer almaz.
+Bu depo, projenin **herkese açık kod aynasıdır**. Kişisel portfolyo, webmail kurulumu, yayın sunucusu yapılandırması, otomatik test paketi ve veritabanı dökümleri burada yer almaz.
 
 ### v3.0.0 ile gelenler
 
@@ -39,13 +39,13 @@ Bu depo, projenin **herkese açık kod aynasıdır**. Kişisel portfolyo, webmai
 | Proje | Depo | Lisans |
 |---|---|---|
 | AnonymityCheck (tarayıcı gizlilik testi) | [shenfurkan/FezadanAnonymityCheck](https://github.com/shenfurkan/FezadanAnonymityCheck) | GPL-3.0 |
-| Fezadan Roundcube skin | [shenfurkan/fezadan-roundcube-skin](https://github.com/shenfurkan/fezadan-roundcube-skin) | CC BY-SA 3.0 |
+| Fezadan Roundcube skin | [shenfurkan/fezadan-roundcube-skin](https://github.com/shenfurkan/fezadan-roundcube-skin) | GPL-3.0 (tooling) / CC BY-SA 3.0 (runtime) |
 
 AnonymityCheck bu depoda modül olarak tutulmaz; kendi deposundan kurulur ve `https://anonymitycheck.fezadan.org` adresinde çalışır. Roundcube skin'i de bağımsız bir Elastic alt temasıdır ve webmail kurulumuna ayrıca kopyalanır.
 
 ## Gereksinimler
 
-- PHP 8.2 (PDO, mbstring, fileinfo, curl)
+- PHP 8.2 (PDO/MySQL, mbstring, fileinfo, curl, gd, openssl, dom)
 - MariaDB 10.3+ / MySQL 5.7+
 - Composer
 - Node.js ve npm (yalnızca Tailwind derlemesi için)
@@ -107,7 +107,7 @@ AnonymityCheck bu depoda modül olarak tutulmaz; kendi deposundan kurulur ve `ht
 - `app/Views/` — ön yüz ve yönetim şablonları.
 - `public_html/` — Apache document root; giriş noktası `index.php`.
 - `cron/` — CLI görevleri.
-- `documents/` — mimari, güvenlik ve bakım kılavuzları.
+- [`documents/`](documents/README.md) — mimari, güvenlik ve bakım kılavuzları.
 
 ## Güvenlik Notları
 
@@ -117,6 +117,7 @@ AnonymityCheck bu depoda modül olarak tutulmaz; kendi deposundan kurulur ve `ht
 - Şifre ve passkey girişinde oturum kimliği yenilenir.
 - Hassas dosyalar (`app/`, `vendor/`, `.env`) document root dışındadır.
 - Bu depoda örnek veya gerçek yönetici hesabı bulunmaz.
+- Güvenlik açığını herkese açık issue olarak açmayın; `info@fezadan.org` adresine yazın veya [security.txt](public_html/.well-known/security.txt) dosyasındaki kanalı kullanın.
 
 ## Lisans
 

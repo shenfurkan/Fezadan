@@ -9,8 +9,8 @@ Fezadan'ın frontend katmanı, harici CSS/JS framework'lerine bağımlı olmadan
 | CSS Framework | TailwindCSS v4 | `assets/css/` |
 | Fontlar | WOFF2 (yerel) | `assets/fonts/` |
 | Genel JS | Vanilla JavaScript (ES6) | `assets/js/main.js` |
-| Admin JS | Vanilla + Summernote + jQuery | `assets/js/admin.js`, `yonetim-editor.js` |
-| PDF Görüntüleyici | PDF.js (Mozilla, yerel) | `assets/js/pdf.mjs`, `pdf.worker.mjs` |
+| Admin JS | Vanilla + Summernote + jQuery | `assets/js/admin.js`, `admin-editor.js` |
+| PDF Görüntüleyici | PDF.js (Mozilla, yerel) | `assets/js/pdf.js`, `pdf.worker.js` |
 | DOCX İçe Aktarma | Mammoth.js (yerel) | `assets/js/mammoth.browser.min.js` |
 | QR Kod | qrcode.js (yerel) | `assets/js/qrcode.min.js` |
 
@@ -83,13 +83,12 @@ Latin Extended karakter seti sayesinde Türkçe karakterler (İ, ğ, Ü, Ş, Ç,
 
 ## JavaScript Dosyaları
 
-### main.js — Genel Frontend
+### site-navigation.js — Genel Frontend
 
-[public_html/assets/js/main.js](https://github.com/shenfurkan/Fezadan/blob/main/public_html/assets/js/main.js) tüm ziyaretçi sayfalarında yüklenir. İçerir:
+[public_html/assets/js/site-navigation.js](https://github.com/shenfurkan/Fezadan/blob/main/public_html/assets/js/site-navigation.js) tüm ziyaretçi sayfalarında yüklenir. İçerir:
 - Mobil menü toggle
 - Scroll tabanlı header davranışı
 - Tema değiştirme (dark/light)
-- Lazy loading görseller
 
 ### admin.js — Yönetim Paneli
 
@@ -98,9 +97,9 @@ Latin Extended karakter seti sayesinde Türkçe karakterler (İ, ğ, Ü, Ş, Ç,
 - Makale içeriği önizleme
 - Medya yükleme arayüzü
 
-### yonetim-editor.js — Zengin Metin Editörü
+### admin-editor.js — Zengin Metin Editörü
 
-[public_html/assets/js/yonetim-editor.js](https://github.com/shenfurkan/Fezadan/blob/main/public_html/assets/js/yonetim-editor.js) Summernote editörünü yapılandırır:
+[public_html/assets/js/admin-editor.js](https://github.com/shenfurkan/Fezadan/blob/main/public_html/assets/js/admin-editor.js) Summernote editörünü yapılandırır:
 - Görsel yükleme (R2 pipeline)
 - DOCX içe aktarma (Mammoth.js ile)
 - OG görsel üretme tetikleyici
@@ -111,7 +110,7 @@ Latin Extended karakter seti sayesinde Türkçe karakterler (İ, ğ, Ü, Ş, Ç,
 
 ### PDF.js — PDF Görüntüleyici
 
-[public_html/assets/js/pdf.mjs](https://github.com/shenfurkan/Fezadan/blob/main/public_html/assets/js/pdf.mjs) ve [pdf.worker.mjs](https://github.com/shenfurkan/Fezadan/blob/main/public_html/assets/js/pdf.worker.mjs), `notlar.fezadan.org` alt sitesinde PDF'leri tarayıcı içinde görüntülemek için kullanılır.
+[public_html/assets/js/pdf.js](https://github.com/shenfurkan/Fezadan/blob/main/public_html/assets/js/pdf.js) ve [pdf.worker.js](https://github.com/shenfurkan/Fezadan/blob/main/public_html/assets/js/pdf.worker.js), `notlar.fezadan.org` alt sitesinde PDF'leri tarayıcı içinde görüntülemek için kullanılır.
 
 ### jQuery (admin paneli için)
 

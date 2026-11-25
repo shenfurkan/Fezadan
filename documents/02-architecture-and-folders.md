@@ -29,7 +29,7 @@ Her Controller, belirli bir işlevselliği yöneten PHP sınıfıdır. URL'deki 
 | `ArticleController` | Tek makale görünümü, yazar bazlı filtreleme, benzer yazılar widget'ı | `fezadan.org/tr/yazar/makale-adi` |
 | `ArticlesController` | Makale listesi, kategori filtreleme, sayfalama | `fezadan.org/tr/makaleler` |
 | `AuthorController` | Yazar profil sayfası | `fezadan.org/tr/yazar/slug` |
-| `NotlarController` | PDF not yönetimi (alt site), indirme limitleme | `notlar.fezadan.org` |
+| `NotesController` | PDF not yönetimi (alt site), indirme limitleme | `notlar.fezadan.org` |
 | `AdminController` | Admin paneli (CRUD, sitemap, parola sıfırlama, OG görsel tetikleyici) | `fezadan.org/yonetim` |
 | `SeoController` | Dinamik `robots.txt` ve sitemap (`sitemap.xml`, `sitemap_main.xml`, `sitemap_notes.xml`) üretimi — cron ve PHP fallback her ikisinde de çalışır | `fezadan.org/robots.txt`, `/sitemap*.xml` |
 | `PageController` | Hakkında, manifesto, gizlilik, bağış ve doğrulama gibi statik front sayfalar | `fezadan.org/tr/hakkinda` |
@@ -68,13 +68,13 @@ class Controller {
 
 ## Bir İsteğin Yolculuğu (Adım Adım)
 
-Kullanıcı tarayıcıya `https://fezadan.org/tr/furkan/uzay-ve-feza` yazıp Enter'a bastığında arka planda gerçekleşen işlemler:
+Kullanıcı tarayıcıya `https://fezadan.org/tr/ornek/uzay-ve-feza` yazıp Enter'a bastığında arka planda gerçekleşen işlemler:
 
 ### Adım 1 — Apache Web Sunucusu ve URL Rewrite
 İstek sunucuya ulaştığında, Apache web sunucusu [public_html/.htaccess](https://github.com/shenfurkan/Fezadan/blob/main/public_html/.htaccess) dosyasındaki kuralları uygular. En önemli kural gelen tüm istekleri `index.php`'ye yönlendirir ve URL'yi parametre olarak ekler:
 ```
-Gelen URL:  /tr/furkan/uzay-ve-feza
-İletilen:   index.php?url=tr/furkan/uzay-ve-feza
+Gelen URL:  /tr/ornek/uzay-ve-feza
+İletilen:   index.php?url=tr/ornek/uzay-ve-feza
 ```
 
 ### Adım 2 — index.php (Giriş Noktası)
@@ -93,7 +93,7 @@ Gelen URL:  /tr/furkan/uzay-ve-feza
 - `/admin`, `/panel`, `/dashboard` gibi bot hedeflerini doğrudan 404 sayfasına yönlendirir.
 - **`/robots.txt`** isteği doğrudan `SeoController::robots()`'a yönlendirilerek dinamik olarak üretilir.
 - **`/sitemap*.xml`** isteğinde önce statik dosya varlığı kontrol edilir; varsa Apache sunar, yoksa `SeoController` dinamik üretip döner.
-- Subdomain `notlar.` ise dil kurallarını atlayarak doğrudan [app/Controllers/NotlarController.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Controllers/NotlarController.php) çağrısı yapar.
+- Subdomain `notlar.` ise dil kurallarını atlayarak doğrudan [app/Controllers/NotesController.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Controllers/NotesController.php) çağrısı yapar.
 - Dili (`tr` veya `en`) tespit eder. Dil belirtilmemişse Türkçe'ye 301 yönlendirmesi yapar.
 
 ### Adım 4 — Controller ve View Render Süreci
@@ -105,12 +105,12 @@ Router tarafından belirlenen Controller (örneğin `ArticleController`) çalı�
 
 ### Kök Dizindeki Dosyalar
 
-- [**`.env`**](https://github.com/shenfurkan/Fezadan/blob/main/.env) — GİZLİ: Veritabanı şifreleri, R2 API anahtarları vb. (Git'e eklenmez).
+- **`.env`** — GİZLİ: Veritabanı şifreleri, R2 API anahtarları vb. (Git'e eklenmez; private repoda tutulur).
 - [**`.env.example`**](https://github.com/shenfurkan/Fezadan/blob/main/.env.example) — `.env` dosyasının boş şablonudur.
 - [**`.gitignore`**](https://github.com/shenfurkan/Fezadan/blob/main/.gitignore) — Git sisteminin takip etmeyeceği dosya listesi.
-- [**`.cpanel.yml`**](https://github.com/shenfurkan/Fezadan/blob/main/.cpanel.yml) — cPanel Git deploy ayarları.
-- [**`Dockerfile`**](https://github.com/shenfurkan/Fezadan/blob/main/Dockerfile) — PHP 8.2 + Apache + GD extension içeren geliştirme konteyneri.
-- [**`docker-compose.yml`**](https://github.com/shenfurkan/Fezadan/blob/main/docker-compose.yml) — DB (MySQL 8), PHP-Apache ve phpMyAdmin servisleri.
+- **`.cpanel.yml`** — cPanel Git deploy ayarları (private repoda).
+- **`Dockerfile`** — PHP 8.2 + Apache + GD extension içeren geliştirme konteyneri (private repoda).
+- **`docker-compose.yml`** — MariaDB 10.3, PHP-Apache ve phpMyAdmin servisleri (private repoda).
 - [**`composer.json`**](https://github.com/shenfurkan/Fezadan/blob/main/composer.json) — AWS SDK bağımlılık listesi.
 - [**`package.json`**](https://github.com/shenfurkan/Fezadan/blob/main/package.json) — TailwindCSS v4 build scriptleri.
 

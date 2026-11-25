@@ -57,7 +57,7 @@ Dil prefix'i yoksa ve host `notlar.` ile başlamıyorsa:
 
 ### Adım 4 — Subdomain Routing (`notlar.*`)
 
-Host `notlar.` ile başlıyorsa, dil mantığı tamamen atlanır ve doğrudan [app/Controllers/NotlarController.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Controllers/NotlarController.php) çağrılır. Sadece `GET` ve `HEAD` isteklerine izin verilir. Detaylar için [16. Notlar Subdomain](16-notlar-subdomain.md) belgesine bakın.
+Host `notlar.` ile başlıyorsa, dil mantığı tamamen atlanır ve doğrudan [app/Controllers/NotesController.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Controllers/NotesController.php) çağrılır. Sadece `GET` ve `HEAD` isteklerine izin verilir. Detaylar için [16. Notlar Subdomain](16-notes-subdomain.md) belgesine bakın.
 
 ---
 
@@ -168,7 +168,7 @@ Tarayıcı → Apache (.htaccess RewriteRule)
             ├─ robots.txt / sitemap → SeoController
             ├─ Dil tespiti (/tr veya /en)
             ├─ Dil prefix yoksa → 301/307 redirect
-            ├─ notlar.* ise → NotlarController
+            ├─ notlar.* ise → NotesController
             ├─ Controller çözümleme
             │   ├─ Dosya varsa → Controller yükle
             │   └─ Yoksa → yazar slug kontrolü

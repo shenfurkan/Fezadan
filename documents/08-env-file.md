@@ -26,7 +26,7 @@ Proje, harici bir PHP dotenv kütüphanesi (vlucas/phpdotenv vb.) kullanmak yeri
 
 ### GÜVENLİK AYARLARI
 
-- **`APP_SECURITY_SALT`**: CSRF ve IP hash doğrulamalarında kullanılan anahtardır. Boş bırakıldığında veya `change-me` değerinde kalırsa, sistem [app/Config/config.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Config/config.php) aracılığıyla rastgele 64 karakterli tuz üretip [app/Config/.security_salt](https://github.com/shenfurkan/Fezadan/blob/main/app/Config/.security_salt) dosyasına yazar.
+- **`APP_SECURITY_SALT`**: CSRF ve IP hash doğrulamalarında kullanılan anahtardır. Boş bırakıldığında veya `change-me` değerinde kalırsa, sistem [app/Config/config.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Config/config.php) aracılığıyla rastgele 64 karakterli tuz üretip `app/Config/.security_salt` dosyasına yazar. Bu dosya çalışma zamanında üretilir, repoda tutulmaz.
 - **`DEPLOY_SECRET`**: Sunucunun GitHub webhook'ları üzerinden otomatik olarak güncellenmesi sırasında gelen HTTP isteğinin imzasını (HMAC-SHA256) doğrulamak için kullanılan gizli deploy şifresidir.
 - **`JWT_SECRET`**: API token imzalama süreçlerinde kullanılan yedek anahtar.
 - **`RECAPTCHA_SITE_KEY`** & **`RECAPTCHA_SECRET_KEY`**: İletişim sayfasındaki robot testleri için Google reCAPTCHA v2 anahtarları.

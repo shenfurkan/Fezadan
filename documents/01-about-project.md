@@ -37,9 +37,9 @@ Projenin mimari olarak ilginç özelliklerinden biri: Aynı PHP kodları iki far
 | Adres | Ne İşe Yarar? | Hangi Controller Kullanır? |
 |-------|---------------|---------------------------|
 | `fezadan.org` | Ana blog sitesi | HomeController, ArticleController, ArticlesController |
-| `notlar.fezadan.org` | PDF arşivi | NotlarController |
+| `notlar.fezadan.org` | PDF arşivi | NotesController |
 
-**Nasıl çalışıyor?** [app/Core/App.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Core/App.php) (router), gelen isteğin hangi domain'den geldiğini `$_SERVER['HTTP_HOST']` değişkeninden okur. Eğer host `notlar.` ile başlıyorsa, istek doğrudan [app/Controllers/NotlarController.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Controllers/NotlarController.php)'a yönlendirilir ve dil prefix'i (`/tr/` veya `/en/`) mantığı tamamen atlanır. Diğer durumlarda standart routing uygulanır.
+**Nasıl çalışıyor?** [app/Core/App.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Core/App.php) (router), gelen isteğin hangi domain'den geldiğini `$_SERVER['HTTP_HOST']` değişkeninden okur. Eğer host `notlar.` ile başlıyorsa, istek doğrudan [app/Controllers/NotesController.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Controllers/NotesController.php)'a yönlendirilir ve dil prefix'i (`/tr/` veya `/en/`) mantığı tamamen atlanır. Diğer durumlarda standart routing uygulanır.
 
 ---
 

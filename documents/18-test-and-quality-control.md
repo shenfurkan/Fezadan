@@ -7,7 +7,7 @@ Fezadan projesinde otomatik birim test framework'ü (PHPUnit vb.) bulunmaz. Bunu
 | Araç | Tür | Açıklama |
 |------|-----|----------|
 | [integration_tests.php](https://github.com/shenfurkan/Fezadan/blob/main/scripts/integration_tests.php) | API/Route Integration | Rota, Robots, Sitemap, CSRF ve Auth testleri |
-| [check-site.py](https://github.com/shenfurkan/Fezadan/blob/main/scripts/check-site.py) | Selenium E2E | Tarayıcı üzerinden canlı site testi |
+| `scripts/check-site.py` | Selenium E2E | Tarayıcı üzerinden canlı site testi (private repoda) |
 | `php -l` | Sözdizimi kontrolü | PHP dosyalarında parse hatası taraması |
 | `npm test` | — | Kullanılmaz (exit 1) |
 | `APP_DEBUG=1` | Hata ayıklama | Localhost'ta hata detaylarını gösterir |
@@ -29,7 +29,7 @@ php scripts/integration_tests.php
 
 ## Selenium Smoke Test — check-site.py
 
-[scripts/check-site.py](https://github.com/shenfurkan/Fezadan/blob/main/scripts/check-site.py) Python betiği, canlı sitenin temel işlevlerini tarayıcı üzerinden test eder.
+`scripts/check-site.py` Python betiği, canlı sitenin temel işlevlerini tarayıcı üzerinden test eder. Betik private repoda bulunur; public aynada yer almaz.
 
 ### Gereksinimler
 
@@ -113,7 +113,7 @@ APP_DEBUG=1
 [app/Core/AdminLog.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Core/AdminLog.php) sınıfı, yönetim panelinde yapılan işlemleri JSON formatında `logs/admin.log` dosyasına kaydeder:
 
 ```json
-{"timestamp": "2026-06-15 14:30:00", "level": "INFO", "admin": "antigravity", "action": "article_created", "article_id": 42}
+{"timestamp": "2026-06-15 14:30:00", "level": "INFO", "admin": "example", "action": "article_created", "article_id": 42}
 ```
 
 - **Otomatik Rotasyon:** Log dosyası 1 MB'ı aştığında gzip ile sıkıştırılarak arşivlenir ve yeni log dosyası oluşturulur.
@@ -198,7 +198,7 @@ Geliştirme yaparken sistemin güvenliğini, gizliliğini ve kararlılığını 
 
 ### 1. Ayrı AnonymityCheck Servisi
 - **Kural:** `anonymitycheck` subdomain'i ana site rotalarından tamamen ayrıdır.
-- **Uygulama:** Modül kodu bu repoda tutulmaz; [FezadanAnonymityCheck](https://github.com/shenfurkan/FezadanAnonymityCheck) deposundan `npm run modules:sync` ile kurulur. Ana site yalnızca `/anonymitycheck/*` isteklerini `ANONYMITY_SITE_URL` adresine yönlendirir.
+- **Uygulama:** Modül kodu bu repoda tutulmaz; [FezadanAnonymityCheck](https://github.com/shenfurkan/FezadanAnonymityCheck) deposundan ayrıca kurulur. Ana site yalnızca `/anonymitycheck/*` isteklerini `ANONYMITY_SITE_URL` adresine yönlendirir.
 
 ### 2. İstilacı Olmayan Yerel Uygulama Keşfi (Port Sniffing)
 - **Sorun:** Kullanıcının bilgisayarında yüklü uygulamaları (Discord, Steam, Tor vb.) tespit etmek için `discord://` gibi custom protokol handler'ları tetiklemek, modern tarayıcılarda kullanıcıya engelleyici ve rahatsız edici güvenlik uyarı pencereleri gösterir.
@@ -225,7 +225,6 @@ Geliştirme yaparken sistemin güvenliğini, gizliliğini ve kararlılığını 
   # Ignore temporary plan and brainstorm markdown files at root
   /*.md
   !/README.md
-  !/AGENTS.md
   ```
 - **Yerel Temizlik:** Root seviyesindeki geçici planlama markdown dosyaları `.gitignore` kapsamındadır ve commit edilmez.
 
@@ -235,7 +234,7 @@ Geliştirme yaparken sistemin güvenliğini, gizliliğini ve kararlılığını 
 
 ```bash
 # PHP sözdizimi kontrolü (tek dosya)
-php -l app/Views/front/anonymity_check.php
+php -l app/Core/App.php
 
 # PHP sözdizimi kontrolü (tüm proje)
 Get-ChildItem -Recurse -Filter *.php | ForEach-Object { php -l $_.FullName }
@@ -249,15 +248,6 @@ npm run dev
 # Tailwind CSS production build
 npm run build
 
-# Docker servisleri yeniden başlatma
-docker-compose down; docker-compose up -d
-
-# Docker konteyner durumlarını listeleme
-docker-compose ps
-
-# Selenium smoke testi
-python scripts/check-site.py
-
 # Sitemap zorla üretim
 php cron/generate-sitemap.php --force
 
@@ -267,3 +257,5 @@ php cron/publish-scheduled.php
 # Veritabanı yedekleme
 php cron/backup-db.php
 ```
+
+Docker, Selenium ve webmail test komutları private repodaki geliştirme ortamında çalışır.

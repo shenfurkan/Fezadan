@@ -175,7 +175,7 @@ MX kaydının hedefi (Target) doğrudan **Proxied (Turuncu Bulut)** modundaki an
 #### Çözüm
 1. Cloudflare DNS ayarlarında yeni bir **A kaydı** oluşturun:
    * **Name:** `mail`
-   * **IPv4 Address:** `213.238.183.121`
+   * **IPv4 Address:** `203.0.113.10` (örnek adres; kendi sunucu IP'nizi yazın)
    * **Proxy Status:** **DNS Only** (Gri bulut olmalıdır).
 2. Mevcut MX kaydınızı düzenleyin ve hedef (Target) alanını `fezadan.org` yerine **`mail.fezadan.org`** yapın.
 

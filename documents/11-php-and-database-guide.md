@@ -39,7 +39,7 @@ Yönetim paneline şifrenizi girip "Giriş Yap" butonuna bastığınızda arka p
 
 ### A. Şifrelerin Güvenli Saklanması (Bcrypt Algoritması)
 Veritabanında şifreler asla açık metin halinde saklanmaz. PHP'nin `password_hash()` fonksiyonu ile **Bcrypt** algoritması kullanılarak tek yönlü bir karma (özet/hash) haline getirilir.
-* Örnek: `ornek-sifre` şifresi veritabanında `$2y$10$DXiPNKH2mkNybasO3/r.2e1Po3Z0v6q0...` şeklinde görünür.
+* Örnek: `ornek-sifre` şifresi veritabanında `$2y$10$ornekTuzVeHashDegeri...` şeklinde görünür.
 * **Tuzlama (Salt):** Her şifre için arka planda benzersiz ve rastgele 22 karakterli bir "tuz" (salt) üretilir. Bu sayede iki farklı kullanıcı aynı şifreyi seçse bile veritabanındaki hash'leri tamamen farklı olur.
 * **Yapay Yavaşlatma (Cost):** Şifre, matematiksel olarak binlerce kez üst üste karıştırılır (zorluk derecesi 10'dur, yani $2^{10} = 1024$ tur döndürülür). Bu, hackerların deneme-yanılma (brute-force) saldırılarını bilgisayar işlemcilerini aşırı yorarak engeller.
 
@@ -66,7 +66,7 @@ Bunu bir sandviç tarifi gibi düşünebiliriz:
 1. **Deneme Sınırı Kontrolü:** PHP önce `login_attempts` tablosuna bakarak o IP adresinden son 3 saatte 3 kereden fazla hatalı giriş yapılıp yapılmadığını kontrol eder. Sınır aşıldıysa girişi engeller.
 2. **Kullanıcıyı Arama (SQL):** PHP veritabanına sorar:
    ```sql
-   SELECT * FROM admins WHERE username = 'antigravity';
+   SELECT * FROM admins WHERE username = 'admin';
    ```
 3. **Şifre Doğrulama:** PHP, girilen şifreyi veritabanından gelen hash içindeki "tuz" ve "maliyet" parametreleriyle tekrar karıştırır. Sonucu veritabanındaki hash ile karşılaştırır (`password_verify` fonksiyonu).
 4. **Oturum Açma (Session):** Eşleşme başarılıysa PHP tarayıcıya geçici bir "oturum çerezi" (bilet) yazar. Artık tarayıcınız bu biletle sayfalar arasında gezinebilir.

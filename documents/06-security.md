@@ -11,7 +11,7 @@ Fezadan projesi, siber tehditlere karşı iç içe çalışan çok katmanlı bir
 `.env` dosyası veritabanı şifrelerini, API anahtarlarını ve gizli ayarları içerir.
 - **Web Erişimi Engeli:** [public_html/.htaccess](https://github.com/shenfurkan/Fezadan/blob/main/public_html/.htaccess) kuralları sayesinde web tarayıcısı üzerinden `.env` dosyasına erişilmeye çalışıldığında doğrudan **403 Forbidden** yanıtı verilir.
 - **Git Koruma Filtresi:** `.env` dosyası [**.gitignore**](https://github.com/shenfurkan/Fezadan/blob/main/.gitignore) listesindedir, yanlışlıkla dahi olsa GitHub'a gönderilmesi engellenmiştir.
-- **APP_SALT Otomatik Üretimi:** [app/Config/config.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Config/config.php) dosyası, `.env` içerisindeki `APP_SECURITY_SALT` alanı boş bırakıldığında veya varsayılan `change-me` değerinde kaldığında, otomatik olarak 64 karakter uzunluğunda rastgele kriptografik bir tuz üretir. Bunu [app/Config/.security_salt](https://github.com/shenfurkan/Fezadan/blob/main/app/Config/.security_salt) dosyasına yazar ve dosya izinlerini `chmod 0600` (sadece sahibi okuyabilir) olarak kilitler.
+- **APP_SALT Otomatik Üretimi:** [app/Config/config.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Config/config.php) dosyası, `.env` içerisindeki `APP_SECURITY_SALT` alanı boş bırakıldığında veya varsayılan `change-me` değerinde kaldığında, otomatik olarak 64 karakter uzunluğunda rastgele kriptografik bir tuz üretir. Bunu `app/Config/.security_salt` dosyasına yazar ve dosya izinlerini `chmod 0600` (sadece sahibi okuyabilir) olarak kilitler. Bu dosya çalışma zamanında üretilir, repoda tutulmaz.
 
 ---
 

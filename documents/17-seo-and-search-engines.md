@@ -253,4 +253,4 @@ php cron/generate-sitemap.php --force
 - Site Scan ile SEO sağlık kontrolü
 - URL Inspection ile arama sonuçlarını güncelleme
 
-Detaylı sorun giderme için [12-hata-cozum-ve-sorun-giderme.md](12-hata-cozum-ve-sorun-giderme.md) belgesine bakın (Bölüm 9: SEO Hataları ve Çözümleri).
+Detaylı sorun giderme için [12-error-resolution-and-troubleshooting.md](12-error-resolution-and-troubleshooting.md) belgesine bakın (Bölüm 9: SEO Hataları ve Çözümleri).

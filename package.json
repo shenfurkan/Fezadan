@@ -2,6 +2,18 @@
   "name": "fezadan",
   "version": "3.0.0",
   "description": "Privacy-first, self-sufficient publishing platform — frontend tooling",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shenfurkan/Fezadan.git"
+  },
+  "homepage": "https://fezadan.org",
+  "bugs": {
+    "url": "https://github.com/shenfurkan/Fezadan/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "npx @tailwindcss/cli -i ./public_html/assets/css/input.css -o ./public_html/assets/css/style.css --watch",
     "build": "npx @tailwindcss/cli -i ./public_html/assets/css/input.css -o ./public_html/assets/css/style.css --minify"

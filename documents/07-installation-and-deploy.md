@@ -40,7 +40,7 @@ Docker varsayılan ayarlar ile çalışacağından `.env` dosyasında bir deği�
 ```bash
 docker-compose up -d --build
 ```
-Bu komut [Dockerfile](https://github.com/shenfurkan/Fezadan/blob/main/Dockerfile) içeriğine göre PHP 8.2 + Apache imajını hazırlar.
+Bu komut `Dockerfile` içeriğine göre PHP 8.2 + Apache imajını hazırlar. Docker dosyaları yalnızca private repoda bulunur; public aynada yer almaz.
 - **GD Kurulum Detayı:** Dockerfile içerisinde GD kütüphanesi otomatik olarak `libfreetype6-dev`, `libjpeg62-turbo-dev` ve `libpng-dev` bağımlılıkları ile derlenir. Bu sayede yerel ortamda OG Görsel Üretimi sorunsuz çalışır.
 
 ### 3. Servislerin Durumu
@@ -72,8 +72,8 @@ Güvenlik nedeniyle projenin çekirdek dosyaları (`app/`, `.env` vb.) web eriş
 - **Subdomain (Alt Alan Adı) Yapılandırması (Örn: `ornek.fezadan.org`):**
   * cPanel'de subdomain oluştururken **Document Root** alanına `/home/public_html/ornek` gibi tam/mutlak sunucu yolları yazmak hatalıdır ve sitenin 404/boş sayfa dönmesine yol açar.
   * cPanel bu alanı ev dizininizden (home directory) itibaren göreceli olarak kabul eder. Bu yüzden subdomain yolu sadece **`public_html/ornek`** (veya projenizin kurulu olduğu dizine göre `public_html/fezadan/public_html/ornek`) şeklinde girilmelidir.
-  * Cloudflare DNS panelinde alt alan adını (örn: `furkan`) ana alan adına yönlendirmek için bir **CNAME** kaydı oluşturup hedefi `fezadan.org` yapmalı ve **Proxied (Turuncu Bulut)** modunu aktif etmelisiniz.
-  * Sunucunun ana IP adresi **`213.238.183.121`**'dir.
+  * Cloudflare DNS panelinde alt alan adını (örn: `ornek`) ana alan adına yönlendirmek için bir **CNAME** kaydı oluşturup hedefi `fezadan.org` yapmalı ve **Proxied (Turuncu Bulut)** modunu aktif etmelisiniz.
+  * Sunucunun ana IP adresini hosting sağlayıcınızdan alın.
 
 ### Adım 5 — .env Dosyasını Yapılandırın
 Proje kök dizinindeki `.env` dosyasını düzenleyin:
