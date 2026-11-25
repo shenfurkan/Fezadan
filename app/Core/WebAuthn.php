@@ -5,8 +5,8 @@ namespace App\Core;
 class CborDecoder
 {
     /**
-     * CBOR bayt dizisini çözer.
-     * Temel tam sayı, bayt/metin dizisi, dizi ve haritaları destekler.
+     * Decodes a CBOR byte string.
+     * Supports basic integers, byte/text strings, arrays, and maps.
      */
     public static function decode(string $data, int &$offset = 0)
     {
@@ -36,27 +36,27 @@ class CborDecoder
         }
 
         switch ($major) {
-            case 0: // İşaretsiz tam sayı
+            case 0: // Unsigned integer
                 return $val;
-            case 1: // Negatif tam sayı
+            case 1: // Negative integer
                 return -1 - $val;
-            case 2: // Bayt dizisi
+            case 2: // Byte string
                 if ($offset + $val > strlen($data)) throw new \RuntimeException("CBOR: Byte string length exceeds input size");
                 $str = substr($data, $offset, $val);
                 $offset += $val;
                 return $str;
-            case 3: // Metin dizisi
+            case 3: // Text string
                 if ($offset + $val > strlen($data)) throw new \RuntimeException("CBOR: Text string length exceeds input size");
                 $str = substr($data, $offset, $val);
                 $offset += $val;
                 return $str;
-            case 4: // Dizi
+            case 4: // Array
                 $arr = [];
                 for ($i = 0; $i < $val; $i++) {
                     $arr[] = self::decode($data, $offset);
                 }
                 return $arr;
-            case 5: // Harita
+            case 5: // Map
                 $map = [];
                 for ($i = 0; $i < $val; $i++) {
                     $k = self::decode($data, $offset);
@@ -87,8 +87,8 @@ class WebAuthn
     }
 
     /**
-     * WebAuthn kimlik kaydını doğrular.
-     * base64url kodlu credentialId ve PEM açık anahtar içeren dizi döndürür.
+     * Verifies WebAuthn credential registration.
+     * Returns array containing base64url encoded credentialId and PEM public key.
      */
     public static function verifyRegistration(
         string $clientDataJsonB64,
@@ -103,7 +103,7 @@ class WebAuthn
             throw new \InvalidArgumentException("Geçersiz clientDataJSON.");
         }
 
-        // Tür, challenge, origin doğrula
+        // Validate type, challenge, origin
         if (($clientData['type'] ?? '') !== 'webauthn.create') {
             throw new \InvalidArgumentException("Geçersiz işlem tipi.");
         }
@@ -132,17 +132,17 @@ class WebAuthn
         }
 
         $flags = ord($authData[32]);
-        $up = ($flags & 0x01) !== 0; // Kullanıcı mevcut
-        $uv = ($flags & 0x04) !== 0; // Kullanıcı doğrulandı
-        $at = ($flags & 0x40) !== 0; // Onaylı kimlik verisi mevcut
+        $up = ($flags & 0x01) !== 0; // User Present
+        $uv = ($flags & 0x04) !== 0; // User Verified
+        $at = ($flags & 0x40) !== 0; // Attested credential data present
 
         if (!$at) {
             throw new \InvalidArgumentException("Attested credential data bulunamadı.");
         }
 
-        // Kimlik verisini oku (37. indeksten başlar)
-        // aaguid: 16 bayt (37-52)
-        // credIdLen: 2 bayt (53-54)
+        // Read credential data (starts at index 37)
+        // aaguid: 16 bytes (37-52)
+        // credIdLen: 2 bytes (53-54)
         $credIdLen = (ord($authData[53]) << 8) | ord($authData[54]);
         if (strlen($authData) < 55 + $credIdLen) {
             throw new \InvalidArgumentException("Eksik authData boyutu.");
@@ -158,7 +158,7 @@ class WebAuthn
             throw new \InvalidArgumentException("Geçersiz public key COSE haritası.");
         }
 
-        // EC2 algoritması ES256 (-7) olduğundan emin ol
+        // Ensure EC2 algorithm ES256 (-7)
         $kty = $pubKeyMap[1] ?? null;
         $alg = $pubKeyMap[3] ?? null;
         $crv = $pubKeyMap[-1] ?? null;
@@ -173,7 +173,7 @@ class WebAuthn
             throw new \InvalidArgumentException("Geçersiz koordinat uzunlukları.");
         }
 
-        // Koordinatları PEM formatına çevir
+        // Convert coordinates to PEM format
         $der = pack('H*', '3059301306072a8648ce3d020106082a8648ce3d03010703420004') . $x . $y;
         $pem = "-----BEGIN PUBLIC KEY-----\n" . chunk_split(base64_encode($der), 64, "\n") . "-----END PUBLIC KEY-----\n";
 
@@ -184,8 +184,8 @@ class WebAuthn
     }
 
     /**
-     * WebAuthn onay girişini doğrular.
-     * Başarıda true döner, başarısızlıkta istisna fırlatır.
+     * Verifies WebAuthn assertion login.
+     * Returns true on success, throws exception on failure.
      */
     public static function verifyAssertion(
         string $clientDataJsonB64,

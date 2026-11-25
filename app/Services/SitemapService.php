@@ -6,14 +6,9 @@ class SitemapService
 {
     public static function generateSitemapInternal(): void
     {
-        try {
-            require_once ROOT . '/app/Controllers/SeoController.php';
-            $seo = new \SeoController();
-            $seo->regenerateAllCache();
-        }
-        catch (\Exception $e) {
-            error_log('Sitemap üretim hatası: ' . $e->getMessage());
-        }
+        require_once ROOT . '/app/Controllers/SeoController.php';
+        $seo = new \SeoController();
+        $seo->regenerateAllCache();
     }
 
     public static function markSitemapDirty(): void

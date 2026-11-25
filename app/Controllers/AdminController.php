@@ -6,56 +6,24 @@ require_once __DIR__ . '/Admin/AdminPasskeys.php';
 require_once __DIR__ . '/Admin/AdminPortfolio.php';
 require_once __DIR__ . '/Admin/AdminSystem.php';
 require_once __DIR__ . '/Admin/AdminAuthAndLogs.php';
+require_once __DIR__ . '/Admin/AdminMailInvitations.php';
 
 require_once dirname(__DIR__) . '/Services/SystemHealthService.php';
 require_once dirname(__DIR__) . '/Services/SitemapService.php';
+require_once dirname(__DIR__) . '/Services/IndexNowService.php';
 require_once dirname(__DIR__) . '/Services/MediaService.php';
 require_once dirname(__DIR__) . '/Services/AuthorService.php';
+require_once dirname(__DIR__) . '/Services/ScientificContent.php';
+require_once dirname(__DIR__) . '/Services/ArticleQueries.php';
 
-/**
- * Yönetim paneli controller'ı — giriş, dashboard ve içerik yönetimi.
- *
- * Altı trait'ten oluşur:
- *
- * - AdminArticles    — makale CRUD, yayınlama, içerik görsel yükleme
- * - AdminNotes       — not/PDF CRUD
- * - AdminPasskeys    — WebAuthn/passkey kaydı ve girişi
- * - AdminPortfolio   — portfolyo öğe yönetimi
- * - AdminSystem      — sistem düzeyinde admin işlemleri
- * - AdminAuthAndLogs — şifre sıfırlama, profil, admin kullanıcı yönetimi, loglama
- *
- * ## Auth akışı
- *
- * - login() brute-force koruması, şifre doğrulama, session fixation
- *   önleme ve CSRF token rotasyonu yapar.
- * - enforceAdminSessionLifetime() boşta kalma (45 dk) ve mutlak (12 saat)
- *   oturum sınırlarını uygular.
- * - requireRole() admin seviyesine göre erişimi kısıtlar
- *   (superadmin > editor > viewer).
- *
- * ## Action yönlendirme
- *
- * Kurucu metot URL segmentini okuyarak istenen admin action'ı belirler.
- * Dört statik dizi dağıtım davranışını tanımlar:
- *
- * - `$writeMethods`    — POST + CSRF + yazma rolü gerektirir
- * - `$jsonMethods`     — JSON yanıt döner
- * - `$publicMethods`   — auth atlar (şifre sıfırlama akışı)
- * - `$csrfExempt`      — CSRF atlar (giriş uç noktaları)
- *
- * Yeni bir admin rotası eklemek için yukarıdaki tüm ilgili dizilere
- * VE App::ROUTABLE_ACTIONS'a giriş eklenmelidir.
- */
 class AdminController extends Controller
 {
-    use AdminArticles, AdminNotes, AdminPasskeys, AdminPortfolio, AdminSystem, AdminAuthAndLogs;
+    use AdminArticles, AdminNotes, AdminPasskeys, AdminPortfolio, AdminSystem, AdminAuthAndLogs, AdminMailInvitations;
 
     private const ADMIN_IDLE_TIMEOUT_SECONDS = 2700;
     private const ADMIN_ABSOLUTE_TIMEOUT_SECONDS = 43200;
 
-    private $adminRequestId = null;
-
-    // Veritabanı bağlantı fonksiyonu
+    // Database bağlantı fonksiyonu
     /** @deprecated Yeni kodda doğrudan Db::pdo() kullanın. */
     private function getPDO()
     {
@@ -68,12 +36,33 @@ class AdminController extends Controller
             && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
     }
 
+    private function refreshSessionCookie(): void
+    {
+        if (headers_sent() || !ini_get('session.use_cookies')) {
+            return;
+        }
+
+        $params = session_get_cookie_params();
+        $options = [
+            'expires' => 0,
+            'path' => $params['path'],
+            'secure' => (bool)$params['secure'],
+            'httponly' => (bool)$params['httponly'],
+            'samesite' => $params['samesite'],
+        ];
+        if (!empty($params['domain'])) {
+            $options['domain'] = $params['domain'];
+        }
+
+        setcookie(session_name(), session_id(), $options);
+    }
+
     /** CSRF verify gerektirmeyen istisnai metodlar (login: session henüz açılmamış olabilir) */
     private static $csrfExempt = ['login', 'loginPasskeyChallenge', 'loginPasskeyVerify'];
 
     private static $publicMethods = ['forgotPassword', 'sendResetLink', 'resetPassword', 'updateResetPassword'];
 
-    private static $jsonMethods = ['uploadContentImage', 'registerPasskeyChallenge', 'registerPasskeyVerify', 'loginPasskeyChallenge', 'loginPasskeyVerify', 'generateTts', 'generateOgImage', 'portfolioReorder'];
+    private static $jsonMethods = ['prepareScientificImport', 'uploadContentImage', 'registerPasskeyChallenge', 'registerPasskeyVerify', 'loginPasskeyChallenge', 'loginPasskeyVerify', 'generateOgImage', 'portfolioReorder'];
 
     private static $writeMethods = [
         'login','logout','store','update','delete','publish',
@@ -81,25 +70,28 @@ class AdminController extends Controller
         'storePatch','deletePatch','patchDelete',
         'storeAuthor','authorStore','deleteAuthor','authorDelete',
         'storeNote','updateNote','deleteNote',
-        'updatePassword','uploadContentImage',
+        'updatePassword','uploadContentImage','prepareScientificImport',
         'sendResetLink','updateResetPassword',
         'generateSitemap',
         'registerPasskeyVerify',
         'loginPasskeyVerify',
         'deletePasskey',
-        'generateTts',
         'generateOgImage',
         'storePortfolio','portfolioStore',
         'updatePortfolio','portfolioUpdate',
         'deletePortfolio','portfolioDelete',
+        'deleteAllPortfolio','portfolioDeleteAll',
         'portfolioReorder',
         'storeAdmin',
-        'updateProfile'
+        'updateProfile',
+        'unlockAdmin', 'adminResetLink', 'deleteAdmin', 'updateAdminRole',
+        'storeMailInvitation', 'revokeMailInvitation', 'reconcileMailInvitation', 'changeMailPassword'
     ];
 
-    private static $viewerReadMethods = ['index', 'dashboard', 'profile', 'logs', 'registerPasskeyChallenge'];
+    private static $viewerReadMethods = ['index', 'dashboard', 'profile', 'registerPasskeyChallenge'];
 
     private static $viewerSelfServiceWriteMethods = [
+        'login',
         'logout',
         'updatePassword',
         'updateProfile',
@@ -143,6 +135,7 @@ class AdminController extends Controller
 
         if (isset($_SESSION['admin_logged_in'])) {
             $this->enforceAdminSessionLifetime($wantsJson, $camel ?: $action);
+            $this->revalidateAdminSession($wantsJson, $camel ?: $action);
 
             $resolvedAction = $camel ?: $action ?: 'index';
             if (($_SESSION['admin_role'] ?? 'viewer') === 'viewer'
@@ -160,6 +153,19 @@ class AdminController extends Controller
             $postMaxBytes = $this->postMaxBytes();
             if ($postMaxBytes > 0 && $contentLength > $postMaxBytes && count($_POST) === 0) {
                 $requestId = $this->requestId();
+                $message = 'Yüklenen veri sunucu limitini aşıyor. Lütfen görsel boyutunu küçültüp tekrar deneyin.';
+                $context = [
+                    'endpoint' => $camel ?: $action,
+                    'request_id' => $requestId,
+                    'content_length' => $contentLength,
+                    'post_max_bytes' => $postMaxBytes,
+                    'php_post_max' => ini_get('post_max_size'),
+                ];
+
+                if ($wantsJson) {
+                    header('Content-Type: application/json; charset=utf-8');
+                    $this->jsonError(413, $message, $context, 'post_max_size_exceeded');
+                }
                 AdminLog::write('error', 'POST_MAX_SIZE_EXCEEDED', [
                     'endpoint' => $camel ?: $action,
                     'request_id' => $requestId,
@@ -167,7 +173,7 @@ class AdminController extends Controller
                     'post_max_bytes' => $postMaxBytes,
                     'php_post_max' => ini_get('post_max_size'),
                 ]);
-                Flash::set('Yüklenen veri sunucu limitini aşıyor. Lütfen görsel boyutunu küçültüp tekrar deneyin. (Hata kodu: ' . $requestId . ')');
+                Flash::set($message . ' (Hata kodu: ' . $requestId . ')');
                 $redirect = $_SERVER['HTTP_REFERER'] ?? '/yonetim/dashboard';
                 header('Location: ' . $redirect);
                 exit;
@@ -195,10 +201,12 @@ class AdminController extends Controller
             }
         }
 
-        // Rol tabanlı erişim: deleteAuthor gibi POST olmayan metodlar (GET tabanlı)
+        // Role-based access: non-POST methods like deleteAuthor (GET-based)
         if (PHP_SAPI !== 'cli' && isset($_SESSION['admin_logged_in'])) {
             $role = $_SESSION['admin_role'] ?? 'viewer';
-            $superAdminOnly = ['authors', 'storeAuthor', 'authorStore', 'deleteAuthor', 'authorDelete', 'admins', 'storeAdmin'];
+            $superAdminOnly = ['authors', 'storeAuthor', 'authorStore', 'deleteAuthor', 'authorDelete', 'admins', 'storeAdmin', 'logs',
+                'unlockAdmin', 'adminResetLink', 'deleteAdmin', 'updateAdminRole',
+                'mailInvitations', 'storeMailInvitation', 'revokeMailInvitation', 'reconcileMailInvitation', 'changeMailPassword'];
             if (in_array($action, $superAdminOnly, true) || in_array($camel, $superAdminOnly, true)) {
                 if ($role !== 'superadmin') {
                     Flash::set('Bu işlem için yetkiniz bulunmamaktadır.');
@@ -213,6 +221,7 @@ class AdminController extends Controller
                 'portfolioEdit', 'portfolioUpdate', 'portfolioReorder', 'storePortfolio', 'deletePortfolio',
                 'updatePortfolio', 'portfolioStore', 'portfolioDelete',
                 'generateSitemap',
+            ];
             if (in_array($action, $superAdminOrViewerOnly, true) || in_array($camel, $superAdminOrViewerOnly, true)) {
                 if ($role === 'editor') {
                     Flash::set('Bu işlem için yetkiniz bulunmamaktadır.');
@@ -242,22 +251,23 @@ class AdminController extends Controller
             exit;
         }
 
-        // Rol kontrolü: yalnızca superadmin metodları
+        // Role check: superadmin-only methods
         $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
         $caller = $trace[1]['function'] ?? '';
         if (in_array($caller, ['sendResetLink', 'updateResetPassword'], true)) {
             return;
         }
         $role = $_SESSION['admin_role'] ?? 'viewer';
-        $superAdminMethods = ['storeAuthor', 'deleteAuthor', 'storeAdmin',
-            'storePortfolio', 'updatePortfolio', 'deletePortfolio',
+        $superAdminMethods = ['storeAuthor', 'deleteAuthor', 'storeAdmin', 'unlockAdmin', 'adminResetLink', 'deleteAdmin', 'updateAdminRole',
+            'storeMailInvitation', 'revokeMailInvitation', 'reconcileMailInvitation', 'changeMailPassword',
+            'storePortfolio', 'updatePortfolio', 'deletePortfolio', 'deleteAllPortfolio', 'portfolioReorder',
             'generateSitemap'];
         if (in_array($caller, $superAdminMethods, true) && $role !== 'superadmin') {
             Flash::set('Bu işlem için yetkiniz bulunmamaktadır.');
             header('Location: /yonetim/dashboard');
             exit;
         }
-        // Viewer: içerik/admin yazmaları engellenir; kendi profil/oturum işlemleri serbesttir.
+        // Viewer: content/admin writes are blocked; own profile/session actions remain available.
         if ($role === 'viewer' && !in_array($caller, self::$viewerSelfServiceWriteMethods, true)) {
             if (in_array($caller, self::$jsonMethods, true) || $this->isAjaxRequest()) {
                 header('Content-Type: application/json; charset=utf-8');
@@ -271,7 +281,12 @@ class AdminController extends Controller
         }
     }
 
-    /** Rol tabanlı erişim kontrolü. superadmin: tam erişim; editor: makale/not/kategori yönetimi (yazar yok); viewer: salt okunur (yalnızca dashboard) */
+    /**
+     * Role-based access control.
+     * superadmin: full access
+     * editor: can manage articles/notes/categories (not authors)
+     * viewer: read-only (dashboard only)
+     */
     private function requireRole(array $allowedRoles): void
     {
         $role = $_SESSION['admin_role'] ?? 'viewer';
@@ -295,18 +310,6 @@ class AdminController extends Controller
             && hash_equals($stored, $sent);
     }
 
-    /**
-     * Boşta kalma ve mutlak oturum zaman aşımını uygular.
-     *
-     * - Boşta kalma: son etkinlikten itibaren 45 dakika.
-     * - Mutlak: ilk girişten itibaren 12 saat.
-     *
-     * Zaman aşımında oturum yok edilir ve kullanıcı girişe yönlendirilir.
-     * JSON uç noktaları yönlendirme yerine 401 döner.
-     *
-     * @param bool   $isJsonMethod JSON hatası dönüp dönmeyeceği.
-     * @param string $endpoint     Hata bağlamı için uç nokta adı.
-     */
     private function enforceAdminSessionLifetime(bool $isJsonMethod = false, string $endpoint = ''): void
     {
         $now = time();
@@ -334,19 +337,50 @@ class AdminController extends Controller
             'idle_seconds' => $now - $lastSeen,
             'absolute_seconds' => $now - $loginAt,
         ]);
+        $this->endAdminSession('Oturum süresi doldu. Lütfen tekrar giriş yapın.', 'session_expired', $isJsonMethod, $endpoint);
+    }
+
+    /** Ties a session to the account's current password: changing or resetting it ends every other session. */
+    private static function credentialFingerprint(string $passwordHash): string
+    {
+        return hash_hmac('sha256', $passwordHash, APP_SALT);
+    }
+
+    /**
+     * The session only caches the login; the admins row decides. A deleted account or a changed
+     * password ends the session on its next request, and role changes apply immediately.
+     */
+    private function revalidateAdminSession(bool $wantsJson, string $endpoint): void
+    {
+        $stmt = Db::pdo()->prepare("SELECT role, password FROM admins WHERE id = ?");
+        $stmt->execute([(int)($_SESSION['admin_id'] ?? 0)]);
+        $account = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if ($account && hash_equals(self::credentialFingerprint((string)$account['password']), (string)($_SESSION['admin_credential'] ?? ''))) {
+            $_SESSION['admin_role'] = $account['role'] ?: 'viewer';
+            return;
+        }
+
+        AdminLog::write('warning', 'Admin oturumu sonlandırıldı: hesap silinmiş veya şifresi değişmiş.', [
+            'endpoint' => $endpoint,
+            'admin_id' => (int)($_SESSION['admin_id'] ?? 0),
+        ]);
+        $this->endAdminSession('Oturumunuz sonlandırıldı. Lütfen tekrar giriş yapın.', 'session_revoked', $wantsJson, $endpoint);
+    }
+
+    private function endAdminSession(string $message, string $code, bool $wantsJson, string $endpoint): void
+    {
         $_SESSION = [];
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_regenerate_id(true);
+            $this->refreshSessionCookie();
         }
 
-        if ($isJsonMethod) {
+        if ($wantsJson) {
             header('Content-Type: application/json; charset=utf-8');
-            $this->jsonError(403, 'Oturum süresi doldu. Lütfen tekrar giriş yapın.', [
-                'endpoint' => $endpoint,
-            ], 'session_expired');
+            $this->jsonError(403, $message, ['endpoint' => $endpoint], $code);
         }
 
-        Flash::set('Oturum süresi doldu. Lütfen tekrar giriş yapın.');
+        Flash::set($message);
         header('Location: /yonetim');
         exit;
     }
@@ -356,19 +390,23 @@ class AdminController extends Controller
         return hash('sha256', $purpose . '|' . $value . '|' . APP_SALT);
     }
 
+    /**
+     * Forget failed logins for an account, and for this IP unless a superadmin is unlocking
+     * someone else's account (after a successful login, a password reset or an unlock).
+     */
+    private function clearLoginAttempts(\PDO $pdo, string $username, bool $includeThisIp = true): void
+    {
+        $pdo->prepare("DELETE FROM login_attempts WHERE ip_hash = ? OR (username_hash IS NOT NULL AND username_hash = ?)")
+            ->execute([
+                $includeThisIp ? $this->adminRateLimitHash($_SERVER['REMOTE_ADDR'] ?? 'unknown', 'admin_login_ip') : '',
+                $this->adminRateLimitHash($username, 'admin_login_username'),
+            ]);
+    }
+
+    /** Same id as the 500 page and the crash log entry; CLI (cron) runs without ErrorHandler. */
     private function requestId(): string
     {
-        if (is_string($this->adminRequestId) && $this->adminRequestId !== '') {
-            return $this->adminRequestId;
-        }
-
-        try {
-            $this->adminRequestId = substr(bin2hex(random_bytes(8)), 0, 12);
-        } catch (\Throwable $e) {
-            $this->adminRequestId = substr(sha1(uniqid('', true)), 0, 12);
-        }
-
-        return $this->adminRequestId;
+        return class_exists('ErrorHandler', false) ? ErrorHandler::requestId() : bin2hex(random_bytes(6));
     }
 
     private function elapsedMs(float $started): int
@@ -509,16 +547,7 @@ class AdminController extends Controller
         $this->view('admin/login');
     }
 
-    /**
-     * Admin kullanıcı doğrulaması.
-     *
-     * - Hız sınırlı: (IP veya kullanıcı adı) başına 3 saatte 10 başarısız deneme.
-     * - Session fixation koruması: başarıda session_regenerate_id(true).
-     * - CSRF token girişte yenilenir.
-     * - Başarısız denemeler login_attempts tablosuna ve AdminLog'a kaydedilir.
-     *
-     * @return never Başarıda dashboard'a, başarısızlıkta giriş sayfasına yönlendirir.
-     */
+    // Giriş yapma
     public function login()
     {
         $this->requirePost();
@@ -533,7 +562,7 @@ class AdminController extends Controller
         try {
             $pdo = $this->getPDO();
 
-            // Brute force koruması: son 3 saatte aynı IP veya aynı kullanıcı adıyla 10'dan fazla başarısız deneme
+            // Brute force protection: son 3 saatte ayni IP veya ayni kullanici adiyla 10'dan fazla basarisiz deneme
             $checkStmt = $pdo->prepare(
                 "SELECT COUNT(*) FROM login_attempts
                  WHERE (ip_hash = ? OR username_hash = ?) AND attempt_time > NOW() - INTERVAL 3 HOUR"
@@ -545,7 +574,6 @@ class AdminController extends Controller
                 AdminLog::write('warning', 'Brute force engellemesi tetiklendi.', [
                     'ip_hash' => $ipHash,
                     'username_hash' => $usernameHash,
-                    'username' => $username,
                 ]);
                 Flash::set('Çok fazla başarısız giriş denemesi. Lütfen 3 saat sonra tekrar deneyin.');
                 header('Location: /yonetim?error=blocked');
@@ -558,11 +586,11 @@ class AdminController extends Controller
 
             if ($user && password_verify($password, $user['password'])) {
                 // Basarili giris: bu IP ve kullanici icin basarisiz denemeleri temizle
-                $cleanStmt = $pdo->prepare("DELETE FROM login_attempts WHERE ip_hash = ? OR (username_hash IS NOT NULL AND username_hash = ?)");
-                $cleanStmt->execute([$ipHash, $usernameHash]);
+                $this->clearLoginAttempts($pdo, $username);
 
-                // Session fixation koruması: oturum kimliğini yenile
+                // Session fixation protection: regenerate session id
                 session_regenerate_id(true);
+                $this->refreshSessionCookie();
                 $_SESSION = [];
                 Csrf::rotate();
 
@@ -571,10 +599,14 @@ class AdminController extends Controller
                 $_SESSION['admin_user'] = $user['username'];
                 $_SESSION['admin_name'] = $user['name'];
                 $_SESSION['admin_role'] = $user['role'] ?? 'viewer';
+                $_SESSION['admin_credential'] = self::credentialFingerprint((string)$user['password']);
                 $_SESSION['admin_login_at'] = time();
                 $_SESSION['admin_last_seen_at'] = time();
 
                 $pdo->prepare("UPDATE admins SET last_login = NOW() WHERE id = ?")->execute([$user['id']]);
+                AdminLog::write('info', 'Giriş yapıldı.', ['endpoint' => 'login', 'method' => 'password']);
+
+
 
                 $loginTarget = '/yonetim/dashboard';
                 header('Location: ' . $loginTarget);
@@ -584,8 +616,9 @@ class AdminController extends Controller
                 $logStmt = $pdo->prepare("INSERT INTO login_attempts (ip_hash, username_hash, attempt_time) VALUES (?, ?, NOW())");
                 $logStmt->execute([$ipHash, $usernameHash]);
 
+                // Only name real accounts: a mistyped "username" is sometimes the password.
                 AdminLog::write('warning', 'Hatalı giriş denemesi.', [
-                    'username' => $username,
+                    'username' => $user ? $user['username'] : '(bilinmeyen kullanıcı adı)',
                 ]);
 
                 // Captcha session'unu temizle; böylece bir sonraki yükleme
@@ -598,7 +631,7 @@ class AdminController extends Controller
             }
         }
         catch (\PDOException $e) {
-            throw new \Exception("Giriş Hatası: " . $e->getMessage());
+            throw new \Exception("Giriş Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -615,16 +648,15 @@ class AdminController extends Controller
 
             // İstatistikler
             $stats = [];
-            $stats['total_articles'] = $pdo->query("SELECT COUNT(*) FROM articles WHERE status = 'published'")->fetchColumn();
+            $stats['total_articles'] = $pdo->query("SELECT COUNT(*) FROM articles a WHERE " . ArticleQueries::PUBLISHED)->fetchColumn();
             $stats['total_drafts']   = $pdo->query("SELECT COUNT(*) FROM articles WHERE status = 'draft'")->fetchColumn();
             $stats['total_scheduled'] = $pdo->query("SELECT COUNT(*) FROM articles WHERE status = 'scheduled'")->fetchColumn();
-            $stats['total_reads']    = (int)$pdo->query("SELECT SUM(`reads`) FROM articles")->fetchColumn();
 
-            // Sistem Sağlık Taraması
+            // Health Checks (Sistem Sağlık Taraması)
             $healthService = new \App\Services\SystemHealthService();
             [$healthChecks, $stats] = $healthService->runHealthChecks($pdo, $stats);
 
-            // Sayfalama ve Arama
+            // Pagination and Search
             $search = isset($_GET['search']) ? trim($_GET['search']) : '';
             $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
             $limit = 10;
@@ -632,7 +664,7 @@ class AdminController extends Controller
 
             $sortCol = $_GET['sort'] ?? 'id';
             $sortOrder = strtoupper($_GET['order'] ?? 'DESC');
-            $allowedSorts = ['id' => 'a.id', 'title' => 'a.title', 'author' => 'author_name', 'category' => 'category_names', 'reads' => 'a.reads'];
+            $allowedSorts = ['id' => 'a.id', 'title' => 'a.title', 'author' => 'author_name', 'category' => 'category_names'];
             if (!isset($allowedSorts[$sortCol])) {
                 $sortCol = 'id';
             }
@@ -661,7 +693,7 @@ class AdminController extends Controller
 
             $orderBy = $allowedSorts[$sortCol] . " " . $sortOrder;
 
-            $sql = "SELECT a.*, au.name AS author_name, au.slug AS author_slug, 
+            $sql = "SELECT a.*, au.name AS author_name, au.slug AS author_slug,
                     (SELECT GROUP_CONCAT(c.name SEPARATOR ', ') FROM article_categories ac JOIN categories c ON ac.category_id = c.id WHERE ac.article_id = a.id) AS category_names
                     FROM articles a
                     LEFT JOIN authors au ON a.author_id = au.id
@@ -687,10 +719,13 @@ class AdminController extends Controller
                 'pagination'       => $pagination,
                 'sort'             => $sort,
                 'healthChecks'     => $healthChecks,
+                'lastDeploy'       => ($_SESSION['admin_role'] ?? '') === 'superadmin'
+                    ? \App\Services\SystemHealthService::lastDeploy(ROOT . '/.cpanel/logs')
+                    : null,
             ]);
         }
         catch (\PDOException $e) {
-            throw new \Exception("Veri Çekme Hatası: " . $e->getMessage());
+            throw new \Exception("Veri Çekme Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -717,30 +752,6 @@ class AdminController extends Controller
         $this->requirePost();
         \App\Services\SitemapService::generateSitemapInternal();
         header('Location: /yonetim/dashboard?status=sitemap');
-        exit;
-    }
-
-    public function generateTts()
-    {
-        $this->requirePost();
-        header('Content-Type: application/json; charset=utf-8');
-
-        $id = (int)($_POST['id'] ?? 0);
-        if ($id <= 0) {
-            $this->jsonError(400, 'Geçersiz makale kimliği.');
-        }
-
-        try {
-            $mediaService = new \App\Services\MediaService();
-            $audioAssetUrl = $mediaService->generateAndUploadTts($this->getPDO(), $id);
-
-            echo json_encode([
-                'success' => true,
-                'audio_url' => $audioAssetUrl
-            ], JSON_UNESCAPED_UNICODE);
-        } catch (\Exception $e) {
-            $this->jsonError($e->getCode() ?: 500, 'Hata oluştu: ' . $e->getMessage());
-        }
         exit;
     }
 
@@ -804,7 +815,7 @@ class AdminController extends Controller
             ]);
         }
         catch (\Exception $e) {
-            throw new \Exception("Yazar Listesi Hatası: " . $e->getMessage());
+            throw new \Exception("Yazar Listesi Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -819,7 +830,7 @@ class AdminController extends Controller
             exit;
         }
         catch (\Exception $e) {
-            throw new \Exception("Yazar Kayıt Hatası: " . $e->getMessage());
+            throw new \Exception("Yazar Kayıt Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -838,7 +849,7 @@ class AdminController extends Controller
                 $authorService->deleteAuthor($this->getPDO(), $id);
             }
             catch (\Exception $e) {
-                throw new \Exception("Yazar Silme Hatası: " . $e->getMessage());
+                throw new \Exception("Yazar Silme Hatası: " . $e->getMessage(), 0, $e);
             }
         }
         header('Location: /yonetim/authors?status=deleted');

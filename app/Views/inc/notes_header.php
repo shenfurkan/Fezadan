@@ -1,13 +1,11 @@
-<?php 
-    $host = $_SERVER['HTTP_HOST'];
-    $main_site_url = (isset($_SERVER['HTTPS']) ? "https://" : "http://") . str_replace('notlar.', '', $host);
-?>
+<?php $main_site_url = langUrl('', 'tr'); ?>
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <script nonce="<?= CSP_NONCE ?>">
         (function () {
-            const userTheme = localStorage.getItem('theme');
+            let userTheme = 'light';
+            try { userTheme = localStorage.getItem('theme') || 'light'; } catch (_) {}
             if (userTheme === 'dark') {
                 document.documentElement.setAttribute('data-theme', 'dark');
             }
@@ -16,7 +14,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FEZADAN NOTLAR | <?php echo htmlspecialchars($page_title ?? 'Akademik PDF Veri Havuzu', ENT_QUOTES, 'UTF-8'); ?></title>
-    
+
     <link rel="icon" type="image/x-icon" href="/cdn/light-favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/cdn/light-favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/cdn/light-favicon-16x16.png">
@@ -24,10 +22,10 @@
     <link rel="manifest" href="/site.webmanifest">
     <link rel="icon" type="image/png" sizes="192x192" href="/cdn/light-android-chrome-192x192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/cdn/light-android-chrome-512x512.png">
-    
+
     <meta name="description" content="<?php echo htmlspecialchars($page_description ?? 'Fezadan PDF Veri Havuzu. Astronomi, bilim ve teknoloji üzerine akademik notlar, makaleler ve araştırmalar.', ENT_QUOTES, 'UTF-8'); ?>">
-    <meta name="robots" content="index, follow, noai, noimageai">
-    
+    <meta name="robots" content="index, follow">
+
     <?php
         $notesBaseUrl = defined('NOTES_SITE_URL') ? rtrim(NOTES_SITE_URL, '/') : 'https://notlar.fezadan.org';
         $current_url = $canonical_url ?? ($notesBaseUrl . (parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/'));
@@ -38,19 +36,21 @@
     <meta property="og:type" content="<?php echo isset($is_note) ? 'article' : 'website'; ?>">
     <meta property="og:title" content="FEZADAN NOTLAR | <?php echo htmlspecialchars($page_title ?? 'Akademik Veri Havuzu'); ?>">
     <meta property="og:description" content="<?php echo htmlspecialchars($page_description ?? 'Fezadan PDF Veri Havuzu.'); ?>">
-    <meta property="og:url" content="<?php echo htmlspecialchars($current_url, ENT_QUOTES, 'UTF-8'); ?>">
-    <meta property="og:image" content="https://fezadan.org/cdn/notlar-social-preview.png">
+        <meta property="og:url" content="<?php echo htmlspecialchars($current_url, ENT_QUOTES, 'UTF-8'); ?>">
+        <meta property="og:image" content="<?php echo htmlspecialchars($notesBaseUrl . '/cdn/notlar-social-preview.png', ENT_QUOTES, 'UTF-8'); ?>">
+        <meta property="og:image:type" content="image/png">
+        <meta property="og:image:alt" content="FEZADAN Notlar sosyal medya görseli">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="FEZADAN NOTLAR | <?php echo htmlspecialchars($page_title ?? 'Akademik Veri Havuzu'); ?>">
     <meta name="twitter:description" content="<?php echo htmlspecialchars($page_description ?? 'Fezadan PDF Veri Havuzu.'); ?>">
-    <meta name="twitter:image" content="https://fezadan.org/cdn/notlar-social-preview.png">
-    
+        <meta name="twitter:image" content="<?php echo htmlspecialchars($notesBaseUrl . '/cdn/notlar-social-preview.png', ENT_QUOTES, 'UTF-8'); ?>">
+        <meta name="twitter:image:alt" content="FEZADAN Notlar sosyal medya görseli">
+
     <link rel="stylesheet" href="/assets/css/style.css?v=<?php echo filemtime($_SERVER['DOCUMENT_ROOT'] . '/assets/css/style.css'); ?>">
-    <link rel="preload" href="/assets/css/fonts.css?v=<?= filemtime(ROOT . '/public_html/assets/css/fonts.css') ?>" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="/assets/css/fonts.css?v=<?= filemtime(ROOT . '/public_html/assets/css/fonts.css') ?>"></noscript>
-    
+    <link rel="stylesheet" href="/assets/css/fonts.css?v=<?= filemtime(ROOT . '/public_html/assets/css/fonts.css') ?>">
+
     <style>
         .skip-to-content {
             position: absolute; left: -9999px; top: 0; z-index: 100;
@@ -64,14 +64,15 @@
         html:focus, body:focus, html:focus-visible, body:focus-visible { outline: none !important; }
 
         :root {
-            --bg-paper: #FEF9E1; 
-            --bg-secondary: #E5D0AC; 
-            --text-main: #6D2323; 
-            --text-accent: #A31D1D; 
-            --line-color: #6D2323; 
+            --bg-paper: #FEF9E1;
+            --bg-secondary: #E5D0AC;
+            --text-main: #6D2323;
+            --text-accent: #A31D1D;
+            --line-color: #6D2323;
         }
 
         [data-theme="dark"] {
+            color-scheme: dark;
             --bg-paper: #120A0A;
             --bg-secondary: #1F1212;
             --text-main: #E1C89E;
@@ -84,10 +85,10 @@
             border-color: var(--text-main);
         }
 
-        body { 
-            background-color: var(--bg-paper); 
-            color: var(--text-main); 
-            font-family: 'Space Grotesk', sans-serif; 
+        body {
+            background-color: var(--bg-paper);
+            color: var(--text-main);
+            font-family: 'Space Grotesk', sans-serif;
             padding-top: 85px;
             transition: background-color 0.3s ease, color 0.3s ease;
             overflow-x: hidden;
@@ -106,21 +107,21 @@
 
         .font-syne { font-family: 'Syne', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
-        
-        .grid-bg { 
-            background-image: linear-gradient(var(--line-color) 1px, transparent 1px), 
-                            linear-gradient(90deg, var(--line-color) 1px, transparent 1px); 
-            background-size: 40px 40px; 
-            opacity: 0.05; 
-            pointer-events: none; 
+
+        .grid-bg {
+            background-image: linear-gradient(var(--line-color) 1px, transparent 1px),
+                            linear-gradient(90deg, var(--line-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.05;
+            pointer-events: none;
         }
-        
+
         .sun-icon { opacity: 1; color: var(--text-main); }
         .moon-icon { opacity: 0.3; color: var(--text-main); }
         [data-theme="dark"] .sun-icon { opacity: 0.3; }
         [data-theme="dark"] .moon-icon { opacity: 1; }
 
-        /* --- MOBİL MENÜ VE NAVBAR ANİMASYONLARI --- */
+        /* MOBİL MENÜ VE NAVBAR ANİMASYONLARI */
         #main-navbar {
             transform: translateY(0);
             transition: transform 0.3s ease-in-out, background-color 0.3s, border-color 0.3s;
@@ -170,7 +171,7 @@
     <div class="grid-bg fixed inset-0 z-0"></div>
 
     <nav id="main-navbar" class="fixed top-0 left-0 w-full z-50 bg-[var(--bg-paper)] border-b-2 border-[var(--text-main)] flex justify-between items-center px-4 md:px-8 h-[85px] shadow-[0_4px_0px_rgba(109,35,35,0.05)]">
-    
+
         <div class="flex items-center gap-4 relative z-50">
             <a href="/" class="flex items-center gap-2">
                 <img src="/cdn/logo-light.png" alt="Logo" class="h-10 w-auto object-contain logo-light mix-blend-multiply opacity-90">
@@ -182,7 +183,7 @@
         </div>
 
         <div class="hidden md:flex items-center gap-6">
-            <a href="<?php echo $main_site_url; ?>" class="group flex items-center gap-2 border-2 border-[var(--text-main)] px-4 py-2 hover:bg-[var(--text-main)] transition-all">
+            <a href="<?= htmlspecialchars($main_site_url, ENT_QUOTES, 'UTF-8') ?>" class="group flex items-center gap-2 border-2 border-[var(--text-main)] px-4 py-2 hover:bg-[var(--text-main)] transition-all">
                 <span class="font-bold text-[18px] text-[var(--text-main)] group-hover:text-[var(--bg-paper)] group-hover:-translate-x-1 transition-transform leading-none mb-1">←</span>
                 <span class="font-syne font-bold uppercase text-[10px] md:text-xs text-[var(--text-main)] group-hover:text-[var(--bg-paper)] tracking-widest">
                     ANA SAYFAYA DON
@@ -200,7 +201,7 @@
             </div>
         </div>
 
-        <button id="hamburger-btn" class="md:hidden relative z-50 focus:outline-none p-2" aria-label="Menüyü Aç" aria-expanded="false">
+        <button type="button" id="hamburger-btn" class="md:hidden relative z-50 p-2" aria-controls="mobile-menu" aria-label="Menüyü Aç" data-open-label="Menüyü Aç" data-close-label="Menüyü Kapat" aria-expanded="false">
             <svg class="hamburger w-8 h-8 text-[var(--text-main)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <line x1="5" y1="6" x2="19" y2="6" class="line1"></line>
                 <line x1="5" y1="12" x2="19" y2="12" class="line2"></line>
@@ -209,11 +210,11 @@
         </button>
     </nav>
 
-    <div id="mobile-menu">
-        <div class="flex flex-col gap-8 text-center items-center"> 
+    <div id="mobile-menu" inert aria-hidden="true">
+        <div class="flex flex-col gap-8 text-center items-center">
             <a href="/" class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">NOTLAR</a>
-            <a href="<?php echo $main_site_url; ?>" class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">FEZADAN</a>
-            
+            <a href="<?= htmlspecialchars($main_site_url, ENT_QUOTES, 'UTF-8') ?>" class="text-2xl font-syne font-bold text-[var(--text-main)] hover:text-[var(--text-accent)]">FEZADAN</a>
+
             <div class="theme-switch-wrapper group scale-125 mt-4" role="button" tabindex="0" aria-label="Temayı Değiştir">
                 <svg class="theme-icon sun-icon opacity-50 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
@@ -230,90 +231,4 @@
         </div>
     </div>
 
-    <script nonce="<?= CSP_NONCE ?>">
-        const navbar = document.getElementById('main-navbar');
-        const hamburgerBtn = document.getElementById('hamburger-btn');
-        const mobileMenu = document.getElementById('mobile-menu');
-        const html = document.documentElement;
-        const body = document.body;
-        
-        let lastScrollY = window.scrollY;
-        let isMenuOpen = false;
-
-        // Arka planın kaymasını engelle
-        function toggleScrollLock(isOpen) {
-            if (isOpen) {
-                html.style.overflow = 'hidden';
-                body.style.overflow = 'hidden';
-                body.style.touchAction = 'none';
-                hamburgerBtn.setAttribute('aria-expanded', 'true');
-            } else {
-                html.style.overflow = '';
-                body.style.overflow = '';
-                body.style.touchAction = '';
-                hamburgerBtn.setAttribute('aria-expanded', 'false');
-            }
-        }
-
-        // Hamburger Tıklama Olayı
-        hamburgerBtn.addEventListener('click', () => {
-            isMenuOpen = !isMenuOpen;
-            hamburgerBtn.classList.toggle('menu-active');
-            mobileMenu.classList.toggle('menu-open');
-            toggleScrollLock(isMenuOpen);
-        });
-
-        // Mobil menüdeki linklere tıklanınca menüyü kapat
-        mobileMenu.querySelectorAll('a').forEach(link => {
-            link.addEventListener('click', () => {
-                isMenuOpen = false;
-                hamburgerBtn.classList.remove('menu-active');
-                mobileMenu.classList.remove('menu-open');
-                toggleScrollLock(false);
-            });
-        });
-
-        // Aşağı Kaydırınca Navbar'ı Gizle (Ana sitedeki özellik)
-        window.addEventListener('scroll', () => {
-            if (isMenuOpen) return;
-
-            const currentScrollY = window.scrollY;
-
-            if (currentScrollY <= 0) {
-                navbar.classList.remove('nav-hidden');
-                lastScrollY = 0;
-                return;
-            }
-
-            if (currentScrollY > lastScrollY && currentScrollY > 50) {
-                if (!navbar.classList.contains('nav-hidden')) {
-                    navbar.classList.add('nav-hidden');
-                }
-            } else if (currentScrollY < lastScrollY) {
-                if (navbar.classList.contains('nav-hidden')) {
-                    navbar.classList.remove('nav-hidden');
-                }
-            }
-            lastScrollY = currentScrollY;
-        }, { passive: true });
-
-        // Tema Değiştirme Mantığı (Hem masaüstü hem mobil butonlar için)
-        const themeToggleBtns = document.querySelectorAll('.theme-switch-wrapper');
-
-        themeToggleBtns.forEach(btn => {
-            btn.addEventListener('keydown', (e) => {
-                if(e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    btn.click();
-                }
-            });
-            
-            btn.addEventListener('click', () => {
-                const currentTheme = document.documentElement.getAttribute('data-theme');
-                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-
-                document.documentElement.setAttribute('data-theme', newTheme);
-                localStorage.setItem('theme', newTheme);
-            });
-        });
-    </script>
+    <script src="/assets/js/site-navigation.js?v=<?= filemtime(ROOT . '/public_html/assets/js/site-navigation.js') ?>" nonce="<?= CSP_NONCE ?>"></script>

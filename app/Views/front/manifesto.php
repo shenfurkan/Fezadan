@@ -4,10 +4,10 @@ $siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
 $lang = App::getLang();
 $isEn = ($lang === 'EN');
 
-$page_title       = $isEn ? 'Guerilla Open Access Manifesto — Freedom of Knowledge | FEZADAN' : 'Açık Erişim Manifestosu — Bilginin Özgürlüğü | FEZADAN';
+$page_title       = $isEn ? 'Guerilla Open Access Manifesto | Freedom of Knowledge | FEZADAN' : 'Açık Erişim Manifestosu | Bilginin Özgürlüğü | FEZADAN';
 $page_description = $isEn
-    ? 'FEZADAN Manifesto — a declaration on the silent conflict between data and aesthetics. Our principles for independent publishing.'
-    : 'FEZADAN manifestosu — veri ve estetik arasındaki sessiz çatışma üzerine bir bildirge. Bağımsız yayıncılık ilkelerimiz.';
+    ? 'FEZADAN Manifesto / a declaration on the silent conflict between data and aesthetics. Our principles for independent publishing.'
+    : 'FEZADAN manifestosu / veri ve estetik arasındaki sessiz çatışma üzerine bir bildirge. Bağımsız yayıncılık ilkelerimiz.';
 $page_canonical   = langUrl('/manifesto');
 $og_url           = $page_canonical;
 require_once ROOT . '/app/Views/inc/header.php';
@@ -27,9 +27,9 @@ require_once ROOT . '/app/Views/inc/header.php';
         border-bottom: 1px solid var(--line-color);
     }
     @media (min-width: 1024px) {
-        .grid-layout { grid-template-columns: 40% 60%; } 
+        .grid-layout { grid-template-columns: 40% 60%; }
     }
-    
+
     [data-theme="dark"] .grid-layout {
         border-color: var(--text-main) !important;
     }
@@ -40,11 +40,11 @@ require_once ROOT . '/app/Views/inc/header.php';
         background-color: var(--bg-secondary);
         border-right: 1px solid var(--text-main);
     }
-    @media (max-width: 1023px) { 
-        .sidebar { 
-            border-right: none; 
-            border-bottom: 1px solid var(--text-main); 
-        } 
+    @media (max-width: 1023px) {
+        .sidebar {
+            border-right: none;
+            border-bottom: 1px solid var(--text-main);
+        }
     }
 
     .quote-mark {
@@ -54,37 +54,37 @@ require_once ROOT . '/app/Views/inc/header.php';
         opacity: 0.1;
         position: absolute;
         top: 2rem;
-        left: -1rem; 
+        left: -1rem;
     }
 </style>
 
 <div class="texture-overlay"></div>
 
 <main id="main-content" class="relative z-10 w-full max-w-[1920px] mx-auto flex-grow">
-    
+
     <div class="grid-layout">
-        
+
         <aside class="sidebar">
             <canvas id="manifesto-canvas" class="absolute inset-0 w-full h-full pointer-events-none z-0 opacity-25"></canvas>
             <div class="sticky top-12 px-6 py-12 lg:p-16 2xl:p-20 relative z-10" style="padding-left: 20px;">
                 <div class="relative">
                     <span class="quote-mark">“</span>
-                    
+
                     <h1 class="font-syne text-5xl md:text-6xl lg:text-4xl xl:text-5xl 2xl:text-7xl font-bold uppercase leading-[0.9] tracking-tighter text-[var(--text-main)] mb-6 break-words">
                         <?= $isEn ? 'Guerilla<br>Open Access<br>Mani&shy;festo' : 'Gerilla<br>Açık Erişim<br>Mani&shy;festo&shy;su' ?>
                     </h1>
                 </div>
-                
+
                 <div class="space-y-6 mt-8 xl:mt-12">
                     <div class="p-4 border-l-2 border-[var(--text-main)] bg-black/5 dark:bg-white/5">
                         <p class="font-mono text-xs uppercase tracking-widest text-[var(--text-main)] mb-2"><?= $isEn ? 'Context' : 'Bağlam' ?></p>
                         <p class="text-sm opacity-80 leading-relaxed text-[var(--text-main)]">
-                            <?= $isEn 
+                            <?= $isEn
                                 ? 'This text was published by Aaron Swartz in July 2008 in Eremo, Italy, as a call to action for digital freedom.'
                                 : 'Bu metin, Aaron Swartz tarafından 2008 yılında yayınlanmış; 2017 yılında Zeki Çelikbaş tarafından Swartz\'ın anısına Türkçeye kazandırılmıştır.' ?>
                         </p>
                     </div>
-                    
+
                     <div class="font-mono text-[10px] uppercase opacity-50 tracking-tighter text-[var(--text-main)]">
                         <p><?= $isEn ? 'Author' : 'Yazar' ?>: Aaron Swartz (1986-2013)</p>
                         <?php if (!$isEn): ?>
@@ -98,7 +98,7 @@ require_once ROOT . '/app/Views/inc/header.php';
         <article class="px-6 py-12 lg:p-16 2xl:p-20 max-w-4xl">
             <div class="space-y-6 text-lg md:text-xl leading-relaxed opacity-90 text-[var(--text-main)]">
                 <?php if ($isEn): ?>
-                
+
                 <h2 class="font-syne text-2xl font-bold uppercase mb-4 tracking-tight opacity-100">
                     Information is power. But like all power, there are those who want to keep it for themselves.
                 </h2>
@@ -116,13 +116,13 @@ require_once ROOT . '/app/Views/inc/header.php';
                 </p>
 
                 <p>
-                    “I agree,” many say, “but what can we do? The companies hold the copyrights, they make enormous amounts of money by charging for access, and it’s perfectly legal — there’s nothing we can do to stop them.” But there is something we can, something that’s already being done: we can fight back.
+                    “I agree,” many say, “but what can we do? The companies hold the copyrights, they make enormous amounts of money by charging for access, and it’s perfectly legal / there’s nothing we can do to stop them.” But there is something we can, something that’s already being done: we can fight back.
                 </p>
 
                 <div class="py-8 my-8 border-y border-[var(--text-main)]/30">
                     <h2 class="font-syne text-2xl font-bold uppercase mb-4 tracking-tight opacity-100">Access is Not a Privilege</h2>
                     <p>
-                        Those with access to these resources — students, librarians, scientists — you have been given a privilege. You get to feed at this banquet of knowledge while the rest of the world is locked out. But you need not — indeed, morally, you cannot — keep this privilege for yourselves. You have a duty to share it with the world. And you have: trading passwords with colleagues, filling download requests for friends.
+                        Those with access to these resources / students, librarians, scientists / you have been given a privilege. You get to feed at this banquet of knowledge while the rest of the world is locked out. But you need not / indeed, morally, you cannot / keep this privilege for yourselves. You have a duty to share it with the world. And you have: trading passwords with colleagues, filling download requests for friends.
                     </p>
                 </div>
 
@@ -131,11 +131,11 @@ require_once ROOT . '/app/Views/inc/header.php';
                 </p>
 
                 <p>
-                    But all of this action goes on in the dark, hidden underground. It’s called stealing or piracy, as if sharing a wealth of knowledge were the moral equivalent of plundering a ship and murdering its crew. But sharing isn’t immoral — it’s a moral imperative. Only those blinded by greed would refuse to let a friend make a copy.
+                    But all of this action goes on in the dark, hidden underground. It’s called stealing or piracy, as if sharing a wealth of knowledge were the moral equivalent of plundering a ship and murdering its crew. But sharing isn’t immoral / it’s a moral imperative. Only those blinded by greed would refuse to let a friend make a copy.
                 </p>
 
                 <p>
-                    Large corporations, of course, are blinded by greed. The laws under which they operate require it — their shareholders would revolt at anything less. And the politicians they have bought off back them, passing laws giving them the exclusive power to decide who can make copies.
+                    Large corporations, of course, are blinded by greed. The laws under which they operate require it / their shareholders would revolt at anything less. And the politicians they have bought off back them, passing laws giving them the exclusive power to decide who can make copies.
                 </p>
 
                 <p>
@@ -147,18 +147,18 @@ require_once ROOT . '/app/Views/inc/header.php';
                 </p>
 
                 <p class="text-2xl md:text-3xl font-syne font-bold tracking-tighter uppercase pt-12 opacity-100">
-                    With enough of us, around the world, we’ll not just send a strong message opposing the privatization of knowledge — we’ll make it a thing of the past.
+                    With enough of us, around the world, we’ll not just send a strong message opposing the privatization of knowledge / we’ll make it a thing of the past.
                     <br><br>
                     <span class="text-[var(--text-accent)]">Will you join us?</span>
                 </p>
 
                 <div class="pt-16 border-t border-[var(--text-main)]/30 opacity-60 italic text-sm font-mono uppercase">
-                    — Aaron Swartz<br>
+                    / Aaron Swartz<br>
                     <span class="text-[10px] opacity-75 font-normal tracking-wide">July 2008, Eremo, Italy</span>
                 </div>
-                
+
                 <?php else: ?>
-                
+
                 <h2 class="font-syne text-2xl font-bold uppercase mb-4 tracking-tight opacity-100"> Bilgi güçtür. Fakat tüm güçler gibi onu kendileri için saklamak isteyenler var. </h2>
 
                 <p>
@@ -172,7 +172,7 @@ require_once ROOT . '/app/Views/inc/header.php';
                 <div class="py-8 my-8 border-y border-[var(--text-main)]/30">
                     <h2 class="font-syne text-2xl font-bold uppercase mb-4 tracking-tight opacity-100">Erişim Bir Ayrıcalık Değildir</h2>
                     <p>
-                        Bu kaynaklara erişimi olanlar – öğrenciler, kütüphaneciler, bilim insanları – size bir ayrıcalık verilmiştir. Dünyanın geri kalanının erişemediği bu bilgi ziyafetinin bileti sizin elinizdedir. Fakat bu yetkinliği yalnızca kendiniz için tutamazsınız. Bunu dünya ile paylaşma göreviniz var. 
+                        Bu kaynaklara erişimi olanlar / öğrenciler, kütüphaneciler, bilim insanları / size bir ayrıcalık verilmiştir. Dünyanın geri kalanının erişemediği bu bilgi ziyafetinin bileti sizin elinizdedir. Fakat bu yetkinliği yalnızca kendiniz için tutamazsınız. Bunu dünya ile paylaşma göreviniz var.
                     </p>
                 </div>
 
@@ -181,7 +181,7 @@ require_once ROOT . '/app/Views/inc/header.php';
                 </p>
 
                 <p>
-                    Buna hırsızlık veya korsanlık denilebilir, ahlaken bir geminin yağmalanması, mürettebatının öldürülmesi ile içindeki bilgi hazinesinin paylaşımı ile eşdeğer tutulabilir. <strong>Ama paylaşım ahlaksız değil – ahlaki bir zorunluluktur.</strong> Yalnızca açgözlülük ile gözleri kör edilenler bir arkadaşının kopya isteğini reddedebilir.
+                    Buna hırsızlık veya korsanlık denilebilir, ahlaken bir geminin yağmalanması, mürettebatının öldürülmesi ile içindeki bilgi hazinesinin paylaşımı ile eşdeğer tutulabilir. <strong>Ama paylaşım ahlaksız değil / ahlaki bir zorunluluktur.</strong> Yalnızca açgözlülük ile gözleri kör edilenler bir arkadaşının kopya isteğini reddedebilir.
                 </p>
 
                 <p>
@@ -193,15 +193,15 @@ require_once ROOT . '/app/Views/inc/header.php';
                 </p>
 
                 <p class="text-2xl md:text-3xl font-syne font-bold tracking-tighter uppercase pt-12 opacity-100">
-                    Dünyada yeteri kadar olduğumuzda, bilgiyi özelleştirenlere karşı yalnızca güçlü bir mesaj göndermekle kalmayacağız – onu geçmişe gömeceğiz. 
+                    Dünyada yeteri kadar olduğumuzda, bilgiyi özelleştirenlere karşı yalnızca güçlü bir mesaj göndermekle kalmayacağız / onu geçmişe gömeceğiz.
                     <br><br>
                     <span class="text-[var(--text-accent)]">Bize katılacak mısın?</span>
                 </p>
 
                 <div class="pt-16 border-t border-[var(--text-main)]/30 opacity-60 italic text-sm font-mono uppercase">
-                    — Aaron Swartz
+                    / Aaron Swartz
                 </div>
-                
+
                 <?php endif; ?>
             </div>
         </article>

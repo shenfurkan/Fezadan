@@ -17,6 +17,7 @@ $rootDir = dirname(__DIR__);
 
 use App\Core\R2Storage;
 
+$sqlFile = $gzFile = null;
 try {
     define('ROOT', $rootDir);
 
@@ -91,8 +92,10 @@ try {
     fwrite(STDERR, '[' . date('c') . '] HATA: ' . $e->getMessage() . "\n");
     exit(2);
 } finally {
-    @unlink($sqlFile);
-    @unlink($gzFile);
+    if ($sqlFile !== null) {
+        @unlink($sqlFile);
+        @unlink($gzFile);
+    }
 }
 
 function cleanupOldBackups(R2Storage $r2, int $retentionDays = 7): void

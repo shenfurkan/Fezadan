@@ -23,7 +23,7 @@
         .nav-item.active { background: var(--text-main); color: var(--bg-paper); }
         .brutalist-input { width: 100%; background: transparent; border-bottom: 2px solid var(--line-color); padding: 12px; font-family: 'JetBrains Mono', monospace; outline: none; transition: 0.3s; }
         .brutalist-input:focus { background: rgba(109,35,35,0.05); }
-        
+
         .brutalist-card { border: 2px solid var(--line-color); box-shadow: 8px 8px 0px var(--line-color); transition: all 0.2s; }
         input, textarea { background: transparent; border: 2px solid var(--line-color); padding: 1rem; width: 100%; outline: none; }
     </style>
@@ -31,7 +31,7 @@
 <body class="flex h-screen w-full overflow-hidden relative">
 
     <div class="grid-bg fixed inset-0 z-0"></div>
-    
+
     <?php include __DIR__ . '/_side_panel.php'; ?>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 pb-12">
@@ -42,7 +42,7 @@
                         <?= Csrf::field() ?>
                         <input type="hidden" name="id" id="authorId">
                         <input type="hidden" name="current_image" id="authorCurrentImage">
-                        
+
                         <div>
                             <label class="font-mono text-[10px] uppercase font-bold mb-1 block">YAZAR ADI</label>
                             <input type="text" name="name" id="authorName" required placeholder="Ad Soyad">
@@ -119,7 +119,7 @@
             document.getElementById('authorName').value = data.name;
             document.getElementById('authorBio').value = data.bio;
             document.getElementById('authorCurrentImage').value = data.image_url;
-            
+
             document.getElementById('authorTwitter').value = data.twitter || "";
             document.getElementById('authorInstagram').value = data.instagram || "";
             document.getElementById('authorWebsite').value = data.website || "";
@@ -127,22 +127,30 @@
 
             const container = document.getElementById('articlesCheckboxContainer');
             const featuredSection = document.getElementById('featuredSection');
-            container.innerHTML = ''; 
-            
+            container.innerHTML = '';
+
             const authorArticles = allArticles.filter(a => a.author_id == data.id);
-            
+
             if(authorArticles.length > 0) {
                 featuredSection.classList.remove('hidden');
                 let featuredIds = data.featured_articles ? data.featured_articles.split(',') : [];
-                
+
                 authorArticles.forEach(article => {
-                    const isChecked = featuredIds.includes(article.id.toString()) ? 'checked' : '';
-                    container.innerHTML += `
-                        <label class="flex items-center gap-3 text-xs font-mono cursor-pointer hover:text-[#A31D1D] transition-colors p-2 border border-transparent hover:bg-[var(--bg-secondary)]/30 hover:border-[var(--line-color)]/30">
-                            <input type="checkbox" name="featured[]" value="${article.id}" ${isChecked} style="width: 16px; height: 16px; padding: 0; border: none;" class="featured-checkbox accent-[#6D2323] flex-shrink-0 cursor-pointer">
-                            <span class="truncate" title="${article.title}">${article.title}</span>
-                        </label>
-                    `;
+                    const label = document.createElement('label');
+                    label.className = 'flex items-center gap-3 text-xs font-mono cursor-pointer hover:text-[#A31D1D] transition-colors p-2 border border-transparent hover:bg-[var(--bg-secondary)]/30 hover:border-[var(--line-color)]/30';
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.name = 'featured[]';
+                    checkbox.value = String(article.id);
+                    checkbox.checked = featuredIds.includes(String(article.id));
+                    checkbox.className = 'featured-checkbox accent-[#6D2323] flex-shrink-0 cursor-pointer';
+                    checkbox.style.cssText = 'width:16px;height:16px;padding:0;border:none';
+                    const title = document.createElement('span');
+                    title.className = 'truncate';
+                    title.title = article.title;
+                    title.textContent = article.title;
+                    label.append(checkbox, title);
+                    container.appendChild(label);
                 });
             } else {
                 featuredSection.classList.add('hidden');
@@ -158,7 +166,7 @@
             document.getElementById('authorName').value = "";
             document.getElementById('authorBio').value = "";
             document.getElementById('authorCurrentImage').value = "";
-            
+
             document.getElementById('authorTwitter').value = "";
             document.getElementById('authorInstagram').value = "";
             document.getElementById('authorWebsite').value = "";

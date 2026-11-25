@@ -15,7 +15,7 @@ class NotesController extends Controller {
             return rtrim(NOTES_SITE_URL, '/');
         }
         $host = $_SERVER['HTTP_HOST'] ?? 'notlar.fezadan.org';
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $scheme = HttpRequest::isHttps() ? 'https' : 'http';
         return $scheme . '://' . $host;
     }
 
@@ -46,7 +46,7 @@ class NotesController extends Controller {
         try {
             $pdo = $this->getPDO();
 
-            $search = isset($_GET['search']) ? trim((string)$_GET['search']) : '';
+            $search = is_string($_GET['search'] ?? null) ? mb_substr(trim($_GET['search']), 0, 200, 'UTF-8') : '';
             $cat_id = isset($_GET['cat']) ? (int)$_GET['cat'] : 0;
             $lang = $this->normalizeLangFilter((string)($_GET['lang'] ?? ''));
 
@@ -57,7 +57,7 @@ class NotesController extends Controller {
             $params = [];
 
             if ($search !== '') {
-                $whereSql .= " AND MATCH(n.title, n.description) AGAINST(:search IN BOOLEAN MODE)";
+                $whereSql .= " AND MATCH(n.title, n.description) AGAINST(:search IN NATURAL LANGUAGE MODE)";
                 $params[':search'] = $search;
             }
 
@@ -114,7 +114,7 @@ class NotesController extends Controller {
                 'page_description' => 'Fezadan Notlar portalında bilimsel PDF dosyalarını, akademik makaleleri ve araştırma notlarını arayın, okuyun ve indirin.'
             ]);
         } catch (\PDOException $e) {
-            throw new \Exception("Veritabanı Hatası: " . $e->getMessage());
+            throw new \Exception("Veritabanı Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -151,7 +151,7 @@ class NotesController extends Controller {
                 'is_note' => true
             ]);
         } catch (\PDOException $e) {
-            throw new \Exception("Veritabanı Hatası: " . $e->getMessage());
+            throw new \Exception("Veritabanı Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -166,7 +166,7 @@ class NotesController extends Controller {
             exit;
         }
 
-        $token = $_GET['token'] ?? '';
+        $token = is_string($_GET['token'] ?? null) ? $_GET['token'] : '';
         $todayToken = self::viewToken($slug);
         $yesterdayToken = self::viewToken($slug, date('Y-m-d', strtotime('-1 day')));
 
@@ -196,11 +196,11 @@ class NotesController extends Controller {
             $r2 = \App\Core\R2Storage::instance();
             $r2->streamView($note['r2_path'], $note['title'] ?? 'belge');
         } catch (\PDOException $e) {
-            throw new \Exception("Belge Görüntüleme Hatası: " . $e->getMessage());
+            throw new \Exception("Belge Görüntüleme Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
-    private function sendPdfHeadResponse(array $note): void {
+    private function sendPdfHeadResponse(array $note, string $disposition = 'inline'): void {
         $fileSize = max(0, (int)($note['file_size'] ?? 0));
         $statusCode = 200;
         $contentRange = null;
@@ -208,42 +208,27 @@ class NotesController extends Controller {
         $rangeHeader = trim((string)($_SERVER['HTTP_RANGE'] ?? ''));
 
         if ($rangeHeader !== '' && $fileSize > 0) {
-            if (!preg_match('/^bytes=(\d*)-(\d*)$/i', $rangeHeader, $matches) || ($matches[1] === '' && $matches[2] === '')) {
+            require_once ROOT . '/app/Core/R2Storage.php';
+            $range = \App\Core\R2Storage::parseHttpRange($rangeHeader, $fileSize);
+            if ($range === null) {
                 http_response_code(416);
                 header('Content-Range: bytes */' . $fileSize);
                 exit;
             }
 
-            if ($matches[1] === '') {
-                $suffixLength = (int)$matches[2];
-                if ($suffixLength <= 0) {
-                    http_response_code(416);
-                    header('Content-Range: bytes */' . $fileSize);
-                    exit;
-                }
-                $start = max(0, $fileSize - $suffixLength);
-                $end = $fileSize - 1;
-            } else {
-                $start = (int)$matches[1];
-                $end = $matches[2] === '' ? ($fileSize - 1) : min((int)$matches[2], $fileSize - 1);
-                if ($start >= $fileSize || $end < $start) {
-                    http_response_code(416);
-                    header('Content-Range: bytes */' . $fileSize);
-                    exit;
-                }
-            }
+            [$start, $end] = $range;
 
             $statusCode = 206;
             $contentRange = 'bytes ' . $start . '-' . $end . '/' . $fileSize;
             $contentLength = $end - $start + 1;
         }
 
-        $safeName = str_replace([' ', '/', '\\', '"'], '_', (string)($note['title'] ?? 'belge')) . '.pdf';
+        require_once ROOT . '/app/Core/R2Storage.php';
         http_response_code($statusCode);
         header('Content-Type: application/pdf');
-        header('Content-Disposition: inline; filename="' . $safeName . '"');
+        header('Content-Disposition: ' . \App\Core\R2Storage::pdfContentDisposition((string)($note['title'] ?? 'belge'), $disposition));
         header('Accept-Ranges: bytes');
-        header('Cache-Control: public, max-age=300');
+        header('Cache-Control: private, no-store, max-age=0');
         if ($contentRange !== null) {
             header('Content-Range: ' . $contentRange);
         }
@@ -259,7 +244,19 @@ class NotesController extends Controller {
             exit;
         }
 
-        // LiteCaptcha doğrulaması — her indirme geçerli bir token gerektirir
+        // A metadata probe is not a download: don't consume captcha tokens or increment counters.
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD') {
+            $stmt = $this->getPDO()->prepare("SELECT title, r2_path, file_size FROM notes WHERE slug = ?");
+            $stmt->execute([$slug]);
+            $note = $stmt->fetch(\PDO::FETCH_ASSOC);
+            if (!$note || empty($note['r2_path'])) {
+                http_response_code(404);
+                exit;
+            }
+            $this->sendPdfHeadResponse($note, 'attachment');
+        }
+
+        // LiteCaptcha verification: every download requires a valid token
         $isLocal = function_exists('litecaptcha_is_local_request') && litecaptcha_is_local_request();
 
         if (defined('LITECAPTCHA_ENABLED') && LITECAPTCHA_ENABLED && !$isLocal) {
@@ -290,7 +287,6 @@ class NotesController extends Controller {
             $lockAcquired = $lockStmt->fetchColumn();
 
             if (!$lockAcquired) {
-                header('HTTP/1.1 429 Too Many Requests');
                 header('Location: /not/' . rawurlencode($slug) . '?error=rate_limit');
                 exit;
             }
@@ -303,7 +299,6 @@ class NotesController extends Controller {
 
                 if ($recentDownloads >= 3) {
                     $pdo->commit();
-                    header('HTTP/1.1 429 Too Many Requests');
                     header('Location: /not/' . rawurlencode($slug) . '?error=rate_limit');
                     exit;
                 }
@@ -319,8 +314,6 @@ class NotesController extends Controller {
                 }
 
                 \App\Core\RateLimit::record($pdo, 'download_rate_limits', $ipHash);
-                $pdo->prepare("UPDATE notes SET downloads = downloads + 1 WHERE id = ?")
-                    ->execute([$note['id']]);
 
                 $pdo->commit();
             } finally {
@@ -331,7 +324,7 @@ class NotesController extends Controller {
             $r2 = \App\Core\R2Storage::instance();
             $r2->streamDownload($note['r2_path'], $note['title']);
         } catch (\PDOException $e) {
-            throw new \Exception("İndirme Hatası: " . $e->getMessage());
+            throw new \Exception("İndirme Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -340,7 +333,7 @@ class NotesController extends Controller {
             $pdo = $this->getPDO();
 
             $sql = "SELECT n.id, n.slug, n.title, n.description, n.lang, n.file_size,
-                           n.downloads, n.created_at, n.updated_at,
+                           n.created_at, n.updated_at,
                            GROUP_CONCAT(c.name SEPARATOR ', ') AS category_names
                     FROM notes n
                     LEFT JOIN note_categories nc ON n.id = nc.note_id
@@ -351,24 +344,9 @@ class NotesController extends Controller {
             $notes = $pdo->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
 
             $notesBase = defined('NOTES_SITE_URL') ? rtrim(NOTES_SITE_URL, '/') : 'https://notlar.fezadan.org';
-            $siteBase  = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
 
-            // 304 Değiştirilmedi
-            $lastModifiedTs = !empty($notes) ? strtotime($notes[0]['created_at']) : time();
-            $lastModifiedHttp = gmdate('D, d M Y H:i:s', $lastModifiedTs) . ' GMT';
-            $ifModifiedSince = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
-            if ($ifModifiedSince && strtotime($ifModifiedSince) >= $lastModifiedTs) {
-                header('HTTP/1.1 304 Not Modified');
-                header('Last-Modified: ' . $lastModifiedHttp);
-                header('Cache-Control: public, max-age=900');
-                exit;
-            }
-
-            $lastBuild = !empty($notes) ? date(DATE_RSS, strtotime($notes[0]['created_at'])) : date(DATE_RSS);
-
-            header('Content-Type: application/rss+xml; charset=UTF-8');
-            header('Cache-Control: public, max-age=900');
-            header('Last-Modified: ' . $lastModifiedHttp);
+            $lastModifiedTs = $this->feedCacheHeaders($notes, $notesBase . '/rss');
+            $lastBuild = date(DATE_RSS, $lastModifiedTs);
 
             $channelTitle = 'FEZADAN NOTLAR - Akademik Veri Havuzu';
             $channelDesc  = 'Fezadan Notlar: Astronomi, bilim ve teknoloji üzerine akademik PDF notlar, makaleler ve araştırmalar.';
@@ -388,7 +366,7 @@ class NotesController extends Controller {
     <lastBuildDate><?= $this->xmlEscape($lastBuild) ?></lastBuildDate>
     <atom:link href="<?= $this->xmlEscape($feedSelf) ?>" rel="self" type="application/rss+xml" />
     <image>
-      <url><?= $this->xmlEscape($siteBase . '/cdn/notlar-social-preview.png') ?></url>
+      <url><?= $this->xmlEscape($notesBase . '/cdn/notlar-social-preview.png') ?></url>
       <title><?= $this->xmlEscape($channelTitle) ?></title>
       <link><?= $this->xmlEscape($notesBase . '/') ?></link>
     </image>
@@ -406,7 +384,7 @@ class NotesController extends Controller {
       <description><?= $this->cdata($desc . ($catNames ? ' | Kategoriler: ' . $catNames : '')) ?></description>
       <content:encoded><?= $this->cdata(
         '<p>' . $desc . '</p>'
-        . '<p>Dosya boyutu: ' . number_format((int)($n['file_size'] ?? 0) / 1024, 0) . ' KB | İndirme: ' . (int)($n['downloads'] ?? 0) . '</p>'
+        . '<p>Dosya boyutu: ' . number_format((int)($n['file_size'] ?? 0) / 1024, 0) . ' KB</p>'
         . ($catNames ? '<p>Kategoriler: ' . $catNames . '</p>' : '')
         . '<p><a href="' . $link . '">Görüntüle / İndir</a></p>'
       ) ?></content:encoded>
@@ -416,7 +394,7 @@ class NotesController extends Controller {
 </rss>
 <?php
         } catch (\PDOException $e) {
-            throw new \Exception("Notlar RSS Hatası: " . $e->getMessage());
+            throw new \Exception("Notlar RSS Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 

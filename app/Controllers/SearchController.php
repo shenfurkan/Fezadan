@@ -6,7 +6,12 @@ class SearchController extends Controller
     {
         header('Content-Type: application/json; charset=utf-8');
 
-        $query = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+        $query = is_string($_GET['q'] ?? null) ? trim($_GET['q']) : '';
+        if (mb_strlen($query, 'UTF-8') > 200) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Arama metni çok uzun.']);
+            exit;
+        }
         if ($query === '' || mb_strlen($query, 'UTF-8') < 2) {
             echo json_encode([]);
             exit;
@@ -14,24 +19,24 @@ class SearchController extends Controller
 
         try {
             $pdo = Db::pdo();
-            
-            // Başlıkta LIKE ile ara, yedek olarak FULLTEXT kullan
+
+            // Search using LIKE on title and FULLTEXT as fallback
             $searchTerm = "%" . $query . "%";
             $lang = App::getLang();
             $sql = "SELECT a.id, a.title, a.slug, a.image_url, a.short_desc, a.lang, au.slug AS author_slug
                     FROM articles a
                     LEFT JOIN authors au ON a.author_id = au.id
-                    WHERE a.status = 'published' 
+                    WHERE " . ArticleQueries::PUBLISHED . "
                       AND a.lang = :lang
-                      AND (a.title LIKE :term OR MATCH(a.title, a.content) AGAINST(:query IN BOOLEAN MODE))
-                    ORDER BY a.reads DESC 
+                      AND (a.title LIKE :term OR MATCH(a.title, a.content) AGAINST(:query IN NATURAL LANGUAGE MODE))
+                    ORDER BY a.created_at DESC, a.id DESC
                     LIMIT 5";
-                    
+
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
                 ':lang' => $lang,
                 ':term' => $searchTerm,
-                ':query' => $query . '*'
+                ':query' => $query
             ]);
             $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
@@ -41,19 +46,20 @@ class SearchController extends Controller
             foreach ($results as $item) {
                 $formatted[] = [
                     'id' => $item['id'],
-                    'title' => htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8'),
+                    'title' => $item['title'],
                     'slug' => $item['slug'],
-                    'url' => articleUrl($item['author_slug'] ?? 'yazar', $item['slug'], strtolower($item['lang'] ?? $lang)),
+                    'url' => articleUrl($item['slug'], $item['lang'] ?? $lang),
                     'image' => $item['image_url'] ? Upload::assetUrl($item['image_url']) : null,
-                    'desc' => htmlspecialchars(mb_substr(strip_tags($item['short_desc']), 0, 80, 'UTF-8'), ENT_QUOTES, 'UTF-8') . '...'
+                    'desc' => mb_substr(strip_tags((string)($item['short_desc'] ?? '')), 0, 80, 'UTF-8') . '...'
                 ];
             }
 
             echo json_encode($formatted, JSON_UNESCAPED_UNICODE);
             exit;
         } catch (\Exception $e) {
+            error_log('Search autocomplete failed: ' . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['error' => $e->getMessage()]);
+            echo json_encode(['error' => 'Arama şu anda kullanılamıyor.']);
             exit;
         }
     }

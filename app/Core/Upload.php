@@ -36,13 +36,13 @@ class Upload
         }
         if (empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) return 'Geçici dosya doğrulanamadı.';
         if (($file['size'] ?? 0) <= 0) return 'Dosya boş görünüyor.';
-        if (($file['size'] ?? 0) > $maxBytes) return 'Dosya çok büyük. Maksimum limit: ' . round($maxBytes / 1048576) . 'MB.';
+        if ($file['size'] > $maxBytes) return 'Dosya çok büyük. Maksimum limit: ' . round($maxBytes / 1048576) . 'MB.';
 
         $ext = strtolower(pathinfo($file['name'] ?? '', PATHINFO_EXTENSION));
         if (!isset(self::$allowed[$ext])) return 'Desteklenmeyen dosya tipi. İzin verilenler: jpg, jpeg, png, webp, gif.';
 
         $info = @getimagesize($file['tmp_name']);
-        if (!$info || !isset($info['mime'])) return 'Dosya gerçek bir görsel olarak okunamadı.';
+        if (!$info) return 'Dosya gerçek bir görsel olarak okunamadı.';
         if ($info['mime'] !== self::$allowed[$ext] && !($info['mime'] === 'image/jpeg' && in_array($ext, ['jpg', 'jpeg'], true))) {
             return 'Dosya uzantısı ile gerçek tipi uyuşmuyor. Algılanan tip: ' . $info['mime'];
         }
@@ -87,7 +87,7 @@ class Upload
         if (!isset(self::$allowed[$ext])) return null;
 
         $info = @getimagesize($file['tmp_name']);
-        if (!$info || !isset($info['mime'])) return null;
+        if (!$info) return null;
         if ($info['mime'] !== self::$allowed[$ext]) {
             // Bazı kameralarda jpg/jpeg uyuşmazlığı tolere edilsin
             if (!($info['mime'] === 'image/jpeg' && in_array($ext, ['jpg', 'jpeg'], true))) {
@@ -111,7 +111,7 @@ class Upload
             return $newName;
         }
 
-        // Yedek: doğrulanmış dosyayı taşı
+        // Fallback: doğrulanmış dosyayı taşı
         if (move_uploaded_file($file['tmp_name'], $destPath)) {
             return $newName;
         }
@@ -128,7 +128,7 @@ class Upload
             $iw = new \Imagick($sourcePath);
             $iw->setIteratorIndex(0);
 
-            // Genişlik veya yükseklik 1920px'i aşarsa otomatik yeniden boyutlandır
+            // Auto-resize if width or height exceeds 1920px
             $width = $iw->getImageWidth();
             $height = $iw->getImageHeight();
             if ($width > 1920 || $height > 1920) {
@@ -194,7 +194,7 @@ class Upload
             return false;
         }
 
-        // Genişlik veya yükseklik 1920px'i aşarsa otomatik yeniden boyutlandır
+        // Auto-resize if width or height exceeds 1920px
         $width = imagesx($im);
         $height = imagesy($im);
         if ($width > 1920 || $height > 1920) {
@@ -335,7 +335,7 @@ class Upload
         }
         self::$lastMeta['timings_ms']['webp'] = self::elapsedMs($webpStarted);
         self::$lastMeta['webp_bytes'] = is_file($webpUploadPath) ? (int)filesize($webpUploadPath) : 0;
-        error_log('[Upload][CP] webp_prepare_done ready=' . ($webpReady ? 'yes' : 'no') . ' bytes=' . self::$lastMeta['webp_bytes'] . ' method=' . (self::$lastMeta['webp_method'] ?? 'unknown'));
+        error_log('[Upload][CP] webp_prepare_done ready=' . ($webpReady ? 'yes' : 'no') . ' bytes=' . self::$lastMeta['webp_bytes'] . ' method=' . self::$lastMeta['webp_method']);
 
         // WebP dönüştürme başarısızsa orijinal formatı kullan (Apache/cPanel GD kısıtı)
         if (!$webpReady || !is_file($webpUploadPath)) {
@@ -363,14 +363,23 @@ class Upload
             require_once ROOT . '/app/Core/R2Storage.php';
             $r2 = \App\Core\R2Storage::instance();
             $r2Started = microtime(true);
-            error_log('[Upload][CP] r2_upload_start key=' . $objectKey . ' mime=' . ($uploadMime ?? 'image/webp'));
-            $uploaded = $r2->uploadFile($webpUploadPath, $objectKey, $uploadMime ?? 'image/webp');
+            error_log('[Upload][CP] r2_upload_start key=' . $objectKey . ' mime=' . $uploadMime);
+            $uploaded = $r2->uploadFile($webpUploadPath, $objectKey, $uploadMime);
             self::$lastMeta['timings_ms']['r2_upload'] = self::elapsedMs($r2Started);
             if (!$uploaded) {
+                // Local fallback for testing without R2
+                $localPath = ROOT . '/public_html/uploads/' . $objectKey;
+                @mkdir(dirname($localPath), 0755, true);
+                if (@copy($webpUploadPath, $localPath)) {
+                    self::cleanupTempUpload($tmpDir);
+                    self::$lastMeta['stage'] = 'done_local_fallback';
+                    self::$lastMeta['stored_path'] = '/uploads/' . $objectKey;
+                    return '/uploads/' . $objectKey;
+                }
                 self::$lastMeta['r2_last_error'] = $r2->getLastAwsError();
                 self::$lastMeta['stage'] = 'r2_upload';
                 self::$lastMeta['total_ms'] = self::elapsedMs($totalStarted);
-                self::setLastError('R2 uploadFile false döndü. Bucket, endpoint, erişim anahtarları veya yetkiler kontrol edilmeli.');
+                self::setLastError('R2 uploadFile false döndü ve yerel kaydetme başarısız oldu.');
                 error_log('[Upload][CP] r2_upload_done path=NULL last_error=' . self::$lastError . ' aws=' . json_encode(self::$lastMeta['r2_last_error'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
                 self::cleanupTempUpload($tmpDir);
                 return null;
@@ -383,6 +392,14 @@ class Upload
             error_log('[Upload][CP] r2_upload_done path=/' . $objectKey . ' ms=' . self::$lastMeta['timings_ms']['r2_upload']);
             return '/' . $objectKey;
         } catch (\Throwable $e) {
+            $localPath = ROOT . '/public_html/uploads/' . $objectKey;
+            @mkdir(dirname($localPath), 0755, true);
+            if (is_file($webpUploadPath) && @copy($webpUploadPath, $localPath)) {
+                self::cleanupTempUpload($tmpDir);
+                self::$lastMeta['stage'] = 'done_local_fallback';
+                self::$lastMeta['stored_path'] = '/uploads/' . $objectKey;
+                return '/uploads/' . $objectKey;
+            }
             self::$lastMeta['stage'] = 'r2_exception';
             self::$lastMeta['total_ms'] = self::elapsedMs($totalStarted);
             self::setLastError('R2 yükleme istisnası: ' . $e->getMessage());
@@ -464,7 +481,7 @@ class Upload
                 return (bool)$ok;
             } catch (\Throwable $e) {
                 error_log('[Upload][CP] imagick_webp_failed class=' . get_class($e) . ' message=' . $e->getMessage());
-                // GD yedeği aşağıda
+                // GD fallback below
             }
         }
 
@@ -533,7 +550,7 @@ class Upload
         }
 
         foreach (array_unique($candidates) as $candidate) {
-            if ($candidate !== '' && is_file($candidate)) {
+            if (is_file($candidate)) {
                 return $candidate;
             }
         }
@@ -610,7 +627,7 @@ class Upload
         if (strpos($path, '//') === 0) return 'https:' . $path;
 
         $rel = '/' . ltrim($path, '/');
-        
+
         // Eğer relative path ve /uploads/ ise ve CDN varsa, CDN kullan
         if (strpos($rel, '/uploads/') === 0 && $cdnBase !== '') {
             return $cdnBase . $rel;
@@ -682,7 +699,7 @@ class Upload
         return null;
     }
 
-    public static function saveOriginalImageToR2(array $file, string $folder = 'portfolio', string $prefix = 'port_', int $maxBytes = 20971520, string $slugBase = ''): ?string
+    public static function saveOriginalImageToR2(array $file, string $folder = 'portfolio', string $prefix = 'port_', int $maxBytes = 104857600, string $slugBase = ''): ?string
     {
         $totalStarted = microtime(true);
         self::setLastError('');
@@ -703,7 +720,7 @@ class Upload
 
         $ext = strtolower(pathinfo($file['name'] ?? '', PATHINFO_EXTENSION));
         $info = @getimagesize($file['tmp_name']);
-        if (!$info || !isset($info['mime'])) {
+        if (!$info) {
             self::setLastError('Görsel okunamadı.');
             return null;
         }
@@ -735,7 +752,7 @@ class Upload
         $seed = trim($slugBase) !== ''
             ? $slugBase
             : (string)pathinfo((string)($file['name'] ?? ''), PATHINFO_FILENAME);
-        
+
         $baseName = self::slugify($seed);
         if ($baseName === '') {
             $baseName = 'portfolio';
@@ -744,11 +761,13 @@ class Upload
         $newName = $baseName . '-' . $suffix . '.' . $ext;
         $destPath = $tmpDir . DIRECTORY_SEPARATOR . $newName;
 
-        $saved = self::reencodeWithImagick($file['tmp_name'], $destPath, $ext);
-        if (!$saved) {
-            $saved = self::reencodeWithGd($file['tmp_name'], $destPath, $ext);
-        }
-        if (!$saved && !move_uploaded_file($file['tmp_name'], $destPath)) {
+        // Portfolio uploads: preserve original file as-is (no resize, no ICC strip).
+        // Security: imageUploadError() + getimagesize() validation already ran above.
+        // R2 serves files with correct Content-Type; PHP is never executed server-side.
+        $isMoved = is_uploaded_file($file['tmp_name'])
+            ? move_uploaded_file($file['tmp_name'], $destPath)
+            : @copy($file['tmp_name'], $destPath); // testing / non-upload contexts
+        if (!$isMoved) {
             self::setLastError('Dosya işlenemedi.');
             self::cleanupTempUpload($tmpDir);
             return null;

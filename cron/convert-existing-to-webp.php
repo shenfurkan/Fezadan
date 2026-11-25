@@ -116,7 +116,7 @@ foreach ($rii as $file) {
         echo "  ✓ " . basename($webp) . "  (" . round($saved / 1024) . " KB tasarruf)\n";
     } catch (Throwable $e) {
         $stats['failed']++;
-        fwrite(STDERR, "  ✗ " . $src . " — " . $e->getMessage() . "\n");
+        fwrite(STDERR, "  ✗ " . $src . " / " . $e->getMessage() . "\n");
     }
 }
 

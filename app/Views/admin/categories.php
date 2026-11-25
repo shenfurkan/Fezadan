@@ -22,26 +22,23 @@
         .nav-item.active { background: var(--text-main); color: var(--bg-paper); }
         .brutalist-input { width: 100%; background: transparent; border-bottom: 2px solid var(--line-color); padding: 12px; font-family: 'JetBrains Mono', monospace; outline: none; transition: 0.3s; }
         .brutalist-input:focus { background: rgba(109,35,35,0.05); }
-        
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; border-left: 1px dashed rgba(109,35,35,0.2); }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(109,35,35,0.5); border-radius: 0px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(109,35,35,1); }
+
+
     </style>
 </head>
 <body class="flex h-screen w-full overflow-hidden relative">
 
     <div class="grid-bg fixed inset-0 z-0"></div>
-    
+
     <?php include __DIR__ . '/_side_panel.php'; ?>
 
     <div class="flex flex-col md:flex-row gap-12 h-full pb-6">
-            
+
             <div class="w-full md:w-1/3">
                 <h3 class="font-syne text-xl font-bold uppercase mb-6 flex items-center gap-2">
                     <span class="w-3 h-3 bg-[#6D2323]"></span> YENİ KATEGORİ
                 </h3>
-                
+
                 <form action="/yonetim/store-category" method="POST" class="border-2 border-[var(--text-main)] p-6 shadow-[8px_8px_0px_#A31D1D] bg-[var(--bg-paper)]">
                     <?= Csrf::field() ?>
                     <div class="mb-6">
@@ -51,7 +48,7 @@
                     <button type="submit" class="w-full py-4 bg-[#6D2323] text-[#FEF9E1] font-bold uppercase hover:bg-black transition-all">
                         KAYDET [+]
                     </button>
-                    
+
                     <?php if(isset($_GET['status'])): ?>
                         <div class="mt-4 text-xs font-mono text-center">
                             <?php if($_GET['status'] == 'error') echo '<span class="text-red-600 font-bold tracking-wider">⚠ BU KATEGORİ ZATEN VAR</span>'; ?>

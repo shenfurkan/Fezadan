@@ -1,3 +1,4 @@
+// @ts-check
 (function (window, document) {
     'use strict';
 
@@ -190,7 +191,7 @@
     });
 
     document.addEventListener('submit', function (e) {
-        var form = e.target.closest('form');
+        var form = /** @type {Element} */ (e.target).closest('form');
         if (!form) return;
         var msg = form.getAttribute('data-confirm');
         if (!msg) return;

@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
         var storageKey = 'fezadan-reader-size';
         var allowedSizes = ['small', 'medium', 'large'];
@@ -226,13 +227,14 @@
             updateTrack(tocMobileItems, tocMobileProgress);
         }
 
-        function openMobileDrawer() {
+        // let, not a declaration: the TOC code below wraps it.
+        let openMobileDrawer = function () {
             if (mobileDrawer) mobileDrawer.classList.add('toc-drawer-open');
             if (mobileOverlay) mobileOverlay.classList.add('toc-drawer-open');
             document.documentElement.style.overflow = 'hidden';
             document.body.style.overflow = 'hidden';
             setTimeout(updateProgressLine, 50);
-        }
+        };
 
         function closeMobileDrawer() {
             if (mobileDrawer) mobileDrawer.classList.remove('toc-drawer-open');
@@ -371,15 +373,15 @@
             recalcHeadingTops();
 
             if (headings.length === 0 && scrollTopBtn) {
-                var tocIcon = scrollTopBtn.querySelector('.toc-toggle-icon');
-                var scrollIcon = scrollTopBtn.querySelector('.scroll-top-icon');
+                var tocIcon = /** @type {HTMLElement} */ (scrollTopBtn.querySelector('.toc-toggle-icon'));
+                var scrollIcon = /** @type {HTMLElement} */ (scrollTopBtn.querySelector('.scroll-top-icon'));
                 if (tocIcon) tocIcon.style.display = 'none';
                 if (scrollIcon) scrollIcon.style.display = 'block';
                 scrollTopBtn.setAttribute('data-no-toc', 'true');
             }
 
             requestAnimationFrame(function () {
-                var desktopTrack = document.querySelector('.toc-track');
+                var desktopTrack = /** @type {HTMLElement} */ (document.querySelector('.toc-track'));
                 if (desktopTrack && tocItems.length > 0 && tocList) {
                     var firstItem = tocItems[0];
                     var startTop = firstItem.offsetTop + firstItem.offsetHeight / 2;
@@ -396,7 +398,7 @@
                     desktopTrack.style.height = Math.max(0, endTop - startTop - offset) + 'px';
                 }
 
-                var mobileTrack = document.querySelector('.toc-mobile-track');
+                var mobileTrack = /** @type {HTMLElement} */ (document.querySelector('.toc-mobile-track'));
                 if (mobileTrack && tocMobileItems.length > 0 && tocMobileList) {
                     var origOpen = openMobileDrawer;
                     openMobileDrawer = function () {
@@ -453,8 +455,8 @@
             copyBtn.addEventListener('click', function() {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(shareUrl).then(function() {
-                        var ci = copyBtn.querySelector('.copy-icon');
-                        var ck = copyBtn.querySelector('.check-icon');
+                        var ci = /** @type {HTMLElement} */ (copyBtn.querySelector('.copy-icon'));
+                        var ck = /** @type {HTMLElement} */ (copyBtn.querySelector('.check-icon'));
                         if (ci) ci.style.display = 'none';
                         if (ck) ck.style.display = '';
                         setTimeout(function() {
@@ -474,69 +476,4 @@
                 }
             });
         }
-    })();
-
-
-
-    (function() {
-        const articleId = (window.FezadanArticleData ? window.FezadanArticleData.articleId : 0);
-        let maxScroll = 0;
-        let secondsSpent = 0;
-        let timer = null;
-        const reportedMilestones = new Set();
-
-        timer = setInterval(() => {
-            secondsSpent++;
-            if (secondsSpent % 15 === 0) {
-                sendAnalytics();
-            }
-        }, 1000);
-
-        function getScrollPercent() {
-            const scrollMax = docScrollHeight - docClientHeight;
-            if (scrollMax <= 0) return 0;
-            const scrollY = window.scrollY || document.documentElement.scrollTop;
-            return (scrollY / scrollMax) * 100;
-        }
-
-        window.addEventListener('scroll', function() {
-            const pct = getScrollPercent();
-            let currentMilestone = 0;
-            if (pct >= 95) currentMilestone = 100;
-            else if (pct >= 75) currentMilestone = 75;
-            else if (pct >= 50) currentMilestone = 50;
-            else if (pct >= 25) currentMilestone = 25;
-
-            if (currentMilestone > maxScroll) {
-                maxScroll = currentMilestone;
-                if (!reportedMilestones.has(currentMilestone)) {
-                    reportedMilestones.add(currentMilestone);
-                    sendAnalytics();
-                }
-            }
-        }, { passive: true });
-
-        function sendAnalytics(isSync = false) {
-            const url = '/tr/analytics/track';
-            const formData = new FormData();
-            formData.append('article_id', articleId);
-            formData.append('scroll_depth', maxScroll);
-            formData.append('seconds_spent', secondsSpent);
-
-            if (isSync && typeof navigator.sendBeacon === 'function') {
-                navigator.sendBeacon(url, formData);
-            } else {
-                fetch(url, {
-                    method: 'POST',
-                    body: formData,
-                    keepalive: true
-                }).catch(() => {});
-            }
-        }
-
-        document.addEventListener('visibilitychange', function() {
-            if (document.visibilityState === 'hidden') {
-                sendAnalytics(true);
-            }
-        });
     })();

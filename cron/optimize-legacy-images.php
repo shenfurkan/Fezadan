@@ -1,10 +1,10 @@
 <?php
 /**
- * Tek seferlik taşıma: Eski kapak görsellerini (.jpg, .jpeg, .png) R2'den indir,
- * maksimum 1920px'e yeniden boyutlandır, WebP formatına çevir, R2'ye
- * /uploads/covers/ altına geri yükle ve articles tablosunu güncelle.
+ * One-off migration: Download legacy cover images (.jpg, .jpeg, .png) from R2,
+ * resize to max 1920px, convert to WebP format, upload back to R2 under
+ * /uploads/covers/, and update the articles table.
  *
- * Kullanım:
+ * Usage:
  *   php cron/optimize-legacy-images.php
  */
 
@@ -32,7 +32,7 @@ try {
     $pdo = Db::pdo();
     $r2 = R2Storage::instance();
 
-    // R2Storage'dan private client ve bucket özelliklerini almak için Reflection
+    // Reflection to get private client and bucket properties from R2Storage
     $ref = new ReflectionClass($r2);
     $clientProp = $ref->getProperty('client');
     $clientProp->setAccessible(true);
@@ -42,12 +42,12 @@ try {
     $bucketProp->setAccessible(true);
     $bucket = $bucketProp->getValue($r2);
 
-    // Eski kapak görselli (.jpg, .jpeg, .png) tüm makaleleri al
+    // Get all articles with legacy cover images (.jpg, .jpeg, .png)
     $stmt = $pdo->query("
-        SELECT id, title, slug, image_url 
-        FROM articles 
-        WHERE image_url IS NOT NULL 
-          AND image_url <> '' 
+        SELECT id, title, slug, image_url
+        FROM articles
+        WHERE image_url IS NOT NULL
+          AND image_url <> ''
           AND (image_url LIKE '%.jpg' OR image_url LIKE '%.jpeg' OR image_url LIKE '%.png')
     ");
     $articles = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -76,15 +76,15 @@ try {
         echo "İşleniyor: [ID: $id] \"$title\"\n";
         echo "  Mevcut URL: $oldUrl\n";
 
-        // R2 için temiz nesne anahtarını çıkar (varsa baştaki slash'i kaldır)
+        // Extract clean object key for R2 (strip starting slash if present)
         $oldKey = ltrim(parse_url($oldUrl, PHP_URL_PATH), '/');
 
-        // Hedef yollar
+        // Target paths
         $localOriginal = $tempDir . '/' . basename($oldKey);
         $localWebp = $tempDir . '/' . $slug . '-' . substr(bin2hex(random_bytes(4)), 0, 8) . '.webp';
 
         try {
-            // 1. R2'den dosyayı indir
+            // 1. Download file from R2
             echo "  R2'den indiriliyor: $oldKey\n";
             $obj = $client->getObject([
                 'Bucket' => $bucket,
@@ -96,7 +96,7 @@ try {
                 throw new RuntimeException("Görsel indirilemedi veya boş.");
             }
 
-            // 2. GD ile görseli yükle ve yeniden boyutlandır (Imagick yoksa yedek)
+            // 2. Load and resize image using GD (fallback if Imagick is unavailable)
             echo "  Boyutlandırılıyor ve WebP formatına dönüştürülüyor...\n";
             $raw = file_get_contents($localOriginal);
             $im = imagecreatefromstring($raw);
@@ -129,11 +129,11 @@ try {
                 echo "    Boyut 1920px'den küçük, yeniden boyutlandırma atlandı.\n";
             }
 
-            // 3. WebP olarak kaydet
+            // 3. Save as WebP
             imagepalettetotruecolor($im);
             imagealphablending($im, true);
             imagesavealpha($im, true);
-            
+
             $converted = imagewebp($im, $localWebp, 82);
             imagedestroy($im);
 
@@ -142,7 +142,7 @@ try {
             }
             echo "    Yeni WebP Boyutu: " . round(filesize($localWebp) / 1024) . " KB\n";
 
-            // 4. WebP'i R2'ye geri yükle
+            // 4. Upload WebP back to R2
             $newKey = 'uploads/covers/' . basename($localWebp);
             echo "  R2'ye yükleniyor: $newKey\n";
             $uploaded = $r2->uploadFile($localWebp, $newKey, 'image/webp');
@@ -150,14 +150,14 @@ try {
                 throw new RuntimeException("R2 yükleme başarısız.");
             }
 
-            // 5. Veritabanını transaction içinde güncelle
+            // 5. Update Database within transaction
             echo "  Veritabanı güncelleniyor...\n";
             $pdo->beginTransaction();
             $upStmt = $pdo->prepare("UPDATE articles SET image_url = ? WHERE id = ?");
             $upStmt->execute(['/' . $newKey, $id]);
             $pdo->commit();
 
-            // 6. Alan kazanmak için eski dosyayı R2'den sil
+            // 6. Delete old file from R2 to save space (keep database clean)
             echo "  Eski görsel R2'den siliniyor: $oldKey\n";
             $r2->deleteFile($oldKey);
 
@@ -171,13 +171,13 @@ try {
             fwrite(STDERR, "  ✗ HATA (ID $id): " . $artEx->getMessage() . "\n\n");
             $failCount++;
         } finally {
-            // Geçici dosyaları temizle
+            // Cleanup temp files
             if (is_file($localOriginal)) @unlink($localOriginal);
             if (is_file($localWebp)) @unlink($localWebp);
         }
     }
 
-    // Geçici klasörü sil
+    // Delete temp folder
     @rmdir($tempDir);
 
     echo "--- ÖZET ---\n";

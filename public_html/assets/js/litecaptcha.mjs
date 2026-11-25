@@ -339,7 +339,7 @@ export class LiteCaptchaWidget {
             const label  = data.label || (escCount + '/' + this.requiredEscapes);
             const detail = escCount >= this.requiredEscapes
                 ? 'Final step: tap the button to complete verification.'
-                : 'Keep chasing the button — tap or swipe near it.';
+                : 'Keep chasing the button: tap or swipe near it.';
             this.setStatus(label, detail, 'is-active');
             if (escCount >= this.requiredEscapes && this.catchBtn) {
                 this.catchBtn.textContent = 'Verify ✓';

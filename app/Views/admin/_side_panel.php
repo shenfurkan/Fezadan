@@ -3,9 +3,6 @@
 $current_uri = $_SERVER['REQUEST_URI'];
 
 $page_title = "PANEL";
-$system_status = "";
-$status_color = "";
-$blink = "";
 
 if (strpos($current_uri, '/yonetim/create-patch') !== false) {
     $page_title = "NOT DEGISIKLIGI";
@@ -21,6 +18,8 @@ if (strpos($current_uri, '/yonetim/create-patch') !== false) {
     $page_title = "KAYITLAR";
 } elseif (strpos($current_uri, '/yonetim/admins') !== false) {
     $page_title = "KULLANICILAR";
+} elseif (strpos($current_uri, '/yonetim/mail-invitations') !== false) {
+    $page_title = "POSTA DAVETLERİ";
 } elseif (strpos($current_uri, '/yonetim/profile') !== false) {
     $page_title = "PROFIL";
 } elseif (strpos($current_uri, '/yonetim/edit') !== false) {
@@ -45,6 +44,7 @@ if (strpos($current_uri, '/yonetim/create-patch') !== false) {
 <style>
     /* Admin Paneli Karanlık Tema Renk Değişkenleri */
     [data-theme="dark"] {
+        color-scheme: dark;
         --bg-paper: #120A0A;
         --bg-secondary: #1F1212;
         --text-main: #E1C89E;
@@ -104,6 +104,27 @@ if (strpos($current_uri, '/yonetim/create-patch') !== false) {
 
     [data-theme="dark"] .sun-icon { opacity: 0.3; }
     [data-theme="dark"] .moon-icon { opacity: 1; }
+
+    /* Keep these areas scrollable without a browser-default gutter. */
+    .sidebar-scrollbar,
+    .admin-content-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+    .sidebar-scrollbar::-webkit-scrollbar,
+    .admin-content-scrollbar::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+    }
+
+    .custom-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(109,35,35,0.5) transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; border-left: 1px dashed rgba(109,35,35,0.2); }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(109,35,35,0.5); border-radius: 0; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(109,35,35,1); }
 </style>
 
 <aside class="w-20 md:w-72 bg-[var(--bg-paper)] border-r-2 border-[var(--text-main)] flex flex-col z-20 flex-shrink-0 transition-all duration-300 h-screen">
@@ -115,8 +136,8 @@ if (strpos($current_uri, '/yonetim/create-patch') !== false) {
         <div class="md:hidden font-syne text-2xl font-bold text-[var(--text-main)]">FZD</div>
     </div>
 
-    <nav class="flex-1 overflow-y-auto py-8 flex flex-col gap-2">
-        <?php $adminRole = $_SESSION['admin_role'] ?? 'superadmin'; ?>
+    <nav class="flex-1 overflow-y-auto py-8 flex flex-col gap-2 sidebar-scrollbar">
+        <?php $adminRole = $_SESSION['admin_role'] ?? 'viewer'; ?>
         <a href="/yonetim/dashboard" class="nav-item <?php echo strpos($current_uri, '/yonetim/dashboard') !== false ? 'active' : ''; ?> py-4 px-8 font-bold uppercase tracking-widest text-sm flex items-center gap-3">
             <svg class="w-5 h-5 flex-shrink-0" viewBox="0 -960 960 960" aria-hidden="true"><path fill="currentColor" d="M520-600v-240h320v240H520ZM120-440v-400h320v400H120Zm400 320v-400h320v400H520Zm-400 0v-240h320v240H120Zm80-400h160v-240H200v240Zm400 320h160v-240H600v240Zm0-480h160v-80H600v80ZM200-200h160v-80H200v80Zm160-320Zm240-160Zm0 240ZM360-280Z"/></svg>
             <span class="hidden md:inline">Genel Bakış</span>
@@ -144,15 +165,19 @@ if (strpos($current_uri, '/yonetim/create-patch') !== false) {
         <?php if ($adminRole === 'superadmin'): ?>
         <a href="/yonetim/portfolio" class="nav-item <?php echo strpos($current_uri, '/yonetim/portfolio') !== false ? 'active' : ''; ?> py-4 px-8 font-bold uppercase tracking-widest text-sm flex items-center gap-3">
             <svg class="w-5 h-5 flex-shrink-0" viewBox="0 -960 960 960" aria-hidden="true"><path fill="currentColor" d="M360-400h400L622-580l-92 120-62-80-108 140Zm-40 160q-33 0-56.5-23.5T240-320v-480q0-33 23.5-56.5T320-880h480q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H320Zm0-80h480v-480H320v480ZM160-80q-33 0-56.5-23.5T80-160v-560h80v560h560v80H160Zm160-720v480-480Z"/></svg>
-            <span class="hidden md:inline">Portfolyo</span>
+            <span class="hidden md:inline">Fotoğraf Albümü</span>
         </a>
         <?php endif; ?>
         <?php endif; ?>
+        <?php if ($adminRole === 'superadmin'): ?>
+        <a href="/yonetim/mail-invitations" aria-label="Posta davetleri" class="nav-item <?php echo strpos($current_uri, '/yonetim/mail-invitations') !== false ? 'active' : ''; ?> py-4 px-8 font-bold uppercase tracking-widest text-sm flex items-center gap-3">
+            <svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 5h18v14H3zM3 5l9 7 9-7" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            <span class="hidden md:inline">Posta davetleri</span>
+        </a>
         <a href="/yonetim/logs" class="nav-item <?php echo strpos($current_uri, '/yonetim/logs') !== false ? 'active' : ''; ?> py-4 px-8 font-bold uppercase tracking-widest text-sm flex items-center gap-3">
             <svg class="w-5 h-5 flex-shrink-0" viewBox="0 -960 960 960" aria-hidden="true"><path fill="currentColor" d="M480-200q66 0 113-47t47-113v-160q0-66-47-113t-113-47q-66 0-113 47t-47 113v160q0 66 47 113t113 47Zm-80-120h160v-80H400v80Zm0-160h160v-80H400v80Zm80 40Zm0 320q-65 0-120.5-32T272-240H160v-80h84q-3-20-3.5-40t-.5-40h-80v-80h80q0-20 .5-40t3.5-40h-84v-80h112q27-56 82.5-88T480-680q65 0 120.5 32T683-560h117v80h-84q3 20 3.5 40t.5 40h80v80h-80q0 20-.5 40t-3.5 40h84v80H688q-27 56-82.5 88T480-120Z"/></svg>
             <span class="hidden md:inline">Hata Kayıtları</span>
         </a>
-        <?php if ($adminRole === 'superadmin'): ?>
         <a href="/yonetim/admins" class="nav-item <?php echo strpos($current_uri, '/yonetim/admins') !== false ? 'active' : ''; ?> py-4 px-8 font-bold uppercase tracking-widest text-sm flex items-center gap-3">
             <svg class="w-5 h-5 flex-shrink-0" viewBox="0 -960 960 960" aria-hidden="true"><path fill="currentColor" d="M287-527q-47-47-47-113t47-113q47-47 113-47t113 47q47 47 47 113t-47 113q-47 47-113 47t-113-47ZM80-160v-112q0-33 17-62t47-44q51-26 115-44t141-18h14q6 0 12 2-8 18-13.5 37.5T404-360h-4q-71 0-127.5 18T180-306q-9 5-14.5 14t-5.5 20v32h252q6 21 16 41.5t22 38.5H80Zm560 40-12-60q-12-5-22.5-10.5T584-204l-58 18-40-68 46-40q-2-14-2-26t2-26l-46-40 40-68 58 18q11-8 21.5-13.5T628-460l12-60h80l12 60q12 5 22.5 10.5T776-436l58-18 40 68-46 40q2 14 2 26t-2 26l46 40-40 68-58-18q-11 8-21.5 13.5T732-180l-12 60h-80Zm40-120q33 0 56.5-23.5T760-320q0-33-23.5-56.5T680-400q-33 0-56.5 23.5T600-320q0 33 23.5 56.5T680-240ZM400-640q0 33 23.5 56.5T480-560q33 0 56.5-23.5T560-640q0-33-23.5-56.5T480-720q-33 0-56.5 23.5T400-640Zm80 80Zm-8 320Z"/></svg>
             <span class="hidden md:inline">Kullanıcılar</span>
@@ -175,18 +200,12 @@ if (strpos($current_uri, '/yonetim/create-patch') !== false) {
 </aside>
 
 <main class="flex-1 flex flex-col relative z-10 overflow-hidden h-screen">
-    
+
     <header class="h-24 border-b-2 border-[var(--text-main)] bg-[var(--bg-paper)]/90 backdrop-blur-sm flex justify-between items-center px-6 md:px-12 flex-shrink-0 z-20 transition-colors">
         <div>
             <h2 class="font-syne text-xl md:text-3xl font-bold uppercase text-[var(--text-main)]"><?php echo $page_title; ?></h2>
-            <?php if ($system_status !== ''): ?>
-            <div class="flex items-center gap-2 text-xs font-mono text-[var(--text-accent)] mt-1">
-                <span class="w-2 h-2 <?php echo $status_color; ?> rounded-full <?php echo $blink; ?>"></span>
-                <?php echo $system_status; ?>
-            </div>
-            <?php endif; ?>
         </div>
-        
+
         <div class="flex items-center gap-6 md:gap-10">
             <div class="theme-switch-wrapper group" role="button" tabindex="0" aria-label="Tema Değiştir">
                 <svg class="theme-icon sun-icon opacity-50 group-hover:opacity-100 transition-opacity" fill="none"
@@ -217,7 +236,7 @@ if (strpos($current_uri, '/yonetim/create-patch') !== false) {
                     btn.click();
                 }
             });
-            
+
             btn.addEventListener('click', () => {
                 const currentTheme = document.documentElement.getAttribute('data-theme');
                 const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
@@ -228,5 +247,5 @@ if (strpos($current_uri, '/yonetim/create-patch') !== false) {
         });
     </script>
 
-    <div class="flex-1 overflow-y-auto p-6 md:p-12 relative">
+    <div class="admin-content-scrollbar flex-1 overflow-y-auto p-6 md:p-12 relative">
 

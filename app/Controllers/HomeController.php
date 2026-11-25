@@ -6,28 +6,32 @@ class HomeController extends Controller {
             $pdo = Db::pdo();
             $contentLang = App::getLang();
             $articles = $this->fetchPublishedArticles($pdo, $contentLang);
+            $count = $pdo->prepare("SELECT COUNT(*) FROM articles a WHERE " . ArticleQueries::PUBLISHED . " AND a.lang = ?");
+            $count->execute([$contentLang]);
 
             $this->view('front/home', [
                 'articles' => $articles,
                 'contentLang' => $contentLang,
+                'totalArticles' => (int)$count->fetchColumn(),
             ]);
         } catch (\PDOException $e) {
-            throw new \Exception("Veritabani Hatasi: " . $e->getMessage());
+            throw new \Exception("Veritabani Hatasi: " . $e->getMessage(), 0, $e);
         }
     }
 
     private function fetchPublishedArticles(\PDO $pdo, string $lang): array {
-        $sql = "SELECT articles.*,
-                       authors.slug AS author_slug,
-                       authors.name AS author_name,
+        $sql = "SELECT a.id, a.slug, a.title, a.short_desc, a.image_url, a.created_at,
+                       au.slug AS author_slug,
+                       au.name AS author_name,
                        GROUP_CONCAT(DISTINCT CONCAT_WS('|', c.id, c.name, c.slug) SEPARATOR ';;') AS categories_raw
-                FROM articles
-                LEFT JOIN authors ON articles.author_id = authors.id
-                LEFT JOIN article_categories ac ON ac.article_id = articles.id
+                FROM articles a
+                LEFT JOIN authors au ON a.author_id = au.id
+                LEFT JOIN article_categories ac ON ac.article_id = a.id
                 LEFT JOIN categories c ON c.id = ac.category_id
-                WHERE articles.status = 'published' AND articles.lang = :lang
-                GROUP BY articles.id
-                ORDER BY articles.created_at DESC";
+                WHERE " . ArticleQueries::PUBLISHED . " AND a.lang = :lang
+                GROUP BY a.id
+                ORDER BY a.created_at DESC, a.id DESC
+                LIMIT 8";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([':lang' => $lang]);
 

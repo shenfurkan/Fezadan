@@ -16,7 +16,7 @@ Sitenin çalışmasını bir restorana benzetebiliriz:
 ### 2. SQL / Veritabanı Nedir? (Restoranın Kileri / Arşiv Odası)
 * **Rolü:** Tüm verileri düzenli, güvenli ve kalıcı bir şekilde saklamak.
 * **Nasıl Çalışır:** İçerisinde düzenli klasörler (bunlara **tablo** diyoruz, örn: `articles` makale tablosu, `admins` yönetici tablosu) bulunur. Veritabanı, kendisine teslim edilen bilgileri yıllarca hiç bozmadan saklar.
-* **İletişim Dili (SQL Sorguları):** PHP ile veritabanı konuşmak için **SQL adı verilen ortak bir dili** kullanırlar. PHP, veritabanına *"Bana şu makaleyi getir"* demek için SQL dilinde yazılmış özel cümleler gönderir. 
+* **İletişim Dili (SQL Sorguları):** PHP ile veritabanı konuşmak için **SQL adı verilen ortak bir dili** kullanırlar. PHP, veritabanına *"Bana şu makaleyi getir"* demek için SQL dilinde yazılmış özel cümleler gönderir.
   * Örn: `SELECT * FROM articles` ifadesi veritabanına *"Makaleler tablosundaki her şeyi seç ve bana getir"* komutudur.
 
 ---
@@ -29,7 +29,7 @@ Lokal geliştirme ortamında Docker çalışırken, veritabanına doğrudan gör
 * **Kullanıcı Adı:** `root`
 * **Şifre:** `root`
 
-phpMyAdmin arayüzüne girdikten sonra sol menüden `fezadano5_site` veritabanını seçerek tüm tabloları (`admins`, `articles`, `categories` vb.) inceleyebilir, elle veri ekleyebilir, silebilir veya güncelleyebilirsiniz.
+phpMyAdmin arayüzüne girdikten sonra sol menüden `fezadan_site` veritabanını seçerek tüm tabloları (`admins`, `articles`, `categories` vb.) inceleyebilir, elle veri ekleyebilir, silebilir veya güncelleyebilirsiniz.
 
 ---
 
@@ -38,14 +38,14 @@ phpMyAdmin arayüzüne girdikten sonra sol menüden `fezadano5_site` veritabanı
 Yönetim paneline şifrenizi girip "Giriş Yap" butonuna bastığınızda arka planda sırasıyla şu adımlar gerçekleşir:
 
 ### A. Şifrelerin Güvenli Saklanması (Bcrypt Algoritması)
-Veritabanında şifreler asla açık metin halinde saklanmaz. PHP'nin `password_hash()` fonksiyonu ile **Bcrypt** algoritması kullanılarak tek yönlü bir karma (özet/hash) haline getirilir. 
+Veritabanında şifreler asla açık metin halinde saklanmaz. PHP'nin `password_hash()` fonksiyonu ile **Bcrypt** algoritması kullanılarak tek yönlü bir karma (özet/hash) haline getirilir.
 * Örnek: `ornek-sifre` şifresi veritabanında `$2y$10$DXiPNKH2mkNybasO3/r.2e1Po3Z0v6q0...` şeklinde görünür.
 * **Tuzlama (Salt):** Her şifre için arka planda benzersiz ve rastgele 22 karakterli bir "tuz" (salt) üretilir. Bu sayede iki farklı kullanıcı aynı şifreyi seçse bile veritabanındaki hash'leri tamamen farklı olur.
 * **Yapay Yavaşlatma (Cost):** Şifre, matematiksel olarak binlerce kez üst üste karıştırılır (zorluk derecesi 10'dur, yani $2^{10} = 1024$ tur döndürülür). Bu, hackerların deneme-yanılma (brute-force) saldırılarını bilgisayar işlemcilerini aşırı yorarak engeller.
 
 ### Önemli Ayrıntı: Rastgele Tuz (Salt) Nasıl Geri Bulunur? (En Basit Anlatımla)
 
-Şifreniz ilk oluşturulduğunda üretilen o **rastgele tuz**, veritabanında saklanan uzun hash metninin **kendi içine gömülür**. 
+Şifreniz ilk oluşturulduğunda üretilen o **rastgele tuz**, veritabanında saklanan uzun hash metninin **kendi içine gömülür**.
 
 **Sandviç Tarifi Benzetmesi:**
 Bunu bir sandviç tarifi gibi düşünebiliriz:
@@ -64,7 +64,7 @@ Bunu bir sandviç tarifi gibi düşünebiliriz:
 
 ### B. Giriş Adımları
 1. **Deneme Sınırı Kontrolü:** PHP önce `login_attempts` tablosuna bakarak o IP adresinden son 3 saatte 3 kereden fazla hatalı giriş yapılıp yapılmadığını kontrol eder. Sınır aşıldıysa girişi engeller.
-2. **Kullanıcıyı Arama (SQL):** PHP veritabanına sorar: 
+2. **Kullanıcıyı Arama (SQL):** PHP veritabanına sorar:
    ```sql
    SELECT * FROM admins WHERE username = 'antigravity';
    ```
@@ -83,7 +83,7 @@ Bunu bir sandviç tarifi gibi düşünebiliriz:
 4. **HTML E-posta Gönderimi:** E-posta, FEZADAN renk şemasına uygun modern bir HTML formatında hazırlanarak gönderilir. Alt kısma *"Lütfen bu e-postayı yanıtlamayınız..."* uyarısı yerleştirilir.
 5. **Bağlantıya Tıklanması:** Kullanıcı gelen kutusundaki linke tıkladığında, tarayıcı uzun token parametresiyle siteye gelir. PHP veritabanına sorar:
    ```sql
-   SELECT id, admin_id FROM admin_password_resets 
+   SELECT id, admin_id FROM admin_password_resets
    WHERE token_hash = :hash AND expires_at > :php_time;
    ```
    *(Buradaki karşılaştırma tamamen PHP saati üzerinden yapıldığı için sunucu saat farklarından kaynaklı anında süre aşımı hataları yaşanmaz).*

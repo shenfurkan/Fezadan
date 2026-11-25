@@ -71,6 +71,9 @@
                         $context = $row['context'] ?? [];
                         $metaItems = [
                             'Hata kodu' => $context['request_id'] ?? '',
+                            'Konum' => $context['location'] ?? '',
+                            'İstisna' => $context['exception'] ?? '',
+                            'Atlanan tekrar' => !empty($context['repeats_skipped']) ? (string)$context['repeats_skipped'] : '',
                             'Uç nokta' => $context['endpoint'] ?? '',
                             'Import' => $context['import_id'] ?? '',
                             'Görsel sırası' => isset($context['image_index']) ? (string)$context['image_index'] : '',

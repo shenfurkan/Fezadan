@@ -4,6 +4,7 @@ class AdminLog
 {
     private const MAX_BYTES = 1048576;
     private const MAX_AGE_ROTATED = 2592000;
+    private const MAX_ROTATED_FILES = 20;
 
     public static function write(string $level, string $message, array $context = []): void
     {
@@ -29,7 +30,11 @@ class AdminLog
             'context' => self::safeContext($context),
         ];
 
-        @file_put_contents($file, json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL, FILE_APPEND | LOCK_EX);
+        $line = json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (@file_put_contents($file, $line . PHP_EOL, FILE_APPEND | LOCK_EX) === false) {
+            // An unwritable logs/ must not silently empty the admin log page.
+            error_log('[Fezadan][AdminLog unwritable] ' . $line);
+        }
     }
 
     public static function recent(int $limit = 100, array $filters = []): array
@@ -61,7 +66,9 @@ class AdminLog
             $buffer = $chunk . $buffer;
 
             $lines = explode("\n", $buffer);
-            $buffer = array_shift($lines);
+            // The first piece may be cut mid-line, so it waits for the next chunk; at the
+            // start of the file it is a whole line (it used to be dropped, hiding line 1).
+            $buffer = $pos > 0 ? array_shift($lines) : '';
 
             for ($i = count($lines) - 1; $i >= 0; $i--) {
                 $line = trim($lines[$i]);
@@ -163,8 +170,11 @@ class AdminLog
         $cutoff = time() - self::MAX_AGE_ROTATED;
         $pattern = $dir . '/admin-*.log';
 
-        foreach (glob($pattern) as $rotatedFile) {
-            if (is_file($rotatedFile) && filemtime($rotatedFile) < $cutoff) {
+        $rotated = glob($pattern) ?: [];
+        rsort($rotated); // admin-YmdHis.log: newest first
+        foreach ($rotated as $i => $rotatedFile) {
+            // Age alone doesn't bound disk use when something logs in a loop.
+            if (is_file($rotatedFile) && ($i >= self::MAX_ROTATED_FILES || filemtime($rotatedFile) < $cutoff)) {
                 @unlink($rotatedFile);
             }
         }

@@ -1,24 +1,36 @@
 <?php
+/**
+ * @var array $author
+ * @var string $contentLang
+ */
 $siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
 $authorSlug = $author['slug'] ?? '';
 $authorBio  = trim(strip_tags($author['bio'] ?? ''));
+$authorName = trim((string)($author['name'] ?? 'Yazar'));
 
 $isEn = (App::getLang() === 'EN');
-$page_title       = ($author['name'] ?? 'Yazar') . ($isEn ? ' — Author Profile | FEZADAN' : ' — Yazar Profili | FEZADAN');
-$page_description = !empty($authorBio)
+$page_title       = $authorName . ($isEn ? ' | Author Profile | FEZADAN' : ' | Yazar Profili | FEZADAN');
+$authorContext    = $isEn
+    ? ' Explore this author profile, biography, and independent articles on science, aesthetics, and critical thought.'
+    : ' FEZADAN yazar profili, biyografi ve bilim, estetik, bağımsız düşünce üzerine makaleler arşivi.';
+$page_description = mb_strlen($authorBio, 'UTF-8') >= 110
     ? mb_substr($authorBio, 0, 160)
-    : ($author['name'] ?? 'Yazar') . ($isEn ? ' — FEZADAN author profile, articles and biography.' : ' — FEZADAN yazar profili, makaleleri ve biyografisi.');
+    : mb_substr(trim($authorBio . $authorContext), 0, 160);
 $page_canonical   = authorUrl($authorSlug);
 $og_url           = $page_canonical;
 $og_type          = 'profile';
 $author_image_url = !empty($author['image_url'])
     ? Upload::assetUrl($author['image_url'])
     : '';
-$og_image = $author_image_url !== '' && !preg_match('/\.webp(\?|$)/i', $author_image_url)
+$og_image = $author_image_url !== ''
     ? $author_image_url
-    : $siteBase . '/cdn/notlar-social-preview.png';
+    : $siteBase . '/cdn/logo-light.png';
 
-// Kişi şeması
+$twitter_image = $author_image_url !== '' && !preg_match('/\.webp(\?|$)/i', $author_image_url)
+    ? $author_image_url
+    : $siteBase . '/cdn/logo-light.png';
+
+// Person schema
 $personSchema = [
     '@context' => 'https://schema.org',
     '@type'    => 'Person',
@@ -39,14 +51,14 @@ foreach (($all_articles ?? []) as $i => $a) {
     $itemList[] = [
         '@type'    => 'ListItem',
         'position' => $i + 1,
-        'url'      => articleUrl($authorSlug, $a['slug'], $contentLang),
+        'url'      => articleUrl($a['slug'], $contentLang),
         'name'     => $a['title'],
     ];
 }
 $collection = [
     '@context'  => 'https://schema.org',
     '@type'     => 'CollectionPage',
-    'name'      => $author['name'] . ' — Makaleler',
+    'name'      => $author['name'] . ' / Makaleler',
     'url'       => $page_canonical,
     'mainEntity'=> [
         '@type'           => 'ItemList',
@@ -87,10 +99,10 @@ require_once ROOT . '/app/Views/inc/header.php';
         box-shadow: 10px 10px 0px var(--text-accent);
         border-color: var(--text-accent);
     }
-    
-    .author-sidebar-card, 
-    .author-sidebar-card h1, 
-    .author-sidebar-card a, 
+
+    .author-sidebar-card,
+    .author-sidebar-card h1,
+    .author-sidebar-card a,
     .author-sidebar-card .author-bio-text {
         color: #1a1a1a !important;
     }
@@ -98,7 +110,7 @@ require_once ROOT . '/app/Views/inc/header.php';
     .author-sidebar-card a:hover {
         color: #A31D1D !important;
     }
-    
+
     .author-fixed-border {
         border-color: #6D2323 !important;
     }
@@ -107,17 +119,17 @@ require_once ROOT . '/app/Views/inc/header.php';
 <div class="texture-overlay"></div>
 
 <main id="main-content" class="relative z-10 w-full px-6 py-12 md:py-24 max-w-[1400px] mx-auto flex-grow">
-    
+
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20">
-        
+
         <aside class="lg:col-span-4 lg:sticky lg:top-32 h-fit">
-            
+
             <div class="bg-[#EAD3AD] border-2 border-[var(--line-color)] shadow-[8px_8px_0px_#6D2323] p-8 md:p-10 flex flex-col items-center text-center author-sidebar-card author-fixed-border">
-                
+
                 <div class="mb-6 mx-auto">
                     <div class="w-36 h-36 md:w-48 md:h-48 rounded-full border-2 border-[var(--line-color)] p-1 shadow-[4px_4px_0px_#6D2323] bg-[var(--bg-paper)] group author-fixed-border">
-                        <img src="<?php echo !empty($author['image_url']) ? htmlspecialchars(Upload::assetUrl($author['image_url']), ENT_QUOTES, 'UTF-8') : SITE_URL . '/assets/default-avatar.jpg'; ?>" 
-                             class="w-full h-full object-cover rounded-full grayscale group-hover:grayscale-0 transition-all duration-500" 
+                        <img src="<?php echo !empty($author['image_url']) ? htmlspecialchars(Upload::assetUrl($author['image_url']), ENT_QUOTES, 'UTF-8') : SITE_URL . '/assets/default-avatar.jpg'; ?>"
+                             class="w-full h-full object-cover rounded-full grayscale group-hover:grayscale-0 transition-all duration-500"
                              alt="<?php echo htmlspecialchars($author['name']); ?>">
                     </div>
                 </div>
@@ -132,24 +144,24 @@ require_once ROOT . '/app/Views/inc/header.php';
 
                 <?php if (!empty($author['twitter']) || !empty($author['instagram']) || !empty($author['website'])): ?>
                     <div class="flex flex-col gap-4 font-mono text-sm uppercase tracking-widest border-t border-[var(--line-color)] border-opacity-30 pt-6 w-full items-center">
-                        
+
                         <?php if (!empty($author['twitter'])): ?>
                             <a href="<?php echo htmlspecialchars($author['twitter']); ?>" target="_blank" class="flex items-center gap-3 text-[var(--text-main)] hover:text-[var(--text-accent)] transition-colors">
-                                <img src="<?php echo SITE_URL; ?>/assets/uploads/twitter.png" alt="Twitter" class="w-5 h-5 object-contain"> 
+                                <img src="<?php echo SITE_URL; ?>/assets/uploads/twitter.png" alt="Twitter" class="w-5 h-5 object-contain">
                                 Twitter (X)
                             </a>
                         <?php endif; ?>
 
                         <?php if (!empty($author['instagram'])): ?>
                             <a href="<?php echo htmlspecialchars($author['instagram']); ?>" target="_blank" class="flex items-center gap-3 text-[var(--text-main)] hover:text-[var(--text-accent)] transition-colors">
-                                <img src="<?php echo SITE_URL; ?>/assets/uploads/instagram.png" alt="Instagram" class="w-5 h-5 object-contain"> 
+                                <img src="<?php echo SITE_URL; ?>/assets/uploads/instagram.png" alt="Instagram" class="w-5 h-5 object-contain">
                                 Instagram
                             </a>
                         <?php endif; ?>
 
                         <?php if (!empty($author['website'])): ?>
                             <a href="<?php echo htmlspecialchars($author['website']); ?>" target="_blank" class="flex items-center gap-3 text-[var(--text-main)] hover:text-[var(--text-accent)] transition-colors">
-                                <span class="text-lg leading-none">🌐</span> 
+                                <span class="text-lg leading-none">🌐</span>
                                 Kişisel Websitesi
                             </a>
                         <?php endif; ?>
@@ -160,14 +172,14 @@ require_once ROOT . '/app/Views/inc/header.php';
                                 <?php echo htmlspecialchars($author['email']); ?>
                             </a>
                         <?php endif; ?>
-                        
+
                     </div>
                 <?php endif; ?>
             </div>
         </aside>
 
         <div class="lg:col-span-8 space-y-20">
-            
+
             <section>
                 <div class="flex items-baseline justify-between border-b-2 border-[var(--text-main)] pb-4 mb-8">
                     <h2 class="font-syne text-3xl font-bold uppercase tracking-wide text-[var(--text-main)]">
@@ -179,7 +191,7 @@ require_once ROOT . '/app/Views/inc/header.php';
                 <?php if (!empty($featured_articles)): ?>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <?php foreach ($featured_articles as $article): ?>
-                            <a href="<?php echo articleUrl($authorSlug, $article['slug'], $contentLang); ?>" class="brutalist-card bg-[var(--bg-paper)] group block">
+                            <a href="<?php echo articleUrl($article['slug'], $contentLang); ?>" class="brutalist-card bg-[var(--bg-paper)] group block">
                                 <?php if (!empty($article['image_url'])): ?>
                                     <div class="aspect-video w-full overflow-hidden border-b-2 border-[var(--line-color)]">
                                         <img src="<?php echo htmlspecialchars(Upload::assetUrl($article['image_url']), ENT_QUOTES, 'UTF-8'); ?>" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500">
@@ -217,7 +229,7 @@ require_once ROOT . '/app/Views/inc/header.php';
                 <?php if (!empty($all_articles)): ?>
                     <div class="flex flex-col gap-4">
                         <?php foreach ($all_articles as $article): ?>
-                            <a href="<?php echo articleUrl($authorSlug, $article['slug'], $contentLang); ?>" class="group flex flex-col md:flex-row md:items-center justify-between p-4 border border-transparent hover:border-[var(--line-color)] hover:bg-[var(--bg-secondary)]/10 transition-all gap-4">
+                            <a href="<?php echo articleUrl($article['slug'], $contentLang); ?>" class="group flex flex-col md:flex-row md:items-center justify-between p-4 border border-transparent hover:border-[var(--line-color)] hover:bg-[var(--bg-secondary)]/10 transition-all gap-4">
                                 <div class="flex-grow">
                                     <h3 class="font-syne text-lg font-bold group-hover:text-[var(--text-accent)] transition-colors">
                                         <?php echo htmlspecialchars($article['title']); ?>
@@ -227,8 +239,7 @@ require_once ROOT . '/app/Views/inc/header.php';
                                     </p>
                                 </div>
                                 <div class="font-mono text-xs text-[var(--text-accent)] font-bold shrink-0 md:text-right">
-                                    <?php echo date('d.m.Y', strtotime($article['created_at'])); ?> <br>
-                                    <span class="opacity-50 text-[10px]"><?php echo $article['reads']; ?> <?= $isEn ? 'READS' : 'OKUNMA' ?></span>
+                                    <?php echo date('d.m.Y', strtotime($article['created_at'])); ?>
                                 </div>
                             </a>
                         <?php endforeach; ?>

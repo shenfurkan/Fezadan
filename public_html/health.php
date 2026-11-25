@@ -1,6 +1,6 @@
 <?php
 /**
- * Hafif sağlık kontrolü uçnoktası — UptimeRobot, Cloudflare Health vb. için.
+ * Hafif sağlık kontrolü uçnoktası: UptimeRobot, Cloudflare Health vb. için.
  * Yalnızca minimal payload; hassas detay sızdırmaz.
  */
 header('Content-Type: application/json; charset=utf-8');

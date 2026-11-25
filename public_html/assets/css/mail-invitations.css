@@ -1,0 +1,57 @@
+.mail-invite-admin {
+    background: var(--bg-paper); color: var(--text-main); font-family: 'Space Grotesk', sans-serif;
+}
+:root { --bg-paper: #fef9e1; --bg-secondary: #e5d0ac; --text-main: #6d2323; --text-accent: #a31d1d; --line-color: #6d2323; }
+.mail-invite-admin main { min-width: 0; }
+.mail-invite-page { margin: 0; --bg-paper: #fef9e1; --bg-secondary: #e5d0ac; --text-main: #6d2323; --text-accent: #a31d1d; background: var(--bg-paper); color: var(--text-main); font: 15px/1.6 'Space Grotesk', sans-serif; }
+.mail-invite-page *, .mail-invite-admin * { box-sizing: border-box; }
+.mail-invite-page a { color: inherit; }
+.mail-invite-public { width: min(100% - 40px, 420px); margin: 64px auto; }
+.mail-invite-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 600; }
+.mail-invite-brand > span { width: 30px; height: 26px; background: currentColor; mask: url('/cdn/logo-light.png') center / contain no-repeat; }
+.mail-invite-public h1 { font-size: 26px; line-height: 1.25; margin: 28px 0 14px; }
+.mail-invite-columns { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 40px; margin-top: 32px; }
+.mail-invite-stack { display: grid; gap: 32px; align-content: start; }
+.mail-invite-password { padding-top: 24px; border-top: 1px solid var(--line-color); }
+.mail-invite-columns h3 { font-size: 18px; margin: 0 0 18px; }
+.mail-invite-muted { font-size: 13px; opacity: .8; line-height: 1.6; }
+.mail-invite-notice { border: 1px solid var(--text-main); padding: 16px; margin: 20px 0; overflow-wrap: anywhere; }
+.mail-invite-notice h3 { margin-top: 0; }
+.mail-invite-form { display: grid; gap: 18px; margin: 24px 0; }
+.mail-invite-form label, .mail-invite-notice label { display: block; font-size: 13px; margin-bottom: 6px; }
+.mail-invite-form input:not([type=hidden]):not([type=checkbox]), .mail-invite-form select, .mail-invite-notice input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--text-main); border-radius: 0; background: transparent; color: var(--text-main); font: inherit; }
+.mail-invite-notice input { margin-bottom: 12px; }
+.mail-invite-code { letter-spacing: .2em; font-family: 'JetBrains Mono', monospace !important; }
+.mail-invite-address { display: flex; align-items: center; gap: 8px; }
+.mail-invite-address input { min-width: 0; }
+.mail-invite-address span { white-space: nowrap; font-size: 13px; }
+.mail-invite-form p { margin: 6px 0 0; }
+.mail-invite-form button, .mail-invite-list button { min-height: 44px; border: 1px solid var(--text-main); background: var(--text-main); color: var(--bg-paper); padding: 10px 14px; font: 600 14px 'Space Grotesk', sans-serif; cursor: pointer; }
+.mail-invite-list button.mail-invite-secondary { background: transparent; color: var(--text-main); }
+.mail-invite-form button:disabled, .mail-invite-list button:disabled { opacity: .5; cursor: not-allowed; }
+.mail-invite-form :is(input, select, button):focus-visible, .mail-invite-page a:focus-visible, .mail-invite-notice input:focus-visible { outline: 2px solid var(--text-main); outline-offset: 3px; }
+.mail-invite-table-wrap { overflow-x: auto; }
+.mail-invite-list { min-width: 0; }
+.mail-invite-list table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+.mail-invite-list :is(th, td) { padding: 12px 10px; border-bottom: 1px solid var(--line-color); }
+.mail-invite-list form { margin: 0; }
+.mail-invite-back { display: inline-block; margin-top: 24px; font-size: 13px; }
+.mail-invite-captcha { border: 1px solid var(--text-main); padding: 12px 14px; }
+.mail-captcha-brand { font-size: 11px; opacity: .75; margin-bottom: 8px; }
+.mail-captcha-line, .mail-captcha-line label { display: flex; align-items: center; gap: 10px; }
+.mail-captcha-line { justify-content: space-between; }
+.mail-captcha-line label { margin: 0; cursor: pointer; }
+.mail-captcha-line input { width: 22px; height: 22px; margin: 0; flex: 0 0 22px; accent-color: var(--text-main); }
+#litecaptcha-status, #litecaptcha-detail { font-size: 12px; }
+#litecaptcha-detail:not([hidden]) { margin-top: 8px; }
+.mail-invite-page .litecaptcha-bridge { position: fixed; width: 1px; height: 1px; left: -9999px; bottom: 0; border: 0; opacity: 0; pointer-events: none; }
+.mail-invite-page .litecaptcha-page-btn { position: fixed; z-index: 10000; min-width: 112px; min-height: 48px; padding: 10px 18px; border: 1px solid var(--text-main); background: var(--text-main); color: var(--bg-paper); font: 600 14px 'Space Grotesk', sans-serif; cursor: pointer; touch-action: manipulation; }
+.mail-invite-page [hidden] { display: none !important; }
+@media (max-width: 1100px) { .mail-invite-columns { grid-template-columns: 1fr; gap: 24px; } }
+@media (max-width: 767px) {
+    .mail-invite-admin header { padding-inline: 16px; gap: 16px; }
+    .mail-invite-admin header h2 { font-size: 18px; }
+    .mail-invite-admin .theme-icon { display: none; }
+    .mail-invite-admin .admin-content-scrollbar { padding: 20px 16px; }
+}
+@media (max-width: 480px) { .mail-invite-public { margin: 32px auto; } .mail-invite-public h1 { font-size: 23px; } }

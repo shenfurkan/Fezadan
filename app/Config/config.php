@@ -1,4 +1,5 @@
 <?php
+require_once dirname(__DIR__) . '/Core/HttpRequest.php';
 if (!function_exists('env_value')) {
     function env_value(string $key, string $default = ''): string
     {
@@ -36,13 +37,16 @@ if (!function_exists('env_value')) {
     }
 }
 
-$isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-    || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-$detectedHost = $_SERVER['HTTP_HOST'] ?? '';
+$isHttps = HttpRequest::isHttps();
+$detectedHost = $_SERVER['FEZADAN_ORIGINAL_HOST'] ?? $_SERVER['HTTP_HOST'] ?? '';
 if ($detectedHost === '') {
     $detectedHost = (PHP_SAPI === 'cli') ? 'fezadan.org' : 'localhost';
 }
-$detectedSiteUrl = ((PHP_SAPI === 'cli' && $detectedHost === 'fezadan.org') || $isHttps ? 'https://' : 'http://') . $detectedHost;
+$mainHost = preg_replace('/^(?:www|notlar)\./i', '', $detectedHost);
+// Without an explicit SITE_URL, public Host headers must not poison canonical/sitemap caches.
+$detectedSiteUrl = HttpRequest::isLocalHost()
+    ? ($isHttps ? 'https://' : 'http://') . $mainHost
+    : 'https://fezadan.org';
 
 define('SITE_URL', env_value('SITE_URL', $detectedSiteUrl));
 define('NOTES_SITE_URL', env_value('NOTES_SITE_URL', 'https://notlar.fezadan.org'));
@@ -66,7 +70,9 @@ if ($appSalt === '' || $appSalt === 'change-me') {
 define('APP_SALT', $appSalt);
 define('APP_DEBUG', filter_var(env_value('APP_DEBUG', '0'), FILTER_VALIDATE_BOOLEAN));
 define('CDN_URL', env_value('CDN_URL', env_value('R2_PUBLIC_URL', SITE_URL)));
+define('INDEXNOW_KEY', 'a7b3f8d1e9c2465db4f0a6c2e8d7b1f9');
 define('LITECAPTCHA_ENABLED', filter_var(env_value('LITECAPTCHA_ENABLED', '1'), FILTER_VALIDATE_BOOLEAN));
+define('MONERO_ADDRESS', env_value('MONERO_ADDRESS', ''));
 
 /**
  * Generates a language-prefixed URL.
@@ -77,6 +83,12 @@ function langUrl(string $path = '', ?string $lang = null): string {
     return rtrim(SITE_URL, '/') . '/' . $lang . ($path !== '' ? '/' . $path : '');
 }
 
+// The public tool has its own origin and is maintained as a separate module repository.
+define('ANONYMITY_SITE_URL', 'https://anonymitycheck.fezadan.org');
+function anonymityUrl(): string {
+    return ANONYMITY_SITE_URL . '/';
+}
+
 function pageUrl(string $page, ?string $lang = null): string {
     $lang = strtolower($lang ?? App::getLang());
     $key = strtolower(trim($page, '/'));
@@ -85,6 +97,8 @@ function pageUrl(string $page, ?string $lang = null): string {
         'hakkinda' => ['tr' => 'hakkinda', 'en' => 'about'],
         'manifesto' => ['tr' => 'manifesto', 'en' => 'manifesto'],
         'privacy' => ['tr' => 'gizlilik-politikasi', 'en' => 'privacy'],
+        'donate' => ['tr' => 'bagis', 'en' => 'donate'],
+        'bagis' => ['tr' => 'bagis', 'en' => 'donate'],
         'verification' => ['tr' => 'teyit', 'en' => 'verification'],
         'teyit' => ['tr' => 'teyit', 'en' => 'verification'],
     ];
@@ -100,17 +114,18 @@ function authorUrl(string $author_slug, ?string $lang = null): string {
 }
 
 /**
- * Bir makale için dil ve yazar önekli URL üretir.
+ * Generates the canonical language-prefixed URL for an article.
  */
-function articleUrl(string $author_slug, string $article_slug, ?string $lang = null): string {
+function articleUrl(string $article_slug, ?string $lang = null): string {
     $lang = strtolower($lang ?? App::getLang());
-    return rtrim(SITE_URL, '/') . '/' . $lang . '/' . rawurlencode($author_slug) . '/' . rawurlencode($article_slug);
+    // The old makale/article paths issued permanent redirects to author URLs.
+    return langUrl(($lang === 'en' ? 'post/' : 'yazi/') . rawurlencode($article_slug), $lang);
 }
 /**
- * Çeviri yardımcısı. Doğru dosyayı yüklemek için App::getLang() kullanır.
- * Anahtar bulunamazsa Türkçe'ye düşer.
+ * Translation helper. Uses App::getLang() to load the correct file.
+ * Falls back to Turkish if key not found.
  *
- * Kullanım: <?= __('nav.home') ?>
+ * Usage: <?= __('nav.home') ?>
  */
 if (!function_exists('__')) {
     function __(string $key, string $default = ''): string
@@ -132,7 +147,7 @@ if (!function_exists('__')) {
 
         $value = $translations[$key] ?? $default;
         if ($value === '' && $lang !== 'tr') {
-            // Türkçe'ye düş
+            // Fallback to Turkish
             $trFile = ROOT . '/app/Translations/tr.php';
             if (is_file($trFile)) {
                 $tr = require $trFile;
@@ -145,13 +160,13 @@ if (!function_exists('__')) {
 }
 
 /**
- * GET veya POST parametrelerinden bir LiteCaptcha HMAC token'ını doğrular.
- * /tmp dosya tabanlı tekilleme ile token tekrarını önler (60sn TTL).
+ * Verifies a LiteCaptcha HMAC token from GET or POST parameters.
+ * Prevents token replay via file-based deduplication until the signed expiry.
  *
- * @param string|null $error Başarısızlık durumunda hata sebebi doldurulur.
- * @param string|null $path  HMAC doğrulama için kullanılacak yol.
- *                           Varsayılan mevcut istek yoludur.
- * @return bool Token geçerli ve kullanılmamışsa true.
+ * @param string|null $error Populated with failure reason on return false.
+ * @param string|null $path  Override the path used for HMAC verification.
+ *                           Defaults to current request path.
+ * @return bool True if the token is valid and unused.
  */
 if (!function_exists('litecaptcha_verify')) {
     function litecaptcha_secret(): string
@@ -173,15 +188,18 @@ if (!function_exists('litecaptcha_verify')) {
         return $hostIsLocal && in_array($remote, ['127.0.0.1', '::1'], true);
     }
 
-    function litecaptcha_verify(?string &$error = null, ?string $path = null): bool
+    function litecaptcha_verify(?string &$error = null, ?string $path = null, bool $allowLocalBypass = true): bool
     {
-        if (litecaptcha_is_local_request()) {
+        if ($allowLocalBypass && litecaptcha_is_local_request()) {
             return true; // Local ortamda token doğrulamayı atla
         }
 
         $rt       = $_GET['rt']  ?? $_GET['lc_rt']  ?? $_POST['lc_rt'] ?? '';
         $sigInput = $_GET['sig'] ?? $_GET['lc_sig'] ?? $_POST['lc_sig'] ?? '';
-        $exp      = (int)($_GET['exp'] ?? $_GET['lc_exp'] ?? $_POST['lc_exp'] ?? 0);
+        $expInput = $_GET['exp'] ?? $_GET['lc_exp'] ?? $_POST['lc_exp'] ?? '';
+        $rt = is_string($rt) ? $rt : '';
+        $sigInput = is_string($sigInput) ? $sigInput : '';
+        $exp = is_scalar($expInput) ? (int)$expInput : 0;
 
         $logDir  = defined('ROOT') ? ROOT . '/logs' : dirname(__DIR__, 2) . '/logs';
         $logFile = $logDir . '/captcha_debug.log';
@@ -192,7 +210,7 @@ if (!function_exists('litecaptcha_verify')) {
             $ctx['exp']       = $exp;
             $ctx['now']       = time();
             $ctx['time_diff'] = $exp > 0 ? (time() - $exp) : 'n/a';
-            $ctx['uri']       = $_SERVER['REQUEST_URI'] ?? '';
+            $ctx['uri']       = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
             foreach ($ctx as $k => $v) {
                 $line .= ' ' . $k . '=' . $v;
             }
@@ -221,37 +239,44 @@ if (!function_exists('litecaptcha_verify')) {
             $error = 'bad_signature';
             $logEntry($error, [
                 'path'         => $currentPath,
-                'secret_len'   => strlen($secret),
-                'secret_start' => substr($secret, 0, 4),
                 'sig_input'    => substr($sigInput, 0, 12),
-                'sig_expected' => substr($expectedSig, 0, 12),
             ]);
             return false;
         }
 
-        // Tekrar önleme: 60sn TTL ile atomik token dosyası oluşturma.
+        // Keep the replay marker for the entire signed lifetime, not just the first 60 seconds.
         $tokenDir  = sys_get_temp_dir() . '/litecaptcha_tokens';
         if (!is_dir($tokenDir)) {
             @mkdir($tokenDir, 0700, true);
         }
         $tokenFile = $tokenDir . '/' . hash('sha256', $rt . '_' . $secret);
         $tokenHandle = @fopen($tokenFile, 'x');
-        if ($tokenHandle === false && is_file($tokenFile)) {
-            $fileAge = time() - (int)@filemtime($tokenFile);
-            if ($fileAge >= 60) {
-                @unlink($tokenFile);
-                $tokenHandle = @fopen($tokenFile, 'x');
-            }
-        }
-
         if ($tokenHandle === false) {
             $error = 'token_replay';
             $logEntry($error, ['file_age_s' => is_file($tokenFile) ? (time() - (int)@filemtime($tokenFile)) : 'n/a']);
             return false;
         }
 
-        @fclose($tokenHandle);
+        if (fwrite($tokenHandle, (string)$exp) !== strlen((string)$exp)) {
+            fclose($tokenHandle);
+            @unlink($tokenFile);
+            $error = 'token_storage_failed';
+            $logEntry($error);
+            return false;
+        }
+        fclose($tokenHandle);
         @chmod($tokenFile, 0600);
+
+        // Occasional cleanup bounds disk use without scanning the directory on every download.
+        if (random_int(1, 100) === 1) {
+            foreach (glob($tokenDir . '/*') ?: [] as $oldToken) {
+                $expiry = (int)@file_get_contents($oldToken);
+                if (($expiry > 0 && $expiry < time())
+                    || ($expiry === 0 && (int)@filemtime($oldToken) < time() - 86400)) {
+                    @unlink($oldToken);
+                }
+            }
+        }
 
         $error = null;
         return true;

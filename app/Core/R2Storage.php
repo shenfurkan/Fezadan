@@ -5,27 +5,6 @@ namespace App\Core;
 use Aws\S3\S3Client;
 use Aws\Exception\AwsException;
 
-/**
- * Cloudflare R2 nesne depolama soyutlaması (S3 uyumlu API ile).
- *
- * PDF, görsel ve yedek dosyaları için yükleme, indirme, silme ve
- * akış (stream) işlemlerini sağlar. AWS SDK for PHP ile singleton
- * bağlantı modeli kullanır.
- *
- * ## Test modu
- *
- * APP_ENV 'testing' ve R2 ortam değişkenleri eksikse, kurucu metot
- * hata fırlatmak yerine istemci oluşturmayı atlar. Gerçek istemci
- * gerektiren metotlar erken döner veya başarı simülasyonu yapar.
- *
- * ## Hata takibi
- *
- * Son AWS hatası getLastAwsError() ile alınabilir. Dahili
- * rememberAwsError() / clearLastAwsError() yardımcıları sayesinde
- * çağıran taraf AwsException yakalamak zorunda kalmaz.
- *
- * @see https://developers.cloudflare.com/r2/api/s3/api/
- */
 class R2Storage {
     private $client;
     private $bucketName;
@@ -172,10 +151,12 @@ class R2Storage {
         try {
             error_log('[R2Storage][CP] upload_pdf_start key=' . $objectKey . ' source_bytes=' . (is_file($tempFilePath) ? (int)filesize($tempFilePath) : 0));
             $this->client->putObject([
-                'Bucket'      => $this->bucketName,
-                'Key'         => $objectKey,
-                'SourceFile'  => $tempFilePath,
-                'ContentType' => 'application/pdf',
+                'Bucket'       => $this->bucketName,
+                'Key'          => $objectKey,
+                'SourceFile'   => $tempFilePath,
+                'ContentType'  => 'application/pdf',
+                // Keys are hash+timestamp, so PDFs never change; this is what lets the CDN cache them.
+                'CacheControl' => 'public, max-age=31536000, immutable',
             ]);
 
             error_log('[R2Storage][CP] upload_pdf_done key=' . $objectKey);
@@ -343,8 +324,31 @@ class R2Storage {
         return $this->deleteFile($objectKey);
     }
 
+    /**
+     * Read-only HEAD request. Returns false only when the object is missing (404);
+     * any other storage error is thrown so callers can tell "missing" from "unreachable".
+     */
+    public function objectExists(string $objectKey): bool {
+        if (getenv('APP_ENV') === 'testing') {
+            return true;
+        }
+        try {
+            $this->client->headObject([
+                'Bucket' => $this->bucketName,
+                'Key'    => $this->normalizeObjectKey($objectKey),
+            ]);
+            return true;
+        } catch (AwsException $e) {
+            $status = $e->getResponse() ? $e->getResponse()->getStatusCode() : 0;
+            if ($status === 404) {
+                return false;
+            }
+            throw $e;
+        }
+    }
+
     /** @return array{0:int,1:int}|null */
-    public function parseHttpRange(string $rangeHeader, int $fileSize): ?array {
+    public static function parseHttpRange(string $rangeHeader, int $fileSize): ?array {
         if ($fileSize <= 0 || !preg_match('/^bytes=(\d*)-(\d*)$/i', trim($rangeHeader), $matches)) {
             return null;
         }
@@ -401,6 +405,14 @@ class R2Storage {
         return rtrim($this->publicUrl, '/') . '/' . $this->normalizeObjectKey((string)$objectKey);
     }
 
+    /** ASCII fallback plus RFC 5987 filename: safe headers and correct Turkish filenames. */
+    public static function pdfContentDisposition(string $name, string $type = 'inline'): string {
+        $name = preg_replace('/[\x00-\x1f\x7f"\/\\\\]/', '_', $name) . '.pdf';
+        $fallback = preg_replace('/[^a-zA-Z0-9._-]/', '_', $name);
+        return ($type === 'attachment' ? 'attachment' : 'inline')
+            . '; filename="' . $fallback . '"; filename*=UTF-8\'\'' . rawurlencode($name);
+    }
+
     public function streamView($objectKey, $displayName = 'belge') {
         try {
             if (ob_get_level()) ob_end_clean();
@@ -432,7 +444,7 @@ class R2Storage {
                 $fileSize = (int)($headResult['ContentLength'] ?? 0);
 
                 if ($fileSize > 0) {
-                    $range = $this->parseHttpRange($rangeHeader, $fileSize);
+                    $range = self::parseHttpRange($rangeHeader, $fileSize);
                     if ($range === null) {
                         http_response_code(416);
                         header('Content-Range: bytes */' . $fileSize);
@@ -456,15 +468,14 @@ class R2Storage {
                     ]);
                 }
 
-                $safeName = str_replace([' ', '/', '\\', '"'], '_', (string)$displayName) . '.pdf';
                 $mimeType = (string)($headResult['ContentType'] ?? 'application/pdf');
                 $finalLength = $contentLength ?? (int)($headResult['ContentLength'] ?? 0);
 
                 http_response_code($statusCode);
                 header('Content-Type: ' . $mimeType);
-                header('Content-Disposition: inline; filename="' . $safeName . '"');
+                header('Content-Disposition: ' . self::pdfContentDisposition((string)$displayName));
                 header('Accept-Ranges: bytes');
-                header('Cache-Control: public, max-age=300');
+                header('Cache-Control: private, no-store, max-age=0');
                 if ($contentRange !== null) {
                     header('Content-Range: ' . $contentRange);
                 }
@@ -475,15 +486,14 @@ class R2Storage {
             }
 
             $result = $this->client->getObject($getParams);
-            $safeName = str_replace([' ', '/', '\\', '"'], '_', (string)$displayName) . '.pdf';
             $mimeType = (string)($result['ContentType'] ?? 'application/pdf');
             $finalLength = $contentLength ?? (int)($result['ContentLength'] ?? 0);
 
             http_response_code($statusCode);
             header('Content-Type: ' . $mimeType);
-            header('Content-Disposition: inline; filename="' . $safeName . '"');
+            header('Content-Disposition: ' . self::pdfContentDisposition((string)$displayName));
             header('Accept-Ranges: bytes');
-            header('Cache-Control: public, max-age=300');
+            header('Cache-Control: private, no-store, max-age=0');
 
             if ($contentRange !== null) {
                 header('Content-Range: ' . $contentRange);
@@ -496,12 +506,9 @@ class R2Storage {
             exit;
         } catch (AwsException $e) {
             error_log("R2 görüntüleme hatası: " . $e->getMessage());
-            http_response_code(500);
-            if (in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8080', '127.0.0.1', '127.0.0.1:8080', '::1']) || strpos($_SERVER['HTTP_HOST'] ?? '', 'localhost') !== false) {
-                echo "HATA DETAYI: " . $e->getMessage();
-            } else {
-                echo "Belge şu anda görüntülenemiyor.";
-            }
+            http_response_code($e->getStatusCode() === 404 ? 404 : 502);
+            header('Cache-Control: private, no-store, max-age=0');
+            echo "Belge şu anda görüntülenemiyor.";
             exit;
         }
     }
@@ -519,7 +526,7 @@ class R2Storage {
             $normalizedKey = $this->normalizeObjectKey($objectKey);
             if ($normalizedKey === ''
                 || strpos($normalizedKey, '..') !== false
-                || strpos($normalizedKey, 'uploads/') !== 0
+                || (strpos($normalizedKey, 'uploads/') !== 0 && strpos($normalizedKey, 'portfolio/') !== 0)
                 || !preg_match('/\.(webp|jpe?g|png|gif)$/i', $normalizedKey)) {
                 http_response_code(404);
                 echo 'Dosya bulunamadı.';
@@ -560,6 +567,33 @@ class R2Storage {
         }
     }
 
+    /** Bounded read for article-cover renditions; no backups, PDFs, remote URLs or arbitrary keys. */
+    public function readCoverImage(string $objectKey, int $maxBytes): string {
+        if ($maxBytes < 1 || $maxBytes > 8388608 || strpos($objectKey, '..') !== false
+            || !preg_match('#^uploads/covers/[A-Za-z0-9_-][A-Za-z0-9._-]*\.(?:webp|jpe?g|png|gif)$#iD', $objectKey)) {
+            throw new \InvalidArgumentException('Invalid public cover image key.');
+        }
+        $result = $this->client->getObject([
+            'Bucket' => $this->bucketName,
+            'Key' => $objectKey,
+            'Range' => 'bytes=0-' . $maxBytes,
+            '@http' => ['connect_timeout' => 2, 'timeout' => 8],
+            '@retries' => 0, // Fall back to the existing CDN cover rather than delaying first paint.
+        ]);
+        if ((int)($result['ContentLength'] ?? 0) > $maxBytes) {
+            throw new \RuntimeException('Cover image exceeds the byte limit.');
+        }
+        $body = $result['Body'];
+        $bytes = '';
+        while (!$body->eof() && strlen($bytes) <= $maxBytes) {
+            $bytes .= $body->read(min(8192, $maxBytes + 1 - strlen($bytes)));
+        }
+        if ($bytes === '' || strlen($bytes) > $maxBytes) {
+            throw new \RuntimeException('Cover image exceeds the byte limit or is empty.');
+        }
+        return $bytes;
+    }
+
     public function streamDownload($objectKey, $displayName) {
         try {
             if (ob_get_level()) ob_end_clean();
@@ -569,22 +603,19 @@ class R2Storage {
                 'Key'    => $this->normalizeObjectKey((string)$objectKey),
             ]);
 
-            $safeName = str_replace([' ', '/', '\\', '"'], '_', (string)$displayName) . '.pdf';
 
             header('Content-Description: File Transfer');
             header('Content-Type: application/pdf');
-            header('Content-Disposition: attachment; filename="' . $safeName . '"');
-            header('Content-Transfer-Encoding: binary');
+            header('Content-Disposition: ' . self::pdfContentDisposition((string)$displayName, 'attachment'));
             header('Expires: 0');
-            header('Cache-Control: must-revalidate');
-            header('Pragma: public');
+            header('Cache-Control: private, no-store, max-age=0');
             header('Content-Length: ' . $result['ContentLength']);
 
             $this->streamAwsBody($result['Body']);
             exit;
         } catch (AwsException $e) {
             error_log("R2 indirme hatası: " . $e->getMessage());
-            http_response_code(500);
+            http_response_code($e->getStatusCode() === 404 ? 404 : 502);
             echo "Dosya şu anda indirilemiyor.";
             exit;
         }

@@ -1,4 +1,6 @@
 <?php
+/** @var int $totalArticles */
+require_once ROOT . '/app/Services/CoverImage.php';
 $siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
 
 $lang = App::getLang();
@@ -13,7 +15,7 @@ $page_description = $isEn
 $page_canonical   = $siteBase . ($isEn ? '/en' : '/tr');
 $og_url           = $page_canonical;
 $og_type          = 'website';
-$og_image         = $siteBase . '/cdn/notlar-social-preview.png';
+$og_image         = $siteBase . '/cdn/logo-light.png';
 $extra_jsonld = [
     [
         '@context'  => 'https://schema.org',
@@ -26,7 +28,7 @@ $extra_jsonld = [
             '@type'  => 'SearchAction',
             'target' => [
                 '@type'       => 'EntryPoint',
-                'urlTemplate' => $siteBase . '/makaleler?q={search_term_string}',
+                'urlTemplate' => langUrl($isEn ? 'articles' : 'makaleler') . '?q={search_term_string}',
             ],
             'query-input' => 'required name=search_term_string',
         ],
@@ -39,6 +41,14 @@ $extra_jsonld = [
         'logo'     => $siteBase . '/cdn/logo-light.png',
     ],
 ];
+
+if (!empty($articles[0]['image_url'])) {
+    $firstCover = (string)$articles[0]['image_url'];
+    $firstId = (int)$articles[0]['id'];
+    $preload_image_srcset = CoverImage::srcset($firstId, $firstCover);
+    $preload_image_sizes = CoverImage::SIZES;
+    $preload_image = CoverImage::url($firstId, $firstCover) ?: Upload::assetUrl($firstCover);
+}
 
 require_once ROOT . '/app/Views/inc/header.php';
 ?>
@@ -56,26 +66,26 @@ require_once ROOT . '/app/Views/inc/header.php';
         text-shadow: 0px 0px 15px rgba(255, 255, 255, 0.9), 0px 0px 5px rgba(255, 255, 255, 0.7);
     }
 
-    .grid-container { 
-        display: grid; 
-        grid-template-columns: 1fr; 
-        gap: 2rem; 
+    .grid-container {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2rem;
         padding: 2.5rem 1rem;
-        border-top: 1px solid var(--line-color); 
+        border-top: 1px solid var(--line-color);
     }
-    @media (min-width: 768px) { 
-        .grid-container { 
-            grid-template-columns: repeat(2, 1fr); 
-            gap: 2.5rem; 
+    @media (min-width: 768px) {
+        .grid-container {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2.5rem;
             padding: 4rem 2rem;
-        } 
+        }
     }
-    @media (min-width: 1024px) { 
-        .grid-container { 
-            grid-template-columns: repeat(4, 1fr); 
-            gap: 2.5rem; 
+    @media (min-width: 1024px) {
+        .grid-container {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2.5rem;
             padding: 4rem 2rem;
-        } 
+        }
     }
 
     .grid-item {
@@ -92,7 +102,7 @@ require_once ROOT . '/app/Views/inc/header.php';
         overflow: hidden;
     }
 
-    .grid-item:hover { 
+    .grid-item:hover {
         background-color: var(--bg-paper);
     }
 
@@ -150,17 +160,17 @@ require_once ROOT . '/app/Views/inc/header.php';
     @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
 
     .manifesto-section { background-color: var(--bg-secondary); color: var(--text-main); padding: 6rem 2rem; text-align: center; border-bottom: 1px solid var(--line-color); }
-    
+
     .content-layer { position: relative; z-index: 10; padding: 1.5rem; }
 
-    [data-theme="dark"] .grid-container { 
-        border-top-color: var(--text-main) !important; 
+    [data-theme="dark"] .grid-container {
+        border-top-color: var(--text-main) !important;
     }
-    [data-theme="dark"] .grid-item { 
+    [data-theme="dark"] .grid-item {
         box-shadow: 6px 6px 0px var(--text-main);
         border-color: var(--text-main);
     }
-    [data-theme="dark"] .grid-item:hover { 
+    [data-theme="dark"] .grid-item:hover {
     }
 
     [data-theme="dark"] .archive-section-border {
@@ -173,7 +183,7 @@ require_once ROOT . '/app/Views/inc/header.php';
 </style>
 
 <main id="main-content" class="flex-grow w-full max-w-[1920px] mx-auto">
-    
+
     <header class="px-4 pt-12 md:pt-20 pb-8 flex flex-col items-center">
         <div class="text-xs md:text-sm uppercase tracking-[0.3em] text-[var(--text-main)] mb-2 font-bold opacity-80"> <?= $isEn ? 'COLLECTIVE' : 'KOLEKTİF' ?>
         </div>
@@ -185,12 +195,12 @@ require_once ROOT . '/app/Views/inc/header.php';
 
     <div class="marquee" aria-hidden="true">
         <div class="marquee-content">
-            <?php 
+            <?php
             if(isset($articles) && is_array($articles)) {
                 $titles = array_column($articles, 'title');
                 $titles = array_slice($titles, 0, 8);
-                $marqueeText = implode(" • ", $titles) . " • "; 
-                echo str_repeat($marqueeText, 4); 
+                $marqueeText = implode(" • ", $titles) . " • ";
+                echo str_repeat($marqueeText, 4);
             }
             ?>
         </div>
@@ -212,15 +222,15 @@ require_once ROOT . '/app/Views/inc/header.php';
                 <?php endif; ?>
             </div>
         <?php endif; ?>
-        <?php 
+        <?php
         $article_counter = 0;
         if(isset($articles) && is_array($articles)):
-            $batch = array_slice($articles, 0, 8); 
-            
-            foreach($batch as $article): 
+            $batch = array_slice($articles, 0, 8);
+
+            foreach($batch as $article):
                 $preview_img = !empty($article['image_url']) ? $article['image_url'] : '';
                 $article_counter++;
-                
+
                 if ($article_counter === 1) {
                     $loading_attr = 'fetchpriority="high" decoding="async"';
                 } elseif ($article_counter <= 2) {
@@ -230,26 +240,29 @@ require_once ROOT . '/app/Views/inc/header.php';
                 }
         ?>
         <div class="grid-item group relative">
-            
+
             <!-- Link to the article (occupies the entire card) -->
-            <a href="<?php echo articleUrl($article['author_slug'] ?? 'yazar', $article['slug']); ?>" class="absolute inset-0 z-10" aria-label="<?php echo htmlspecialchars($article['title']); ?> makalesini oku"></a>
+            <a href="<?php echo articleUrl($article['slug']); ?>" class="absolute inset-0 z-10" aria-label="<?php echo htmlspecialchars($article['title']); ?> makalesini oku"></a>
 
             <!-- Card Image Header -->
-            <?php if($preview_img): 
+            <?php if($preview_img):
                 $preview_webp = Upload::webpUrl($preview_img);
                 $preview_url = Upload::assetUrl($preview_img);
                 $preview_fallback = Upload::assetUrl((string)(parse_url($preview_img, PHP_URL_PATH) ?: $preview_img));
+                $preview_srcset = CoverImage::srcset((int)$article['id'], $preview_img);
+                if ($preview_srcset !== '') $preview_url = CoverImage::url((int)$article['id'], $preview_img);
             ?>
                 <div class="card-image-wrapper">
                     <picture>
-                        <?php if ($preview_webp): ?>
+                        <?php if ($preview_webp && $preview_srcset === ''): ?>
                             <source type="image/webp" srcset="<?php echo htmlspecialchars($preview_webp, ENT_QUOTES, 'UTF-8'); ?>">
                         <?php endif; ?>
-                        <img src="<?php echo htmlspecialchars($preview_url, ENT_QUOTES, 'UTF-8'); ?>" 
-                             width="600" height="400" 
+                        <img src="<?php echo htmlspecialchars($preview_url, ENT_QUOTES, 'UTF-8'); ?>"
+                              width="768" height="432"
+                              <?php if ($preview_srcset !== ''): ?>srcset="<?= htmlspecialchars($preview_srcset, ENT_QUOTES, 'UTF-8') ?>" sizes="<?= CoverImage::SIZES ?>"<?php endif; ?>
                              <?php echo $loading_attr; ?>
                              data-fallback="<?php echo htmlspecialchars($preview_fallback, ENT_QUOTES, 'UTF-8'); ?>"
-                             class="reveal-img pointer-events-none" 
+                             class="reveal-img pointer-events-none"
                              alt="<?php echo htmlspecialchars($article['title']); ?>">
                     </picture>
                 </div>
@@ -258,7 +271,7 @@ require_once ROOT . '/app/Views/inc/header.php';
                     <span class="text-xl font-syne font-bold opacity-30 select-none tracking-widest text-[var(--text-main)]">FEZADAN</span>
                 </div>
             <?php endif; ?>
-            
+
             <!-- Card Body -->
             <div class="flex-grow p-6 flex flex-col justify-between">
                 <div>
@@ -267,7 +280,7 @@ require_once ROOT . '/app/Views/inc/header.php';
                         <?php if (!empty($article['categories'])): ?>
                             <?php foreach($article['categories'] as $cat): ?>
                                 <a href="<?php echo langUrl((App::getLang() === 'EN' ? 'articles' : 'makaleler') . '?cat=' . (int)$cat['id']); ?>" aria-label="<?php echo htmlspecialchars($cat['name']); ?> kategorisindeki makalelere git"
-                                class="flex items-center justify-center leading-none h-6 uppercase text-[var(--text-main)] font-bold border border-[var(--text-main)] px-2 bg-[var(--bg-paper)] hover:bg-[var(--text-main)] hover:text-[var(--bg-paper)] transition-colors text-[10px] shadow-sm rounded-sm">
+                                 class="flex items-center justify-center leading-none min-h-10 uppercase text-[var(--text-main)] font-bold border border-[var(--text-main)] px-3 bg-[var(--bg-paper)] hover:bg-[var(--text-main)] hover:text-[var(--bg-paper)] transition-colors text-[10px] shadow-sm rounded-sm">
                                     <span class="mt-[2px]"><?php echo htmlspecialchars($cat['name']); ?></span>
                                 </a>
                             <?php endforeach; ?>
@@ -312,15 +325,11 @@ require_once ROOT . '/app/Views/inc/header.php';
             <span class="font-syne text-xl md:text-3xl font-bold text-[var(--text-main)] uppercase tracking-widest group-hover:opacity-70 transition-colors">
                 <?= $isEn ? 'Explore Entire Archive →' : 'Tüm Arşivi İncele →' ?>
             </span>
-            <p class="text-xs mt-2 uppercase tracking-widest opacity-60 text-[var(--text-main)]"><?= $isEn ? 'Total' : 'Toplam' ?> <?php echo isset($articles) ? count($articles) : 0; ?> <?= $isEn ? 'Articles' : 'Makale' ?></p>
+            <p class="text-xs mt-2 uppercase tracking-widest text-[var(--text-main)]"><?= $isEn ? 'Total' : 'Toplam' ?> <?= $totalArticles ?> <?= $isEn ? 'Articles' : 'Makale' ?></p>
         </a>
     </div>
 </main>
 
-<script nonce="<?= CSP_NONCE ?>">
-document.addEventListener('error',function(e){var t=e.target;if(t&&t.tagName==='IMG'&&t.dataset.fallback){t.onerror=null;t.src=t.dataset.fallback}},true);
-</script>
-
-<?php 
-require_once ROOT . '/app/Views/inc/footer.php'; 
+<?php
+require_once ROOT . '/app/Views/inc/footer.php';
 ?>

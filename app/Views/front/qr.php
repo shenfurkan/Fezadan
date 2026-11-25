@@ -1,6 +1,6 @@
 <?php
 $siteBase  = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
-$pageUrl   = articleUrl($article['author_slug'] ?? 'yazar', $article['slug'] ?? '', $article['lang'] ?? 'TR');
+$pageUrl   = articleUrl($article['slug'] ?? '', $article['lang'] ?? 'TR');
 $pageTitle = $article['title'] ?? 'Makale';
 $safeTitle = htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8');
 $safeUrl   = htmlspecialchars($pageUrl, ENT_QUOTES, 'UTF-8');
@@ -9,7 +9,7 @@ $safeUrl   = htmlspecialchars($pageUrl, ENT_QUOTES, 'UTF-8');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo $safeTitle; ?> — QR Kod | FEZADAN</title>
+    <title><?php echo $safeTitle; ?> | QR Kod | FEZADAN</title>
     <meta name="robots" content="noindex,nofollow">
     <link rel="stylesheet" href="/assets/css/fonts.css?v=<?= filemtime(ROOT . '/public_html/assets/css/fonts.css') ?>">
     <style>

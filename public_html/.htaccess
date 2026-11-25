@@ -1,7 +1,7 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
-    
+
     Options -MultiViews -Indexes
 
     # Hassas dosya ve klasorler public web'den okunamaz.
@@ -11,24 +11,9 @@
     # robots.txt: route dynamically
     RewriteRule ^robots\.txt$ index.php?url=robots.txt [L,QSA]
 
-    # sitemap.xml: Statik dosya varsa doğrudan sun, yoksa PHP üretsin
-    RewriteCond %{HTTP_HOST} ^notlar\. [NC]
-    RewriteCond %{DOCUMENT_ROOT}/sitemap_notes.xml -f
-    RewriteRule ^sitemap\.xml$ sitemap_notes.xml [L]
-
-    RewriteCond %{HTTP_HOST} !^notlar\. [NC]
-    RewriteCond %{DOCUMENT_ROOT}/sitemap.xml -f
-    RewriteRule ^sitemap\.xml$ sitemap.xml [L]
-
-    # sitemap_main.xml / sitemap_notes.xml: statik varsa sun, yoksa PHP üretsin
-    RewriteCond %{DOCUMENT_ROOT}/sitemap_main.xml -f
-    RewriteRule ^sitemap_main\.xml$ sitemap_main.xml [L]
-
-    RewriteCond %{DOCUMENT_ROOT}/sitemap_notes.xml -f
-    RewriteRule ^sitemap_notes\.xml$ sitemap_notes.xml [L]
-
-    RewriteCond %{DOCUMENT_ROOT}/sitemap_anonymity.xml -f
-    RewriteRule ^sitemap_anonymity\.xml$ sitemap_anonymity.xml [L]
+    # Always validate sitemap freshness in PHP. A retained cron/deploy output must
+    # never shadow new publications or removed URLs; host-specific routing stays in App.
+    RewriteRule ^(sitemap(?:_(?:main|notes))?\.xml)$ index.php?url=$1 [L,QSA]
 
     # Kök ikon yolları: bazı crawler'lar HTML'i okumadan bu standart dosyaları dener.
     RewriteRule ^favicon\.ico$ cdn/light-favicon.ico [L]
@@ -38,16 +23,25 @@
     RewriteRule ^android-chrome-192x192\.png$ cdn/light-android-chrome-192x192.png [L]
     RewriteRule ^android-chrome-512x512\.png$ cdn/light-android-chrome-512x512.png [L]
 
-    # Route all requests under /anonymitycheck/ to public_html/anonymitycheck/index.php
-    RewriteRule ^anonymitycheck(?:/(.*))?$ anonymitycheck/index.php [L,QSA]
+    # Redirect before mod_dir adds a trailing slash to the physical legacy directory.
+    # Old API clients need 308 so a POST does not turn into a GET and lose its body.
+    RewriteCond %{HTTP_HOST} !(^|\.)localhost(?::[0-9]+)?$ [NC]
+    RewriteCond %{HTTP_HOST} !^(127\.0\.0\.1|\[::1\])(?::[0-9]+)?$ [NC]
+    RewriteCond %{REQUEST_METHOD} !^(GET|HEAD)$
+    RewriteRule ^anonymitycheck(?:/(.*))?$ https://anonymitycheck.fezadan.org/$1 [R=308,L]
+    RewriteCond %{HTTP_HOST} !(^|\.)localhost(?::[0-9]+)?$ [NC]
+    RewriteCond %{HTTP_HOST} !^(127\.0\.0\.1|\[::1\])(?::[0-9]+)?$ [NC]
+    RewriteRule ^anonymitycheck(?:/(.*))?$ https://anonymitycheck.fezadan.org/$1 [R=301,L]
 
+    # Keep local path access out of the public mirror: the scanner is a separate service.
+    # The parent MVC rule must not consume a legacy portfolio path.
     # SEO friendly URL'ler
     RewriteRule ^privacy$ index.php?url=privacy [L,QSA]
     RewriteRule ^gizlilik-politikasi$ index.php?url=privacy [L,QSA,R=301]
     RewriteRule ^yazar/([a-zA-Z0-9_-]+)$ index.php?url=yazar/index/$1 [L,QSA]
     RewriteRule ^makale/([a-zA-Z0-9_-]+)$ index.php?url=makale/index/$1 [L,QSA]
 
-    # Lang-prefixed static page shortcuts — explicit routes prevent hosting-level interference
+    # Lang-prefixed static page shortcuts: explicit routes prevent hosting-level interference
     RewriteRule ^(tr|en)/hakkinda$ index.php?url=$1/hakkinda [L,QSA]
     RewriteRule ^(tr|en)/about$ index.php?url=$1/about [L,QSA]
     RewriteRule ^(tr|en)/manifesto$ index.php?url=$1/manifesto [L,QSA]
@@ -76,7 +70,7 @@
 
 <IfModule mod_expires.c>
     ExpiresActive On
-    
+
     ExpiresDefault "access plus 1 month"
 
     ExpiresByType image/jpeg "access plus 1 year"
@@ -98,29 +92,47 @@
     ExpiresByType text/html "access plus 0 seconds"
     ExpiresByType application/xml "access plus 0 seconds"
     ExpiresByType application/json "access plus 0 seconds"
+    <FilesMatch "\.php$">
+        # PHP sets its own cache policy; avoid appending a second, conflicting max-age.
+        ExpiresActive Off
+    </FilesMatch>
+    <Files "sw.js">
+        # Do not leave a future Expires header for LiteSpeed/CDN TTL calculation.
+        ExpiresActive Off
+    </Files>
 </IfModule>
 
 <IfModule mod_headers.c>
     # sw.js must be re-fetched frequently so browser/CDN pick up service worker updates
     <Files "sw.js">
-        Header set Cache-Control "max-age=3600, public"
+        Header set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
+        Header unset Expires
     </Files>
-    <FilesMatch "\.(js|css|gz)$">
+    # WASM compilation is permitted only inside the document converter worker,
+    # never by relaxing the public/admin document's script policy.
+    <Files "scientific-import-worker.js">
+        Header set Content-Security-Policy "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'"
+    </Files>
+    <FilesMatch "^(?!sw\.js$).*\.(js|css|gz)$">
         Header set Cache-Control "max-age=31536000, public, immutable"
     </FilesMatch>
     <FilesMatch "\.(ico|jpe?g|png|gif|swf|webp|svg|woff|woff2|ttf|eot)$">
         Header set Cache-Control "max-age=31536000, public, immutable"
     </FilesMatch>
-    # Sitemap & robots: kısa cache — Google taze sürümü görsün
+    # Sitemap & robots: kısa cache: Google taze sürümü görsün
     <FilesMatch "\.(xml|txt)$">
         Header set Cache-Control "max-age=600, public"
     </FilesMatch>
-    <FilesMatch "\.(php|html|htm)$">
+    <FilesMatch "\.(html|htm)$">
         Header set Cache-Control "no-cache, no-store, must-revalidate"
         Header set Pragma "no-cache"
         Header set Expires 0
     </FilesMatch>
-    Header always set Vary "Accept-Encoding"
+    # Preserve explicit PHP cache policies (feeds, public R2 assets vs. private HTML/PDFs).
+    <FilesMatch "\.php$">
+        Header set Cache-Control "private, no-store, max-age=0" "expr=-z resp('Cache-Control')"
+    </FilesMatch>
+    Header merge Vary "Accept-Encoding"
 </IfModule>
 
 <IfModule mod_headers.c>
@@ -133,7 +145,7 @@
 AddType application/javascript .mjs
 AddType application/manifest+json .webmanifest
 
-# PHP Ayarlari — Apache mod_php kullanan sunucular icin. 
+# PHP Ayarlari: Apache mod_php kullanan sunucular icin.
 # LiteSpeed (LSPHP) ve PHP-FPM sunucular bu blogu es gecer ve dizindeki .user.ini dosyasini okur.
 # Bu sayede LiteSpeed sunucularda 500 Internal Server Error alinmasi engellenir.
 <IfModule mod_php.c>

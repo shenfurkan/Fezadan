@@ -1,3 +1,4 @@
+// @ts-check
 (function (window, document, $) {
     'use strict';
 
@@ -9,14 +10,16 @@
     var DEFAULT_TOOLBAR = [
         ['undo', ['undo', 'redo']],
         ['style', ['style']],
-        ['font', ['bold', 'italic', 'underline', 'strikethrough', 'clear']],
-        ['fontname', ['fontname']],
-        ['fontsize', ['fontsize']],
-        ['color', ['color']],
-        ['para', ['paragraph', 'ul', 'ol']],
-        ['height', ['height']],
-        ['insert', ['link', 'picture', 'video', 'table', 'hr', 'blockquote']],
-        ['view', ['fullscreen', 'codeview']]
+        ['font', ['bold', 'italic', 'underline']],
+        ['para', ['ul', 'ol']],
+        ['insert', ['link', 'picture']],
+        ['advanced-font', ['strikethrough', 'clear']],
+        ['advanced-fontname', ['fontname']],
+        ['advanced-fontsize', ['fontsize']],
+        ['advanced-color', ['color']],
+        ['advanced-paragraph', ['paragraph', 'height']],
+        ['advanced-insert', ['video', 'table', 'hr', 'blockquote']],
+        ['advanced-view', ['fullscreen', 'codeview']]
     ];
 
     function qs(selector, root) {
@@ -32,9 +35,21 @@
     }
 
     function htmlToText(html) {
-        var div = document.createElement('div');
-        div.innerHTML = html || '';
-        return (div.textContent || div.innerText || '').trim();
+        var template = document.createElement('template');
+        template.innerHTML = html || '';
+        return (template.content.textContent || '').trim();
+    }
+
+    function readerPreviewHtml(html) {
+        var template = document.createElement('template');
+        template.innerHTML = html || '';
+        qsa('script, iframe, object, embed, form, input, select, textarea, button, applet, audio, video, source, track, link, style, meta, base, frame, frameset', template.content).forEach(function (node) { node.remove(); });
+        qsa('*', template.content).forEach(function (node) {
+            Array.from(node.attributes).forEach(function (attribute) {
+                if (/^on/i.test(attribute.name) || attribute.name === 'contenteditable' || attribute.name === 'data-placeholder') node.removeAttribute(attribute.name);
+            });
+        });
+        return template.innerHTML;
     }
 
     function safeJsonParse(value) {
@@ -48,6 +63,44 @@
     function escapeHtml(value) {
         return String(value || '').replace(/[&<>"']/g, function (ch) {
             return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[ch];
+        });
+    }
+
+    // Walk prose text, not serialized HTML: formulas, code and link attributes are opaque.
+    function referenceTextNodes(root) {
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        var nodes = [];
+        var node;
+        while ((node = walker.nextNode())) {
+            if (node.parentElement && !node.parentElement.closest('.fezadan-math, pre, code, a, script, style')) nodes.push(node);
+        }
+        return nodes;
+    }
+
+    function linkPreviewReferences(root) {
+        var seen = new Set();
+        referenceTextNodes(root).forEach(function (node) {
+            var parts = node.textContent.split(/(\[\d+\])/g);
+            if (parts.length === 1) return;
+            var fragment = document.createDocumentFragment();
+            parts.forEach(function (part) {
+                var match = part.match(/^\[(\d+)\]$/);
+                if (!match) { fragment.appendChild(document.createTextNode(part)); return; }
+                var num = match[1];
+                var sup = document.createElement('sup');
+                sup.className = 'reference-sup';
+                var link = document.createElement('a');
+                link.href = '#prev-ref-item-' + num;
+                link.className = 'text-[var(--text-accent)] hover:underline';
+                link.style.fontFamily = '"JetBrains Mono", monospace';
+                link.style.fontSize = '0.75rem';
+                link.textContent = part;
+                if (!seen.has(num)) link.id = 'prev-ref-link-' + num;
+                seen.add(num);
+                sup.appendChild(link);
+                fragment.appendChild(sup);
+            });
+            node.parentNode.replaceChild(fragment, node);
         });
     }
 
@@ -65,7 +118,7 @@
                 var currentTheme = document.documentElement.getAttribute('data-theme');
                 var newTheme = currentTheme === 'dark' ? 'light' : 'dark';
                 document.documentElement.setAttribute('data-theme', newTheme);
-                localStorage.setItem('theme', newTheme);
+                try { localStorage.setItem('theme', newTheme); } catch (_) { /* Theme still works without storage. */ }
             });
         });
     }
@@ -93,25 +146,62 @@
         });
     }
 
-    function ensurePreviewGlobals() {
-        window.switchTab = function (tab) {
-            var preview = document.getElementById('previewPanel');
-            var form = document.getElementById('uploadForm') || document.getElementById('editForm');
-            if (!preview || !form) return;
+    function previewDocument() {
+        var frame = /** @type {HTMLIFrameElement} */ (document.getElementById('previewFrame'));
+        return frame && frame.dataset.ready === '1' ? frame.contentDocument : null;
+    }
 
+    function ensurePreviewGlobals() {
+        var preview = /** @type {HTMLDialogElement} */ (document.getElementById('previewPanel'));
+        var frame = /** @type {HTMLIFrameElement} */ (document.getElementById('previewFrame'));
+        var template = /** @type {HTMLTemplateElement} */ (document.getElementById('previewTemplate'));
+        if (!preview || !frame || !template) return;
+
+        window.switchTab = function (tab) {
             if (tab === 'preview') {
+                if (!preview.open) preview.showModal();
+                document.documentElement.classList.add('editor-preview-open');
                 if (typeof window.updatePreview === 'function') window.updatePreview();
-                form.classList.add('hidden');
-                preview.classList.remove('hidden');
                 setTabButtonState('preview');
-                preview.scrollTo({ top: 0, behavior: 'smooth' });
+                if (frame.contentWindow) frame.contentWindow.scrollTo(0, 0);
                 return;
             }
-
-            preview.classList.add('hidden');
-            form.classList.remove('hidden');
+            if (preview.open) preview.close();
             setTabButtonState('write');
         };
+
+        if (preview.dataset.previewBound !== '1') {
+            preview.dataset.previewBound = '1';
+            preview.addEventListener('close', function () {
+                document.documentElement.classList.remove('editor-preview-open');
+                setTabButtonState('write');
+            });
+            document.getElementById('previewClose').addEventListener('click', function () { window.switchTab('write'); });
+            qsa('[data-preview-device]', preview).forEach(function (button) {
+                button.addEventListener('click', function () {
+                    document.getElementById('previewStage').dataset.device = button.dataset.previewDevice;
+                    qsa('[data-preview-device]', preview).forEach(function (other) {
+                        other.setAttribute('aria-pressed', String(other === button));
+                    });
+                });
+            });
+            frame.addEventListener('load', function () {
+                frame.dataset.ready = '1';
+                var doc = frame.contentDocument;
+                if (!doc) return;
+                // Events inside an iframe do not bubble to the editor document.
+                doc.addEventListener('keydown', function (event) {
+                    if (event.key === 'Escape' || ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'p')) {
+                        event.preventDefault();
+                        window.switchTab('write');
+                    }
+                });
+                if (window.updatePreview) window.updatePreview();
+            });
+            // No allow-scripts, forms, popups or top navigation: draft HTML cannot
+            // execute in the authenticated admin page or escape the reader frame.
+            frame.srcdoc = '<!doctype html><html lang="tr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body>' + template.innerHTML + '</body></html>';
+        }
 
         var writeBtn = document.getElementById('tabWrite');
         var previewBtn = document.getElementById('tabPreview');
@@ -125,12 +215,14 @@
         }
 
         window.renderPrevRefs = function (value) {
-            var wrap = document.getElementById('prev-refs-wrap');
-            var list = document.getElementById('prev-refs');
+            var doc = previewDocument();
+            if (!doc) return;
+            var wrap = doc.getElementById('prev-refs-wrap');
+            var list = doc.getElementById('prev-refs');
             if (!wrap || !list) return;
 
             var lines = String(value || '').split('\n').map(function (line) { return line.trim(); }).filter(Boolean);
-            wrap.classList.toggle('hidden', lines.length === 0);
+            wrap.hidden = lines.length === 0;
             if (!lines.length) {
                 list.innerHTML = '';
                 return;
@@ -149,34 +241,43 @@
         };
 
         window.buildPrevToc = function () {
-            var content = document.getElementById('prev-content');
-            var toc = document.getElementById('prev-toc');
+            var doc = previewDocument();
+            if (!doc) return;
+            var content = doc.getElementById('prev-content');
+            var toc = doc.getElementById('prev-toc');
             if (!content || !toc) return;
 
             var headings = qsa('h2, h3', content).filter(function (heading) { return textOf(heading); });
+            doc.getElementById('prev-toc-wrap').hidden = headings.length === 0;
             if (!headings.length) {
                 toc.innerHTML = '<p class="opacity-50">Başlıklar eklendikçe burada görünür.</p>';
                 return;
             }
 
             toc.innerHTML = headings.map(function (heading, index) {
-                if (!heading.id) heading.id = 'prev-heading-' + index;
-                var indent = heading.tagName.toLowerCase() === 'h3' ? 'pl-3 opacity-75' : 'font-bold';
-                return '<a href="#' + escapeHtml(heading.id) + '" class="block ' + indent + ' hover:text-[var(--text-accent)]">' + escapeHtml(textOf(heading)) + '</a>';
+                heading.id = 'prev-heading-' + index;
+                return '<a href="#' + heading.id + '" data-level="' + heading.tagName.slice(1) + '">' + escapeHtml(textOf(heading)) + '</a>';
             }).join('');
         };
 
         window._bindPreviewScroll = function () {
-            var panel = document.getElementById('previewPanel');
-            if (!panel || panel.dataset.scrollBound === '1') return;
-            panel.dataset.scrollBound = '1';
-            panel.addEventListener('click', function (e) {
-                var link = e.target.closest('a[href^="#prev-"]');
+            var doc = previewDocument();
+            if (!doc || doc.documentElement.dataset.scrollBound === '1') return;
+            doc.documentElement.dataset.scrollBound = '1';
+            doc.addEventListener('click', function (e) {
+                var link = /** @type {Element} */ (e.target).closest('a[href]');
                 if (!link) return;
-                var target = document.getElementById(link.getAttribute('href').slice(1));
-                if (!target) return;
                 e.preventDefault();
-                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                var href = link.getAttribute('href');
+                if (href.charAt(0) === '#') {
+                    var target = doc.getElementById(href.slice(1));
+                    if (target) target.scrollIntoView({ block: 'start' });
+                } else {
+                    try {
+                        var url = new URL(href, window.location.href);
+                        if (/^https?:$/.test(url.protocol)) window.open(url.href, '_blank', 'noopener,noreferrer');
+                    } catch (_) { /* An invalid draft link must not break the preview. */ }
+                }
             });
         };
     }
@@ -251,6 +352,9 @@
         this.importFailures = [];
         this.deferredWordTransfer = null;
         this.isDirty = false;
+        this.pendingImageUploads = 0;
+        this.updateTimer = null;
+        this.backupTimer = null;
     }
 
     AdminEditor.prototype.init = function () {
@@ -260,15 +364,24 @@
         this.statusBox = this.ensureStatusBox();
         this.qualityPanel = this.ensureQualityPanel();
         this.initSummernote();
+        var self = this;
+        qsa('.note-editable img', this.form).forEach(function (image) { self.preserveImageDimensions(image); });
+        this.form.addEventListener('load', function (event) {
+            var image = /** @type {HTMLImageElement} */ (event.target);
+            if (image.tagName === 'IMG' && image.closest('.note-editable')) self.preserveImageDimensions(image);
+        }, true);
+        this.bindWorkspace();
         this.bindShortcuts();
         this.bindTemplates();
         this.bindWordImport();
+        this.bindScientificTools();
         this.bindCoverPreview();
         this.bindDraftActions();
         this.bindSlugGeneration();
         this.bindAnalysis();
         this.bindSubmit();
         this.startHeartbeat();
+        this.setSaveState('Henüz değişiklik yok');
         this.restoreDraftIfNeeded();
         this.updatePreview();
         this.updateQuality();
@@ -310,6 +423,92 @@
         }
     };
 
+    AdminEditor.prototype.bindWorkspace = function () {
+        var self = this;
+        var focusButton = document.getElementById('editorFocusToggle');
+        var settings = document.getElementById('editorSettings');
+        this.setFocusMode = function (enabled) {
+            if (!focusButton || !settings) return;
+            settings.hidden = enabled;
+            document.body.classList.toggle('editor-focus', enabled);
+            focusButton.setAttribute('aria-pressed', String(enabled));
+            focusButton.textContent = enabled ? 'Yayın bilgilerini göster' : 'Odaklan';
+        };
+        if (focusButton && settings) {
+            focusButton.addEventListener('click', function () {
+                self.setFocusMode(focusButton.getAttribute('aria-pressed') !== 'true');
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && !event.defaultPrevented && !document.querySelector('dialog[open], .note-modal.open, .note-editor.fullscreen') && settings.hidden) {
+                    self.setFocusMode(false);
+                    focusButton.focus();
+                }
+            });
+        }
+        var settingsJump = document.getElementById('editorSettingsJump');
+        if (settingsJump && settings) {
+            settingsJump.addEventListener('click', function () {
+                if (settings.hidden) self.setFocusMode(false);
+            });
+        }
+        // Native validation must be able to reach required fields inside a closed section.
+        this.form.addEventListener('invalid', function (event) {
+            self.revealField(/** @type {HTMLElement} */ (event.target));
+        }, true);
+        if (!document.body.classList.contains('editor-workspace')) return;
+        var header = this.form.querySelector('.editor-header');
+        if (header) {
+            // The sticky header can wrap when the viewport, fonts or focus mode change.
+            var updateHeaderHeight = function () {
+                self.form.style.setProperty('--editor-header-height', header.getBoundingClientRect().height + 'px');
+            };
+            updateHeaderHeight();
+            new ResizeObserver(updateHeaderHeight).observe(header);
+        }
+        var toolbar = this.form.querySelector('.note-toolbar');
+        var advanced = qsa('[class*="note-advanced-"]', toolbar);
+        if (toolbar && advanced.length) {
+            var more = document.createElement('button');
+            more.type = 'button';
+            more.className = 'note-btn editor-toolbar-more';
+            more.textContent = 'Diğer araçlar';
+            more.setAttribute('aria-expanded', 'false');
+            more.setAttribute('aria-controls', advanced.map(function (group, index) {
+                // The edit form's hidden name="id" input shadows form.id in the DOM.
+                group.id = self.form.getAttribute('id') + '-advanced-' + index;
+                group.hidden = true;
+                return group.id;
+            }).join(' '));
+            more.addEventListener('mousedown', function (event) {
+                event.preventDefault();
+                self.editor.summernote('saveRange');
+            });
+            more.addEventListener('click', function () {
+                var open = more.getAttribute('aria-expanded') !== 'true';
+                advanced.forEach(function (group) { group.hidden = !open; });
+                more.setAttribute('aria-expanded', String(open));
+            });
+            toolbar.appendChild(more);
+            qsa('button[tabindex="-1"]', toolbar).forEach(function (button) {
+                if (!button.closest('.note-dropdown-menu')) button.setAttribute('tabindex', '0');
+            });
+        }
+        var editable = this.form.querySelector('.note-editable');
+        if (editable) {
+            editable.setAttribute('role', 'textbox');
+            editable.setAttribute('aria-label', 'Makale metni');
+            editable.setAttribute('aria-multiline', 'true');
+        }
+    };
+
+    AdminEditor.prototype.revealField = function (field) {
+        if (!field) return;
+        if (this.setFocusMode && field.closest('#editorSettings')) this.setFocusMode(false);
+        for (var parent = field.parentElement; parent; parent = parent.parentElement) {
+            if (parent instanceof HTMLDetailsElement) parent.open = true;
+        }
+    };
+
     AdminEditor.prototype.bindBeforeUnload = function () {
         var self = this;
         window.addEventListener('beforeunload', function (e) {
@@ -318,6 +517,21 @@
                 e.returnValue = '';
             }
         });
+        window.addEventListener('pagehide', function () {
+            if (self.isDirty) self.saveDraft();
+        });
+    };
+
+    AdminEditor.prototype.setSaveState = function (message) {
+        var state = document.getElementById('editorSaveState');
+        if (state) state.textContent = message;
+    };
+
+    AdminEditor.prototype.scheduleDraftBackup = function () {
+        var self = this;
+        this.setSaveState('Kaydedilmemiş değişiklikler');
+        clearTimeout(this.backupTimer);
+        this.backupTimer = setTimeout(function () { self.saveDraft(); }, 1200);
     };
 
     AdminEditor.prototype.ensureStatusBox = function () {
@@ -433,9 +647,6 @@
                     }
                 },
                 onKeyup: function (e) {
-                    if (self.shortcutHandler) {
-                        self.shortcutHandler(e);
-                    }
                     var selection = window.getSelection();
                     if (selection.rangeCount) {
                         var range = selection.getRangeAt(0);
@@ -469,15 +680,13 @@
                             }
                         }
                     }
-                    self.updatePreview();
-                    self.updateQuality();
+                    self.scheduleUpdates();
                 },
                 onImageUpload: function (files) {
-                    self.uploadImages(Array.prototype.slice.call(files || []));
+                    return self.uploadImages(Array.prototype.slice.call(files || []));
                 },
                 onChange: function () {
-                    self.updatePreview();
-                    self.updateQuality();
+                    self.scheduleUpdates();
                 },
                 onPaste: function (e) {
                     var clipboardData = (e.originalEvent || e).clipboardData || window.clipboardData;
@@ -493,17 +702,16 @@
                             document.execCommand('insertText', false, text);
                         }
                     }
-                    setTimeout(function () {
-                        self.updatePreview();
-                        self.updateQuality();
-                    }, 0);
+                    self.scheduleUpdates();
                 }
             }
         });
     };
 
     AdminEditor.prototype.normalizeExistingImages = function () {
+        var self = this;
         $('.note-editable').find('img').each(function () {
+            self.preserveImageDimensions(this);
             var img = $(this);
             if (img.closest('figure').length) return;
             img.wrap('<figure></figure>');
@@ -511,26 +719,81 @@
         });
     };
 
+    // Persist the intrinsic ratio in saved HTML so images reserve space before loading.
+    // Old articles acquire it when opened and saved; no server-side URL fetching is needed.
+    AdminEditor.prototype.preserveImageDimensions = function (image) {
+        function recordSize() {
+            if (image.naturalWidth > 0 && image.naturalHeight > 0
+                && !image.hasAttribute('width') && !image.hasAttribute('height')) {
+                image.setAttribute('width', String(image.naturalWidth));
+                image.setAttribute('height', String(image.naturalHeight));
+            }
+        }
+        if (image.complete) recordSize();
+        else image.addEventListener('load', recordSize, { once: true });
+    };
+
     AdminEditor.prototype.uploadImages = function (files) {
         var self = this;
-        if (!files.length) return;
+        if (!files.length) return Promise.resolve();
+        var editable = this.form.querySelector('.note-editable');
+        if (!editable || this.editor.summernote('codeview.isActivated')) return Promise.resolve();
         var hadWarning = false;
+        var failures = 0;
+        this.pendingImageUploads += files.length;
+        var codeviewButton = /** @type {HTMLButtonElement} */ (this.form.querySelector('.btn-codeview'));
+        // Code view keeps a separate HTML snapshot; switching mid-upload would lose results.
+        if (codeviewButton) codeviewButton.disabled = true;
+        this.isDirty = true;
+        // Anchor each upload now, before asynchronous work or further typing moves the cursor.
+        var uploads = files.map(function (file) {
+            var placeholder = document.createElement('span');
+            placeholder.className = 'editor-image-upload';
+            placeholder.contentEditable = 'false';
+            placeholder.setAttribute('data-import-error', '1');
+            placeholder.setAttribute('role', 'status');
+            placeholder.textContent = (file.name || 'Görsel') + ' yükleniyor…';
+            self.editor.summernote('insertNode', placeholder);
+            return { file: file, placeholder: placeholder };
+        });
         this.showStatus('Görsel yükleniyor...', 'info');
-        files.reduce(function (chain, file) {
+        return uploads.reduce(function (chain, upload) {
             return chain.then(function () {
-                return self.uploadImage(file, { source: 'editor' }).then(function (payload) {
+                return self.uploadImage(upload.file, { source: 'editor' }).then(function (payload) {
+                    // Removing an upload marker while it loads must not resurrect the image.
+                    if (!editable.contains(upload.placeholder)) return;
                     var altText = prompt('Görsel açıklaması girin (alt text):') || '';
-                    self.insertHtmlSafely(self.figureHtml(payload.url, altText));
+                    var image = document.createElement('img');
+                    image.src = payload.url;
+                    self.preserveImageDimensions(image);
+                    image.alt = altText;
+                    image.style.maxWidth = '100%';
+                    image.style.height = 'auto';
+                    self.editor.summernote('editor.beforeCommand');
+                    upload.placeholder.replaceWith(image);
+                    self.editor.summernote('editor.afterCommand');
                     if (payload.visibility_warning) {
                         hadWarning = true;
                         self.showStatus(payload.visibility_warning + ' (Hata kodu: ' + payload.request_id + ')', 'error');
                     }
+                }).catch(function (err) {
+                    failures++;
+                    if (editable.contains(upload.placeholder)) {
+                        self.editor.summernote('editor.beforeCommand');
+                        upload.placeholder.className = 'fezadan-import-error';
+                        upload.placeholder.textContent = (upload.file.name || 'Görsel') + ' yüklenemedi: ' + err.message + ' Bu uyarıyı silip görseli yeniden ekleyin.';
+                        self.editor.summernote('editor.afterCommand');
+                    }
+                }).finally(function () {
+                    self.pendingImageUploads--;
+                    if (codeviewButton && self.pendingImageUploads === 0) codeviewButton.disabled = false;
+                    self.updatePreview();
+                    self.updateQuality();
                 });
             });
         }, Promise.resolve()).then(function () {
-            if (!hadWarning) self.showStatus('Görsel yüklendi.', 'success');
-        }).catch(function (err) {
-            self.showStatus('Görsel yüklenemedi: ' + err.message, 'error');
+            if (failures) self.showStatus(failures + ' görsel yüklenemedi. Metindeki hata açıklamalarını kontrol edin; diğer görseller işlendi.', 'error');
+            else if (!hadWarning) self.showStatus('Görsel yüklendi.', 'success');
         });
     };
 
@@ -561,12 +824,18 @@
                 }
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                 canvas.toBlob(function (blob) {
-                    if (!blob) {
+                    if (!blob || blob.size >= file.size) {
+                        resolve(file);
+                        return;
+                    }
+                    // Browsers without a WebP encoder may return PNG despite the requested type.
+                    var extension = { 'image/webp': '.webp', 'image/png': '.png', 'image/jpeg': '.jpg' }[blob.type];
+                    if (!extension) {
                         resolve(file);
                         return;
                     }
                     var baseName = (file.name || 'image').replace(/\.[^.]+$/, '');
-                    resolve(new File([blob], baseName + '.webp', { type: 'image/webp' }));
+                    resolve(new File([blob], baseName + extension, { type: blob.type }));
                 }, 'image/webp', 0.86);
             };
             img.onerror = function () {
@@ -632,6 +901,8 @@
     AdminEditor.prototype.dataUrlToFile = function (dataUrl, filename) {
         var parts = dataUrl.split(',');
         var mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/png';
+        var extension = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' }[mime];
+        if (extension) filename = filename.replace(/\.[^.]+$/, '') + extension;
         var bytes = atob(parts[1] || '');
         var n = bytes.length;
         var data = new Uint8Array(n);
@@ -697,7 +968,7 @@
     };
 
     AdminEditor.prototype.ensureDeferredWordImageInput = function () {
-        var input = document.getElementById('deferredWordImages');
+        var input = /** @type {HTMLInputElement} */ (document.getElementById('deferredWordImages'));
         if (!input) {
             input = document.createElement('input');
             input.type = 'file';
@@ -751,35 +1022,203 @@
     AdminEditor.prototype.loadMammoth = function () {
         return new Promise(function (resolve, reject) {
             if (window.mammoth) {
-                resolve();
+                resolve(undefined);
                 return;
             }
             var script = document.createElement('script');
             script.src = '/assets/js/mammoth.browser.min.js';
             var nonce = document.querySelector('script[nonce]');
             if (nonce) script.setAttribute('nonce', nonce.getAttribute('nonce'));
-            script.onload = function () { resolve(); };
+            script.onload = function () { resolve(undefined); };
             script.onerror = function () { reject(new Error('Word kütüphanesi yüklenemedi.')); };
             document.head.appendChild(script);
+        });
+    };
+
+    AdminEditor.prototype.bindScientificTools = function () {
+        var self = this;
+        var trigger = /** @type {HTMLButtonElement} */ (document.getElementById('scientificImportTrigger'));
+        var input = /** @type {HTMLInputElement} */ (document.getElementById('scientificInput'));
+        var cancel = /** @type {HTMLButtonElement} */ (document.getElementById('scientificImportCancel'));
+        var dialog = /** @type {HTMLDialogElement} */ (document.getElementById('formulaDialog'));
+        var source = /** @type {HTMLTextAreaElement} */ (document.getElementById('formulaSource'));
+        var display = /** @type {HTMLInputElement} */ (document.getElementById('formulaDisplay'));
+        var preview = document.getElementById('formulaPreview');
+        var error = document.getElementById('formulaError');
+        var save = /** @type {HTMLButtonElement} */ (document.getElementById('formulaSave'));
+        var remove = /** @type {HTMLButtonElement} */ (document.getElementById('formulaDelete'));
+        var editable = /** @type {HTMLElement} */ (this.editor.next('.note-editor').find('.note-editable')[0]);
+        if (!trigger || !input || !dialog || !editable) return;
+        var editing = null;
+
+        function formulaNode() {
+            var node = document.createElement('span');
+            node.className = 'fezadan-math';
+            node.dataset.mathDisplay = display.checked ? '1' : '0';
+            node.contentEditable = 'false';
+            node.tabIndex = 0;
+            node.textContent = source.value.trim();
+            return node;
+        }
+        function formulaPreview() {
+            preview.replaceChildren(formulaNode());
+            error.textContent = '';
+            if (window.FezadanMath && source.value.trim()) window.FezadanMath.render(preview).then(function () {
+                if (preview.querySelector('.fezadan-math-error')) error.textContent = 'Formül gösterilemedi. TeX kaynağını kontrol edin.';
+            });
+        }
+        function openFormula(node) {
+            if (self.editor.summernote('codeview.isActivated')) {
+                self.showStatus('Formül eklemek için kod görünümünü kapatın.', 'warning');
+                return;
+            }
+            editing = node;
+            self.editor.summernote('saveRange');
+            source.value = node ? node.textContent : '';
+            display.checked = node ? node.dataset.mathDisplay === '1' : false;
+            save.textContent = node ? 'Güncelle' : 'Ekle';
+            remove.hidden = !node;
+            formulaPreview();
+            dialog.showModal();
+            source.focus();
+        }
+        document.getElementById('formulaTrigger').addEventListener('click', function () { openFormula(null); });
+        editable.addEventListener('click', function (event) {
+            var node = /** @type {Element} */ (event.target).closest('.fezadan-math');
+            if (node) { event.preventDefault(); openFormula(node); }
+        });
+        editable.addEventListener('keydown', function (event) {
+            var node = /** @type {Element} */ (event.target).closest('.fezadan-math');
+            if (node && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openFormula(node); }
+        });
+        // Keep restored/imported formulas keyboard-accessible without saving renderer DOM.
+        function prepareFormulaNodes() {
+            editable.querySelectorAll('.fezadan-math').forEach(function (node) {
+                node.setAttribute('contenteditable', 'false');
+                node.setAttribute('tabindex', '0');
+                node.setAttribute('title', 'Formülü düzenle');
+                node.setAttribute('role', 'button');
+                node.setAttribute('aria-label', 'Formülü düzenle: ' + node.textContent.trim());
+            });
+        }
+        var observer = new MutationObserver(prepareFormulaNodes);
+        observer.observe(editable, { childList: true, subtree: true });
+        prepareFormulaNodes();
+        var previewTimer;
+        source.addEventListener('input', function () { clearTimeout(previewTimer); previewTimer = setTimeout(formulaPreview, 250); });
+        display.addEventListener('change', formulaPreview);
+        document.getElementById('formulaCancel').addEventListener('click', function () { dialog.close(); });
+        // Buttons inside the article form must never submit it from this modal.
+        source.addEventListener('keydown', function (event) { event.stopPropagation(); });
+        save.addEventListener('click', function () {
+            var text = source.value.trim();
+            if (!text || new TextEncoder().encode(text).length > 12000) {
+                error.textContent = 'Formül boş olamaz ve 12 KB sınırını aşamaz.';
+                return;
+            }
+            if (!editing && editable.querySelectorAll('.fezadan-math').length >= 1000) {
+                error.textContent = 'Yazı başına en fazla 1000 formül eklenebilir.';
+                return;
+            }
+            var node = formulaNode();
+            self.editor.summernote('restoreRange');
+            if (editing && editable.contains(editing)) {
+                self.editor.summernote('editor.beforeCommand');
+                editing.replaceWith(node);
+                self.editor.summernote('editor.afterCommand');
+            } else {
+                self.editor.summernote('insertNode', node);
+            }
+            self.isDirty = true;
+            dialog.close();
+            self.updatePreview();
+            self.updateQuality();
+        });
+        remove.addEventListener('click', function () {
+            if (editing && editable.contains(editing)) {
+                self.editor.summernote('editor.beforeCommand');
+                editing.remove();
+                self.editor.summernote('editor.afterCommand');
+                self.isDirty = true;
+            }
+            dialog.close();
+            self.updatePreview();
+            self.updateQuality();
+        });
+
+        trigger.addEventListener('click', function () { input.click(); });
+        cancel.addEventListener('click', function () { if (self.cancelScientificImport) self.cancelScientificImport(); });
+        input.addEventListener('change', async function () {
+            var file = input.files && input.files[0];
+            input.value = '';
+            if (!file || self.scientificImportPending) return;
+            if (!/\.(tex|md|markdown)$/i.test(file.name) || file.size > 524288) {
+                self.showStatus('UTF-8 .tex veya .md dosyası seçin (en fazla 512 KB).', 'error');
+                return;
+            }
+            self.scientificImportPending = true;
+            trigger.disabled = true;
+            cancel.hidden = false;
+            var worker;
+            var timer;
+            var controller = new AbortController();
+            try {
+                var text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer());
+                var converted = await new Promise(function (resolve, reject) {
+                    worker = new Worker(input.dataset.workerUrl, { type: 'module' });
+                    self.cancelScientificImport = function () { controller.abort(); reject(new Error('Aktarım iptal edildi; mevcut içerik değişmedi.')); };
+                    timer = setTimeout(function () { controller.abort(); reject(new Error('Aktarım zaman aşımına uğradı; daha küçük bir belge deneyin.')); }, 120000);
+                    worker.onmessage = function (event) {
+                        if (event.data.stage) self.showStatus(event.data.stage, 'info');
+                        else if (event.data.error) reject(new Error(event.data.error));
+                        else resolve(event.data);
+                    };
+                    worker.onerror = function () { reject(new Error('Dönüştürücü çalıştırılamadı. Tarayıcı desteğini ve yerel dosyaları kontrol edin.')); };
+                    worker.postMessage({ source: text, format: /\.tex$/i.test(file.name) ? 'latex' : 'markdown' });
+                });
+                self.showStatus('Aktarılan içerik sunucuda denetleniyor.', 'info');
+                var data = new FormData();
+                data.append('_csrf', self.config.csrfToken);
+                data.append('html', converted.html);
+                var response = await fetch('/yonetim/prepare-scientific-import', { method: 'POST', body: data, credentials: 'same-origin', signal: controller.signal });
+                var result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.error || 'İçerik denetlenemedi.');
+                if (controller.signal.aborted) throw new Error('Aktarım iptal edildi; mevcut içerik değişmedi.');
+                if (!result.html.trim()) throw new Error('Aktarılabilir içerik bulunamadı.');
+                self.insertHtmlSafely(result.html);
+                self.isDirty = true;
+                var warnings = Array.from(new Set((converted.warnings || []).concat(result.warnings || [])));
+                self.showStatus('İçerik aktarıldı (' + result.formula_count + ' formül). Önizlemeyi kontrol edin.' + (warnings.length ? '\n' + warnings.join('\n') : ''), warnings.length ? 'warning' : 'success');
+            } catch (error) {
+                self.showStatus(controller.signal.aborted ? 'Aktarım durduruldu; mevcut içerik değişmedi.' : 'Aktarım başarısız: ' + error.message, 'error');
+            } finally {
+                if (worker) worker.terminate();
+                clearTimeout(timer);
+                self.cancelScientificImport = null;
+                self.scientificImportPending = false;
+                trigger.disabled = false;
+                cancel.hidden = true;
+            }
         });
     };
 
     AdminEditor.prototype.bindShortcuts = function () {
         var self = this;
         function handleShortcut(e) {
+            if (e.defaultPrevented) return;
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
-                var draftBtn = qs(self.config.draftButtonSelector, self.form);
-                if (draftBtn) {
-                    draftBtn.click();
+                var saveButton = qs('[data-shortcut-save]', self.form) || qs(self.config.draftButtonSelector, self.form);
+                if (saveButton) {
+                    saveButton.click();
                 } else {
                     self.saveDraft();
                 }
             }
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'P' || e.key === 'p')) {
                 e.preventDefault();
-                var previewPanel = document.getElementById('previewPanel');
-                var isPreviewVisible = previewPanel && !previewPanel.classList.contains('hidden');
+                var previewPanel = /** @type {HTMLDialogElement} */ (document.getElementById('previewPanel'));
+                var isPreviewVisible = previewPanel && previewPanel.open;
                 if (window.switchTab) {
                     window.switchTab(isPreviewVisible ? 'write' : 'preview');
                 }
@@ -851,7 +1290,8 @@
             trigger.addEventListener('click', function () { input.click(); });
         }
         input.addEventListener('change', function () {
-            if (!input.files || !input.files[0]) return;
+            if (!input.files || !input.files[0] || self.wordImportPending) return;
+            self.wordImportPending = true;
             self.showLoading(true, 'Word kütüphanesi yükleniyor...');
             self.loadMammoth().then(function () {
                 self.showLoading(true, 'Word dosyası işleniyor...');
@@ -860,6 +1300,15 @@
                     window.mammoth.convertToHtml({ arrayBuffer: e.target.result }).then(function (result) {
                         var parser = new DOMParser();
                         var doc = parser.parseFromString(result.value || '', 'text/html');
+                        // Mammoth drops Word equations (OMML) with only a warning. Never publish an
+                        // apparently complete article without them. Style warnings lose no content.
+                        if ((result.messages || []).some(function (message) { return /oMath/i.test(message.message); })) {
+                            var warningBlock = doc.createElement('p');
+                            warningBlock.className = 'fezadan-import-error';
+                            warningBlock.setAttribute('data-import-error', '1');
+                            warningBlock.textContent = 'Word denklemleri aktarılamadı. Denklemleri "Formül ekle" ile yeniden ekleyip bu uyarıyı kaldırın.';
+                            doc.body.appendChild(warningBlock);
+                        }
                         var images = Array.prototype.slice.call(doc.getElementsByTagName('img')).filter(function (img) {
                             return img.src && img.src.indexOf('data:') === 0;
                         });
@@ -916,17 +1365,20 @@
                     }).catch(function (err) {
                         self.showStatus('Word dosyası okunamadı: ' + err.message, 'error');
                     }).finally(function () {
+                        self.wordImportPending = false;
                         self.showLoading(false);
                         input.value = '';
                     });
                 };
                 reader.onerror = function () {
+                    self.wordImportPending = false;
                     self.showLoading(false);
                     self.showStatus('Word dosyası okunamadı.', 'error');
                     input.value = '';
                 };
                 reader.readAsArrayBuffer(input.files[0]);
             }).catch(function (err) {
+                self.wordImportPending = false;
                 self.showLoading(false);
                 self.showStatus(err.message, 'error');
                 input.value = '';
@@ -996,7 +1448,7 @@
         if (placeholder) placeholder.classList.toggle('hidden', !!src);
         if (previewState) previewState.classList.toggle('hidden', !src);
         if (fileName) fileName.textContent = filename || '';
-        var editThumb = document.getElementById('currentCoverThumb');
+        var editThumb = /** @type {HTMLImageElement} */ (document.getElementById('currentCoverThumb'));
         if (editThumb && src) editThumb.src = src;
     };
 
@@ -1019,6 +1471,7 @@
 
     AdminEditor.prototype.draftKeys = function () {
         return {
+            recovery: this.config.draftKey + ':recovery',
             title: this.config.draftKey + ':title',
             content: this.config.draftKey + ':content',
             desc: this.config.draftKey + ':desc',
@@ -1031,51 +1484,85 @@
         var title = qs(this.config.titleSelector, this.form);
         var desc = qs(this.config.descSelector, this.form);
         var refs = qs(this.config.refsSelector, this.form);
-        var content = this.getCode();
-        if ((title && title.value.trim()) || !this.isEmptyHtml(content)) {
-            localStorage.setItem(keys.title, title ? title.value : '');
-            localStorage.setItem(keys.content, content);
-            localStorage.setItem(keys.desc, desc ? desc.value : '');
-            localStorage.setItem(keys.refs, refs ? refs.value : '');
+        try {
+            localStorage.setItem(keys.recovery, JSON.stringify({
+                title: title ? title.value : '',
+                content: this.getCode(),
+                desc: desc ? desc.value : '',
+                refs: refs ? refs.value : ''
+            }));
+            this.setSaveState('Metin bu tarayıcıda yedeklendi; dosyalar ve yayın bilgileri hariç');
+        } catch (_) {
+            this.setSaveState('Tarayıcı yedeği alınamadı; taslak kaydedin');
         }
     };
 
     AdminEditor.prototype.restoreDraftIfNeeded = function () {
         var keys = this.draftKeys();
-        var savedTitle = localStorage.getItem(keys.title);
-        var savedContent = localStorage.getItem(keys.content);
-        if (!savedTitle && (!savedContent || this.isEmptyHtml(savedContent))) return;
-
-        var currentContent = this.getCode();
-        if (savedContent && savedContent === currentContent) return;
-        if (!window.confirm('Bu sayfa için kaydedilmemiş bir tarayıcı yedeği bulundu. Geri yüklemek ister misiniz?')) {
-            this.clearDraft();
-            return;
-        }
+        var saved;
+        try {
+            saved = safeJsonParse(localStorage.getItem(keys.recovery) || 'null');
+            if (!saved || typeof saved !== 'object') {
+                saved = {
+                    title: localStorage.getItem(keys.title),
+                    content: localStorage.getItem(keys.content),
+                    desc: localStorage.getItem(keys.desc),
+                    refs: localStorage.getItem(keys.refs)
+                };
+                if (Object.values(saved).every(function (value) { return value === null; })) return;
+            }
+        } catch (_) { return; /* Browser backups are optional. */ }
         var title = qs(this.config.titleSelector, this.form);
         var desc = qs(this.config.descSelector, this.form);
         var refs = qs(this.config.refsSelector, this.form);
-        if (title && savedTitle) title.value = savedTitle;
-        if (savedContent) this.setCode(savedContent);
-        if (desc && localStorage.getItem(keys.desc) !== null) desc.value = localStorage.getItem(keys.desc);
-        if (refs && localStorage.getItem(keys.refs) !== null) refs.value = localStorage.getItem(keys.refs);
+        if ((saved.title === null || saved.title === (title ? title.value : ''))
+            && (saved.content === null || saved.content === this.getCode())
+            && (saved.desc === null || saved.desc === (desc ? desc.value : ''))
+            && (saved.refs === null || saved.refs === (refs ? refs.value : ''))) return;
+        if (!window.confirm('Kaydedilmemiş bir tarayıcı yedeği bulundu. Başlık, metin, özet ve kaynakçayı geri yüklemek ister misiniz? Dosyalar ve yayın ayarları yedekte değildir.')) return;
+        if (title && typeof saved.title === 'string') title.value = saved.title;
+        if (typeof saved.content === 'string') {
+            var recovered = document.createElement('template');
+            recovered.innerHTML = saved.content;
+            qsa('[data-word-image-pending], .editor-image-upload', recovered.content).forEach(function (node) {
+                node.removeAttribute('data-word-image-pending');
+                node.removeAttribute('data-word-image-index');
+                node.classList.remove('editor-image-upload');
+                node.classList.add('fezadan-import-error');
+                node.setAttribute('data-import-error', '1');
+                node.textContent = 'Bu görsel yedeklenemedi. Görseli yeniden ekleyip bu uyarıyı kaldırın.';
+            });
+            this.setCode(recovered.innerHTML);
+        }
+        if (desc && typeof saved.desc === 'string') desc.value = saved.desc;
+        if (refs && typeof saved.refs === 'string') refs.value = saved.refs;
+        this.isDirty = true;
+        this.setSaveState('Tarayıcı yedeği geri yüklendi');
         this.updatePreview();
         this.updateQuality();
-    };
-
-    AdminEditor.prototype.clearDraft = function () {
-        var keys = this.draftKeys();
-        Object.keys(keys).forEach(function (key) { localStorage.removeItem(keys[key]); });
     };
 
     AdminEditor.prototype.bindSubmit = function () {
         var self = this;
         this.form.addEventListener('submit', function (e) {
+            if (self.pendingImageUploads > 0) {
+                e.preventDefault();
+                self.showLoading(false);
+                self.showStatus('Kaydetmeden önce görsellerin yüklenmesini bekleyin.', 'warning');
+                return;
+            }
+            if (self.scientificImportPending || self.wordImportPending) {
+                e.preventDefault();
+                self.showStatus('Kaydetmeden önce aktarımın tamamlanmasını bekleyin veya aktarımı iptal edin.', 'warning');
+                return;
+            }
             var authorInputs = qsa('input[name="authors[]"]', self.form);
             if (authorInputs.length && !qsa('input[name="authors[]"]:checked', self.form).length) {
                 e.preventDefault();
                 self.showLoading(false);
                 self.showStatus('Lütfen en az bir yazar seçin.', 'error');
+                self.revealField(authorInputs[0]);
+                authorInputs[0].focus();
                 return;
             }
 
@@ -1083,6 +1570,9 @@
                 e.preventDefault();
                 self.showLoading(false);
                 self.showStatus('Kapak görselinde hata var. Farklı bir dosya seçin veya alanı boş bırakın.', 'error');
+                var coverInput = qs(self.config.coverInputSelector, self.form);
+                self.revealField(coverInput);
+                if (coverInput) coverInput.focus();
                 return;
             }
 
@@ -1092,7 +1582,7 @@
                 try {
                     var fd = new FormData(self.form);
                     fd.forEach(function (value) {
-                        if (value && typeof value.size === 'number') totalBytes += value.size;
+                        if (typeof value !== 'string') totalBytes += value.size; // File entries; text fields are strings
                         else totalBytes += new Blob([String(value || '')]).size;
                     });
                 } catch (err) {
@@ -1116,14 +1606,16 @@
             if (!isDraft && self.hasUnresolvedImportErrors()) {
                 e.preventDefault();
                 self.showLoading(false);
-                self.showStatus('Word import sırasında yüklenemeyen görsel var. Hata bloğunu silin veya görseli yeniden yükleyin; isterseniz taslak olarak kaydedebilirsiniz.', 'error');
+                self.showStatus('Aktarılamayan içerik var. İşaretli bölümleri düzeltin veya kaldırın; isterseniz taslak olarak kaydedebilirsiniz.', 'error');
                 var editable = document.querySelector('.note-editable [data-import-error="1"]');
                 if (editable) editable.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return;
             }
             self.isDirty = false;
             self.saveDraft();
-            sessionStorage.setItem('fezadan_pending_draft_clear', JSON.stringify(self.draftKeys()));
+            try {
+                sessionStorage.setItem('fezadan_pending_draft_clear', JSON.stringify(self.draftKeys()));
+            } catch (_) { /* Server submission does not depend on browser storage. */ }
             self.showLoading(true, 'İşleniyor...');
             var submit = qs(self.config.publishButtonSelector, self.form) || qs('button[type="submit"]', self.form);
             [qs(self.config.draftButtonSelector, self.form), submit].forEach(function (button) {
@@ -1149,64 +1641,106 @@
 
     AdminEditor.prototype.bindAnalysis = function () {
         var self = this;
-        ['input', 'change', 'keyup'].forEach(function (eventName) {
-            self.form.addEventListener(eventName, function () {
+        var lastContent = this.getCode();
+        this.editor.on('summernote.change', function (_, content) {
+            if (content !== lastContent) {
                 self.isDirty = true;
-                self.updatePreview();
-                self.updateQuality();
+                self.scheduleDraftBackup();
+            }
+            lastContent = content;
+        });
+        // Navigation keys and header buttons are not article changes.
+        ['input', 'change'].forEach(function (eventName) {
+            self.form.addEventListener(eventName, function (event) {
+                if (/** @type {Element} */ (event.target).closest('#formulaDialog, #scientificInput')) return;
+                self.isDirty = true;
+                self.scheduleDraftBackup();
+                self.scheduleUpdates();
             });
         });
+    };
+
+    // Summernote change, keyup and the bubbling input event describe the same edit.
+    // Coalesce expensive HTML parsing/quality checks outside the keystroke handler.
+    AdminEditor.prototype.scheduleUpdates = function () {
+        var self = this;
+        clearTimeout(this.updateTimer);
+        this.updateTimer = setTimeout(function () {
+            self.updateTimer = null;
+            self.updatePreview();
+            self.updateQuality();
+        }, 150);
     };
 
     AdminEditor.prototype.updatePreview = function () {
         var title = qs(this.config.titleSelector, this.form);
         var desc = qs(this.config.descSelector, this.form);
         var refs = qs(this.config.refsSelector, this.form);
-        var prevTitle = document.getElementById('prev-title');
-        var prevDesc = document.getElementById('prev-desc');
-        var prevContent = document.getElementById('prev-content');
-        if (!prevTitle || !prevContent) return;
-
-        prevTitle.textContent = (title && title.value.trim()) || 'Başlık buraya gelecek...';
-        if (prevDesc) {
-            var descValue = desc ? desc.value.trim() : '';
-            prevDesc.style.display = descValue ? 'block' : 'none';
-            if (descValue) prevDesc.textContent = '"' + descValue + '"';
-        }
-
+        var titleValue = title ? title.value.trim() : '';
+        var descValue = desc ? desc.value.trim() : '';
         var content = this.getCode();
-        if (content && !this.isEmptyHtml(content)) {
-            var seen = [];
-            prevContent.innerHTML = content.replace(/\[(\d+)\]/g, function (match, num) {
-                var id = '';
-                if (seen.indexOf(num) === -1) {
-                    id = ' id="prev-ref-link-' + num + '"';
-                    seen.push(num);
-                }
-                return '<sup class="reference-sup"><a href="#prev-ref-item-' + num + '"' + id + ' class="text-[var(--text-accent)] hover:underline" style="font-family:\'JetBrains Mono\',monospace;font-size:0.75rem;">[' + num + ']</a></sup>';
-            });
-        } else {
-            prevContent.innerHTML = '<p class="opacity-40 italic">İçerik editörden yansıyacak...</p>';
-        }
-
-        var readTime = document.getElementById('prev-readtime');
-        if (readTime) {
-            var words = textOf(prevContent).split(/\s+/).filter(Boolean).length;
-            readTime.textContent = Math.max(1, Math.ceil(words / 200));
-        }
-
+        var plain = htmlToText(content);
+        var words = plain ? plain.split(/\s+/).filter(Boolean).length : 0;
+        var minutes = Math.max(1, Math.ceil(words / 200));
         var wordCounter = document.getElementById('wordCounter');
-        if (wordCounter) {
-            var wc = textOf(prevContent).split(/\s+/).filter(Boolean).length;
-            wordCounter.textContent = wc + ' kelime / ~' + Math.max(1, Math.ceil(wc / 200)) + ' dk';
+        if (wordCounter) wordCounter.textContent = words ? words + ' kelime · yaklaşık ' + minutes + ' dk' : '0 kelime';
+
+        var authors = qsa('input[name="authors[]"]:checked', this.form);
+        var lang = qs('select[name="lang"]', this.form);
+        var isEn = lang && lang.value === 'EN';
+        var panel = /** @type {HTMLDialogElement} */ (document.getElementById('previewPanel'));
+        var seoTitle = qs('[name="seo_title"]', this.form);
+        var seoDesc = qs('[name="seo_description"]', this.form);
+        var slug = qs('#manualSlug', this.form);
+        var snippetTitle = document.getElementById('snippetTitle');
+        var snippetDesc = document.getElementById('snippetDesc');
+        var snippetUrl = document.getElementById('snippetUrl');
+        if (snippetTitle) snippetTitle.textContent = (seoTitle && seoTitle.value.trim()) || titleValue || 'Sayfa başlığı';
+        if (snippetDesc) snippetDesc.textContent = (seoDesc && seoDesc.value.trim()) || descValue || plain.slice(0, 160) || 'Açıklama eklediğinizde burada görünür.';
+        if (snippetUrl) {
+            var site = panel && panel.dataset.siteUrl || window.location.origin;
+            var articleSlug = (slug && slug.value.trim()) || slugify(titleValue);
+            snippetUrl.textContent = site.replace(/^https?:\/\//, '') + (isEn ? '/en/post/' : '/tr/yazi/') + (articleSlug ? encodeURIComponent(articleSlug) : 'makale-slugu');
         }
 
-        var coverWrap = document.getElementById('prev-cover-wrap');
-        var prevCover = document.getElementById('prev-cover');
+        // Keep typing cheap and avoid loading draft images in a hidden preview.
+        var doc = previewDocument();
+        if (!panel || !panel.open || !doc) return;
+        doc.documentElement.lang = isEn ? 'en' : 'tr';
+        doc.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme') || 'light');
+        var prevTitle = doc.getElementById('prev-title');
+        var prevDesc = doc.getElementById('prev-desc');
+        var prevContent = doc.getElementById('prev-content');
+        if (!prevTitle || !prevContent) return;
+        prevTitle.textContent = titleValue || (isEn ? 'Your title will appear here…' : 'Başlık buraya gelecek…');
+        prevDesc.hidden = !descValue;
+        prevDesc.textContent = descValue ? '“' + descValue + '”' : '';
+
+        if (content && !this.isEmptyHtml(content)) {
+            prevContent.innerHTML = readerPreviewHtml(content);
+            linkPreviewReferences(prevContent);
+        } else {
+            prevContent.textContent = isEn ? 'Your content will appear here.' : 'İçerik eklediğinizde burada görünür.';
+        }
+
+        doc.getElementById('prev-readtime').textContent = minutes + (isEn ? ' min read' : ' dk okuma');
+        var publishAt = qs('[name="publish_at"]', this.form);
+        var prevDate = doc.getElementById('prev-date');
+        if (!prevDate.dataset.initialDate) prevDate.dataset.initialDate = prevDate.textContent;
+        var date = publishAt && publishAt.value ? new Date(publishAt.value) : null;
+        prevDate.textContent = date && !isNaN(date.getTime()) ? date.toLocaleDateString(isEn ? 'en-US' : 'tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : prevDate.dataset.initialDate;
+        var prevAuthors = doc.getElementById('prev-authors');
+        prevAuthors.hidden = !authors.length;
+        prevAuthors.textContent = (isEn ? 'Authors: ' : 'Yazarlar: ') + authors.map(function (input) { return textOf(input.closest('label').querySelector('span')); }).join(' & ');
+
+        var coverWrap = doc.getElementById('prev-cover-wrap');
+        var prevCover = /** @type {HTMLImageElement} */ (doc.getElementById('prev-cover'));
         var coverUrl = this.coverDataUrl || this.config.existingCoverUrl || '';
         if (coverWrap && prevCover) {
-            coverWrap.style.display = coverUrl ? 'block' : 'none';
+            coverWrap.hidden = !coverUrl;
             if (coverUrl) prevCover.src = coverUrl;
+            else prevCover.removeAttribute('src');
+            prevCover.alt = titleValue + (isEn ? ' / cover image' : ' / kapak görseli');
         }
 
         var checked = qsa(this.config.categorySelector + ':checked', this.form);
@@ -1214,32 +1748,36 @@
             var label = cb.closest('label');
             return textOf(label ? label.querySelector('span') : null);
         }).filter(Boolean);
-        var prevCats = document.getElementById('prev-cats');
+        var prevCats = doc.getElementById('prev-cats');
         if (prevCats) {
-            prevCats.textContent = catNames.length ? catNames.join(', ') : 'KATEGORİ SEÇİLMEDİ';
-            prevCats.style.opacity = catNames.length ? '1' : '0.5';
+            prevCats.textContent = catNames.length ? catNames.join(', ') : (isEn ? 'GENERAL' : 'GENEL');
         }
 
+        doc.getElementById('prev-refs-heading').textContent = isEn ? 'References' : 'Kaynakça';
+        doc.getElementById('prev-toc-heading').textContent = isEn ? 'Contents' : 'İçindekiler';
         if (window.renderPrevRefs && refs) window.renderPrevRefs(refs.value);
         if (window.buildPrevToc) window.buildPrevToc();
         if (window._bindPreviewScroll) window._bindPreviewScroll();
+        if (window.FezadanMath) window.FezadanMath.render(prevContent);
     };
 
     AdminEditor.prototype.updateQuality = function () {
         if (!this.qualityPanel) return;
         var result = this.analyze();
+        var title = qs(this.config.titleSelector, this.form);
+        var empty = result.wordCount === 0 && (!title || !title.value.trim());
         var state = this.qualityPanel.querySelector('#qualityState');
         var meta = this.qualityPanel.querySelector('#qualityMeta');
         var list = this.qualityPanel.querySelector('#qualityList');
         if (state) {
-            state.className = 'quality-state ' + result.state;
-            state.textContent = result.label;
+            state.className = 'quality-state ' + (empty ? 'neutral' : result.state);
+            state.textContent = empty ? 'Yeni taslak' : result.label;
         }
         if (meta) {
-            meta.textContent = result.wordCount + ' kelime / ' + result.readTime + ' dk okuma';
+            meta.textContent = empty ? 'Başlık ve metinle başlayın. Yayın bilgilerini daha sonra tamamlayabilirsiniz.' : result.wordCount + ' kelime / ' + result.readTime + ' dk okuma';
         }
         if (list) {
-            list.innerHTML = result.items.map(function (item) {
+            list.innerHTML = (empty ? [] : result.items).map(function (item) {
                 return '<div class="quality-item ' + item.level + '"><span class="dot"></span><span>' + item.text + '</span></div>';
             }).join('');
         }
@@ -1297,11 +1835,14 @@
         }
 
         if (this.hasUnresolvedImportErrors()) {
-            add('critical', 'Word import sırasında yüklenemeyen görsel var; yayınlamadan önce düzeltin.');
+            add('critical', 'Aktarılamayan içerik var; yayınlamadan önce işaretli bölümleri düzeltin.');
         }
 
         var refText = refs ? refs.value.trim() : '';
-        var usedRefs = Array.from(new Set((content.match(/\[(\d+)\]/g) || []).map(function (m) { return m.replace(/\D/g, ''); })));
+        var refContainer = document.createElement('div');
+        refContainer.innerHTML = content;
+        var prose = referenceTextNodes(refContainer).map(function (node) { return node.textContent; }).join(' ');
+        var usedRefs = Array.from(new Set((prose.match(/\[(\d+)\]/g) || []).map(function (m) { return m.replace(/\D/g, ''); })));
         var declaredRefs = {};
         refText.split('\n').forEach(function (line) {
             line = line.trim();
@@ -1330,7 +1871,7 @@
         var state = critical ? 'critical' : (warning ? 'warning' : 'ready');
         return {
             state: state,
-            label: critical ? 'Kritik Eksik' : (warning ? 'Uyarı Var' : 'Yayına Hazır'),
+            label: critical ? 'Eksik alanlar' : (warning ? 'Öneriler var' : 'Kontrol tamam'),
             wordCount: words.length,
             readTime: Math.max(1, Math.ceil(words.length / 200)),
             items: items

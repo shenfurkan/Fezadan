@@ -2,7 +2,7 @@
 /**
  * Tek PDO bağlantısı.
  *
- * Her controller'ın yeni `new PDO(...)` açmasını engeller — TCP/auth handshake
+ * Her controller'ın yeni `new PDO(...)` açmasını engeller: TCP/auth handshake
  * her istekte tek sefer olur. Persistent connection değil; tek-istek-tek-bağlantı.
  *
  * Kullanım:

@@ -1,49 +1,56 @@
 <?php
-$preview_date = $preview_date ?? date('d F Y');
-$preview_title = isset($article['title']) ? (string)$article['title'] : 'Başlık buraya gelecek...';
-$preview_desc = isset($article['short_desc']) ? (string)$article['short_desc'] : '';
-$preview_image = isset($article['image_url']) ? (string)$article['image_url'] : '';
+$preview_date = !empty($article['created_at']) ? date('d F Y', strtotime($article['created_at'])) : date('d F Y');
 ?>
-<section id="previewPanel" class="hidden fixed inset-x-0 top-20 bottom-0 z-40 overflow-y-auto bg-[var(--bg-paper)] text-[var(--text-main)] p-6 md:p-10">
-    <div class="max-w-5xl mx-auto grid grid-cols-1 xl:grid-cols-[1fr_18rem] gap-8">
-        <article class="bg-[var(--bg-paper)] border-2 border-[var(--text-main)] shadow-[8px_8px_0px_var(--text-main)] p-6 md:p-10">
-            <div class="flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-wider opacity-70 mb-5">
-                <span id="prev-cats">KATEGORİ SEÇİLMEDİ</span>
-                <span aria-hidden="true">/</span>
-                <span><?php echo htmlspecialchars($preview_date, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></span>
-                <span aria-hidden="true">/</span>
-                <span><span id="prev-readtime">1</span> dk okuma</span>
-            </div>
-
-            <h1 id="prev-title" class="font-syne text-4xl md:text-6xl font-black uppercase leading-none mb-6">
-                <?php echo htmlspecialchars($preview_title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>
-            </h1>
-
-            <p id="prev-desc" class="<?php echo $preview_desc === '' ? 'hidden ' : ''; ?>font-mono text-sm md:text-base border-l-4 border-[var(--text-accent)] pl-4 mb-8 opacity-80">
-                <?php echo htmlspecialchars($preview_desc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>
-            </p>
-
-            <figure id="prev-cover-wrap" class="<?php echo $preview_image === '' ? 'hidden ' : ''; ?>mb-8 border-2 border-[var(--text-main)] bg-[var(--bg-secondary)]/20">
-                <img id="prev-cover" src="<?php echo htmlspecialchars($preview_image, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>" alt="" class="w-full aspect-video object-cover">
+<dialog id="previewPanel" class="editor-preview" aria-labelledby="previewHeading" aria-describedby="previewHelp" data-site-url="<?= htmlspecialchars(rtrim(SITE_URL, '/'), ENT_QUOTES, 'UTF-8') ?>">
+    <header class="editor-preview-toolbar">
+        <div class="editor-preview-heading">
+            <h2 id="previewHeading">Makale önizlemesi</h2>
+            <p id="previewHelp">Kaydedilmemiş değişiklikler dahil. Bu ekran yazıyı kaydetmez veya yayınlamaz.</p>
+        </div>
+        <div class="editor-preview-devices" role="group" aria-label="Önizleme genişliği">
+            <button type="button" data-preview-device="desktop" aria-pressed="true">Masaüstü</button>
+            <button type="button" data-preview-device="tablet" aria-pressed="false">Tablet</button>
+            <button type="button" data-preview-device="mobile" aria-pressed="false">Telefon</button>
+        </div>
+        <button type="button" id="previewClose" class="editor-preview-close" autofocus>Düzenlemeye dön <span aria-hidden="true">×</span></button>
+    </header>
+    <div id="previewStage" class="editor-preview-stage" data-device="desktop">
+        <iframe id="previewFrame" title="Makalenin okuyucu görünümü" sandbox="allow-same-origin" referrerpolicy="no-referrer"></iframe>
+    </div>
+</dialog>
+<template id="previewTemplate">
+    <link rel="stylesheet" href="/assets/css/style.css?v=<?= filemtime(ROOT . '/public_html/assets/css/style.css') ?>">
+    <link rel="stylesheet" href="/assets/css/fonts.css?v=<?= filemtime(ROOT . '/public_html/assets/css/fonts.css') ?>">
+    <link rel="stylesheet" href="/assets/css/article-math.css?v=<?= filemtime(ROOT . '/public_html/assets/css/article-math.css') ?>">
+    <link rel="stylesheet" href="/assets/css/admin-preview.css?v=<?= filemtime(ROOT . '/public_html/assets/css/admin-preview.css') ?>">
+    <main class="preview-reader">
+        <article class="preview-reader-article">
+            <header class="preview-reader-header">
+                <div class="preview-reader-meta">
+                    <span id="prev-date"><?= htmlspecialchars($preview_date, ENT_QUOTES, 'UTF-8') ?></span>
+                    <span aria-hidden="true">/</span>
+                    <span id="prev-cats">GENEL</span>
+                    <span aria-hidden="true">/</span>
+                    <span id="prev-readtime">1 dk okuma</span>
+                </div>
+                <h1 id="prev-title" class="main-article-title font-syne text-5xl md:text-7xl font-bold leading-[0.9] tracking-tight mb-8">Başlık buraya gelecek…</h1>
+                <p id="prev-desc" class="font-body text-xl md:text-2xl italic leading-normal text-[var(--text-main)] opacity-90 pl-6 border-l-4 border-[var(--text-accent)]" hidden></p>
+                <p id="prev-authors" class="preview-reader-authors" hidden></p>
+            </header>
+            <figure id="prev-cover-wrap" class="preview-reader-cover" hidden>
+                <img id="prev-cover" alt="" width="1200" height="675">
             </figure>
-
-            <div id="prev-content" class="prose max-w-none font-serif text-lg leading-8 text-[var(--text-main)]">
-                <p class="opacity-40 italic">İçerik editörden yansıyacak...</p>
+            <div id="prev-content" class="journal-text font-body">
+                <p>İçerik eklediğinizde burada görünür.</p>
             </div>
-
-            <section id="prev-refs-wrap" class="hidden mt-10 pt-6 border-t-2 border-[var(--line-color)]">
-                <h2 class="font-syne text-xl font-black uppercase mb-4">Kaynakça</h2>
-                <ol id="prev-refs" class="space-y-2 font-mono text-xs leading-6"></ol>
+            <section id="prev-refs-wrap" class="preview-reader-refs" hidden>
+                <h2 id="prev-refs-heading">Kaynakça</h2>
+                <ol id="prev-refs"></ol>
             </section>
         </article>
-
-        <aside class="space-y-4 xl:sticky xl:top-6 xl:self-start">
-            <div class="border-2 border-[var(--text-main)] bg-[var(--bg-secondary)]/20 p-4">
-                <h2 class="font-syne text-sm font-black uppercase mb-3">İçindekiler</h2>
-                <nav id="prev-toc" class="font-mono text-xs space-y-2 opacity-80">
-                    <p class="opacity-50">Başlıklar eklendikçe burada görünür.</p>
-                </nav>
-            </div>
+        <aside id="prev-toc-wrap" class="preview-reader-toc" hidden>
+            <h2 id="prev-toc-heading">İçindekiler</h2>
+            <nav id="prev-toc" aria-labelledby="prev-toc-heading"></nav>
         </aside>
-    </div>
-</section>
+    </main>
+</template>

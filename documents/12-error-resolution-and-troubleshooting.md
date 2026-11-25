@@ -166,7 +166,7 @@ Sitenin aktif izleme panelinde (örneğin Koality, Semrush, UptimeRobot):
 ---
 
 ## 8. Cloudflare DNS Ünlem Uyarıları, Sahiplik Doğrulamaları ve Çözümleri
- 
+
 ### A. MX Kaydı Ünlemi (Mail Yönlendirme Hatası)
 #### Belirti
 Cloudflare DNS listesinde `fezadan.org` MX kaydının yanında sarı bir ünlem işareti görünür.
@@ -178,7 +178,7 @@ MX kaydının hedefi (Target) doğrudan **Proxied (Turuncu Bulut)** modundaki an
    * **IPv4 Address:** `213.238.183.121`
    * **Proxy Status:** **DNS Only** (Gri bulut olmalıdır).
 2. Mevcut MX kaydınızı düzenleyin ve hedef (Target) alanını `fezadan.org` yerine **`mail.fezadan.org`** yapın.
- 
+
 ### B. Çoklu Subdomain Ünlemi (Örn: `www.notlar.fezadan.org`)
 #### Belirti
 `www.notlar.fezadan.org` gibi derin/iç içe subdomain A veya CNAME kayıtlarının yanında sarı ünlem işareti görünür.
@@ -199,11 +199,11 @@ Bu kullanıcılar geçmişte mülkiyeti doğrulamak amacıyla DNS seviyesinde bi
    `google-site-verification=YzHPz6jCksPYrReCNL-tPbpjzglYrwm-LLBZal...`
 4. **Silme İşlemi:** İlgili TXT kaydının sağındaki **Edit** (Düzenle) -> **Delete** (Sil) butonlarına basarak kaydı kaldırın.
 5. **Google Paneli Onayı:** Silme işleminden 1-2 dakika sonra Search Console ekranına dönüp **"Verify Removal"** (Kaldırmayı Doğrula) butonuna basın. Yetki kalıcı olarak kaldırılacaktır.
- 
+
 ---
- 
+
 ## 9. Arama Motoru Optimizasyonu (SEO) Hataları ve Çözümleri
- 
+
 ### A. "Identical Page Titles" ve "Identical Meta Descriptions" Uyarıları
 #### Belirti
 Bing Webmaster Tools veya Google Search Console panellerinde `/tr` ve `/en` sayfaları için çakışan/özdeş sayfa başlıkları veya meta açıklamaları uyarıları raporlanır.
@@ -241,7 +241,7 @@ Google arama sonuçlarındaki güncellemelerin veya "URL is unknown to Google" (
 1. **Giriş:** [Google Search Console](https://search.google.com/search-console) paneline gidin.
 2. **URL İnceleme:** En üstteki arama kutusuna incelemek istediğiniz tam adresi yazıp aratın (örn: `https://fezadan.org/tr`).
 3. **Canlı URL Testi (İsteğe Bağlı):** Sağ üstteki **"Test Live URL"** butonuna basarak Google'ın sayfaya şu anda sorunsuz erişip erişemediğini test edin.
-4. **Talep Gönderme:** Ekrandaki **"Request Indexing"** (Dizin Oluşturulmasını İste) bağlantısına tıklayın. 
+4. **Talep Gönderme:** Ekrandaki **"Request Indexing"** (Dizin Oluşturulmasını İste) bağlantısına tıklayın.
 5. Sayfa sıraya alınır ve Googlebot genellikle 1-24 saat içinde sayfayı ziyaret edip arama sonuçlarını günceller.
 
 ### D. Bing Webmaster Tools "Site Scan" ve "URL Inspection" Yönetimi
@@ -264,6 +264,8 @@ DuckDuckGo ve Bing arama sonuçlarındaki eski başlık metinlerini anında gün
 ---
 
 ## 14. Anonymity Check — "Map Unavailable" Hatası
+
+> Bu bölüm ayrı [FezadanAnonymityCheck](https://github.com/shenfurkan/FezadanAnonymityCheck) modülünü anlatır; modül kodu bu repoda bulunmaz.
 
 ### Hata Belirtisi
 

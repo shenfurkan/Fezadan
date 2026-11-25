@@ -196,9 +196,9 @@ Canlıya almadan önce:
 
 Geliştirme yaparken sistemin güvenliğini, gizliliğini ve kararlılığını korumak için uygulanan bazı spesifik mimari korumalar ve tasarım kararları aşağıda listelenmiştir:
 
-### 1. Subdomain Yönlendirme Güvenliği (App.php)
-- **Kural:** `anonymitycheck` subdomain'inden gelen istekler, normal ana site rotalarından (dil ön ekleri, 404 yönlendirmeleri, yazar/makale slug kontrolleri) tamamen izole edilmelidir.
-- **Uygulama:** [App.php](https://github.com/shenfurkan/Fezadan/blob/main/app/Core/App.php#L116) yönlendiricisinde, hostname `anonymitycheck.` ile başlıyorsa istek doğrudan `AnonymityCheckController`'a yönlendirilir ve dil tespiti vb. mantık atlatılır. Bu sayede olası çakışmalar engellenir.
+### 1. Ayrı AnonymityCheck Servisi
+- **Kural:** `anonymitycheck` subdomain'i ana site rotalarından tamamen ayrıdır.
+- **Uygulama:** Modül kodu bu repoda tutulmaz; [FezadanAnonymityCheck](https://github.com/shenfurkan/FezadanAnonymityCheck) deposundan `npm run modules:sync` ile kurulur. Ana site yalnızca `/anonymitycheck/*` isteklerini `ANONYMITY_SITE_URL` adresine yönlendirir.
 
 ### 2. İstilacı Olmayan Yerel Uygulama Keşfi (Port Sniffing)
 - **Sorun:** Kullanıcının bilgisayarında yüklü uygulamaları (Discord, Steam, Tor vb.) tespit etmek için `discord://` gibi custom protokol handler'ları tetiklemek, modern tarayıcılarda kullanıcıya engelleyici ve rahatsız edici güvenlik uyarı pencereleri gösterir.
@@ -215,7 +215,7 @@ Geliştirme yaparken sistemin güvenliğini, gizliliğini ve kararlılığını 
   - Sunucu tarafında tutulan günlük loglar (`logs/anonymity_check.jsonl`), ziyaretçinin IP adresini ve User-Agent bilgisini ham haliyle kaydetmez. Değerler, günlük değişen bir salt anahtarıyla SHA-256 hash işleminden geçirilerek maskelenir ve bu log dosyası her gün otomatik olarak temizlenir (truncation).
 
 ### 4. XS-Leaks Timing Attack Kalibrasyonu
-- **Nasıl Çalışır?** Kullanıcının Google veya GitHub hesaplarında oturumunun açık olup olmadığını anlamak için bu sitelerin giriş kontrol yönlendirmelerine (`CheckCookie` vb.) istekler atılarak gecikme süresi (`performance.now()`) ölçülür. 
+- **Nasıl Çalışır?** Kullanıcının Google veya GitHub hesaplarında oturumunun açık olup olmadığını anlamak için bu sitelerin giriş kontrol yönlendirmelerine (`CheckCookie` vb.) istekler atılarak gecikme süresi (`performance.now()`) ölçülür.
 - **Koruma:** İstekler `mode: 'no-cors'` ve `cache: 'no-store'` ile atılır. Oturumu açık olan kullanıcılarda istek yönlendirme zinciri çok hızlı çözümlenirken (önbellek veya oturum çerez doğrulaması sayesinde <120ms), oturumu kapalı kullanıcılarda tam login sayfalarına yönlendirme yapıldığından süre belirgin şekilde uzar (>250ms).
 
 ### 5. Git Hijyeni ve Sırların Korunması (.gitignore)

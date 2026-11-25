@@ -7,7 +7,41 @@ try {
     $pdo = Db::pdo();
     echo "Starting database migration...\n";
 
-            // Kendi kendini iyileştirme: önce MyISAM tablolarını transaction ve FK desteği için InnoDB'ye çevir
+    // Mail invitations must be available before the new public/admin routes deploy.
+    // Keep failures outside the legacy best-effort block so deploy stops safely.
+    $tableCheck = $pdo->query("SHOW TABLES LIKE 'mail_invitations'");
+    if ($tableCheck->rowCount() === 0) {
+        $pdo->exec("CREATE TABLE `mail_invitations` (
+            `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+            `code_hash` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+            `local_part` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+            `active_address` varchar(64) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
+            `quota_mb` int unsigned NOT NULL DEFAULT 250,
+            `status` varchar(16) NOT NULL DEFAULT 'pending',
+            `created_by` int NOT NULL,
+            `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `expires_at` datetime NOT NULL,
+            `used_at` datetime DEFAULT NULL,
+            `attempt_id` char(32) DEFAULT NULL,
+            `attempt_started_at` datetime DEFAULT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_mail_invite_code` (`code_hash`),
+            UNIQUE KEY `uniq_mail_invite_address` (`active_address`),
+            KEY `idx_mail_invite_expiry` (`status`, `expires_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
+    $tableCheck = $pdo->query("SHOW TABLES LIKE 'mail_invite_rate_limits'");
+    if ($tableCheck->rowCount() === 0) {
+        $pdo->exec("CREATE TABLE `mail_invite_rate_limits` (
+            `scope_hash` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+            `window_start` bigint NOT NULL,
+            `attempts` int unsigned NOT NULL DEFAULT 0,
+            PRIMARY KEY (`scope_hash`, `window_start`),
+            KEY `idx_mail_invite_rate_window` (`window_start`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
+
+            // Self-healing: convert MyISAM tables to InnoDB first for transaction & FK support
             try {
                 $dbName = DB_NAME;
                 $myisamTables = $pdo->query(
@@ -22,34 +56,34 @@ try {
                 error_log("InnoDB self-healing migration failed: " . $e->getMessage());
             }
 
-            // Kendi kendini iyileştiren sütun kontrolleri
+            // Self-healing column checks
             try {
-                // 'lang' sütunu var mı kontrol et
+                // Check if 'lang' column exists
                 $query = $pdo->query("SHOW COLUMNS FROM `articles` LIKE 'lang'");
                 if ($query->rowCount() === 0) {
                     $pdo->exec("ALTER TABLE `articles` ADD COLUMN `lang` VARCHAR(10) NOT NULL DEFAULT 'TR'");
                 }
-                // 'meta_keywords' sütunu var mı kontrol et
+                // Check if 'meta_keywords' column exists
                 $query = $pdo->query("SHOW COLUMNS FROM `articles` LIKE 'meta_keywords'");
                 if ($query->rowCount() === 0) {
                     $pdo->exec("ALTER TABLE `articles` ADD COLUMN `meta_keywords` TEXT NULL");
                 }
-                // 'seo_title' sütunu var mı kontrol et
+                // Check if 'seo_title' column exists
                 $query = $pdo->query("SHOW COLUMNS FROM `articles` LIKE 'seo_title'");
                 if ($query->rowCount() === 0) {
                     $pdo->exec("ALTER TABLE `articles` ADD COLUMN `seo_title` VARCHAR(255) NULL");
                 }
-                // 'seo_description' sütunu var mı kontrol et
+                // Check if 'seo_description' column exists
                 $query = $pdo->query("SHOW COLUMNS FROM `articles` LIKE 'seo_description'");
                 if ($query->rowCount() === 0) {
                     $pdo->exec("ALTER TABLE `articles` ADD COLUMN `seo_description` TEXT NULL");
                 }
-                // 'translation_of' sütunu var mı kontrol et
+                // Check if 'translation_of' column exists
                 $query = $pdo->query("SHOW COLUMNS FROM `articles` LIKE 'translation_of'");
                 if ($query->rowCount() === 0) {
                     $pdo->exec("ALTER TABLE `articles` ADD COLUMN `translation_of` INT NULL DEFAULT NULL");
                 }
-                // 'login_attempts' tablosu var mı kontrol et (brute-force koruması)
+                // Check if 'login_attempts' table exists (brute-force protection)
                 $tableCheck = $pdo->query("SHOW TABLES LIKE 'login_attempts'");
                 if ($tableCheck->rowCount() === 0) {
                     $pdo->exec("CREATE TABLE `login_attempts` (
@@ -62,7 +96,7 @@ try {
                       KEY `idx_login_attempts_time` (`attempt_time`)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
                 }
-                // 'download_rate_limits' tablosu var mı kontrol et (notlar indirme hız sınırı)
+                // Check if 'download_rate_limits' table exists (notlar download rate limiting)
                 $tableCheck = $pdo->query("SHOW TABLES LIKE 'download_rate_limits'");
                 if ($tableCheck->rowCount() === 0) {
                     $pdo->exec("CREATE TABLE `download_rate_limits` (
@@ -75,88 +109,51 @@ try {
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
                 }
 
-                // 'read_rate_limits' tablosu var mı kontrol et (makale okuma tekilleme)
-                $tableCheck = $pdo->query("SHOW TABLES LIKE 'read_rate_limits'");
-                if ($tableCheck->rowCount() === 0) {
-                    $pdo->exec("CREATE TABLE `read_rate_limits` (
-                      `id` int(11) NOT NULL AUTO_INCREMENT,
-                      `ip_hash` varchar(64) NOT NULL,
-                      `article_id` int(11) NOT NULL,
-                      `hit_date` date NOT NULL,
-                      `hit_time` timestamp NOT NULL DEFAULT current_timestamp(),
-                      PRIMARY KEY (`id`),
-                      UNIQUE KEY `uniq_read_rate_daily` (`ip_hash`, `article_id`, `hit_date`),
-                      KEY `idx_read_rate_ip` (`ip_hash`),
-                      KEY `idx_read_rate_article` (`article_id`),
-                      KEY `idx_read_rate_time` (`hit_time`)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-                }
+                // Retired local readership tables/data are left intact, but no longer created or modified.
 
-                // Eski şemalarda da okuma tekillemenin atomik olduğundan emin ol.
-                try {
-                    $indexCheck = $pdo->query("SHOW INDEX FROM `read_rate_limits` WHERE Key_name = 'uniq_read_rate_daily'");
-                    if ($indexCheck && $indexCheck->rowCount() === 0) {
-                        $pdo->exec("DELETE rr1 FROM `read_rate_limits` rr1
-                            INNER JOIN `read_rate_limits` rr2
-                                ON rr1.ip_hash = rr2.ip_hash
-                                AND rr1.article_id = rr2.article_id
-                                AND rr1.hit_date = rr2.hit_date
-                                AND rr1.id > rr2.id");
-                        $pdo->exec("ALTER TABLE `read_rate_limits` ADD UNIQUE KEY `uniq_read_rate_daily` (`ip_hash`, `article_id`, `hit_date`)");
-                    }
-                } catch (\Exception $e) {
-                    error_log("read_rate_limits unique index self-healing failed: " . $e->getMessage());
-                }
-
-                // login_attempts'te 'username_hash' sütunu var mı kontrol et (eski şemada eksik olabilir)
+                // Check if 'username_hash' column exists on login_attempts (may be missing from older schema)
                 $query = $pdo->query("SHOW COLUMNS FROM `login_attempts` LIKE 'username_hash'");
                 if ($query->rowCount() === 0) {
                     $pdo->exec("ALTER TABLE `login_attempts` ADD COLUMN `username_hash` VARCHAR(64) NULL DEFAULT NULL");
                 }
-                // articles'da 'publish_at' sütunu var mı kontrol et (planlı yayın)
+                // Check if 'publish_at' column exists on articles (scheduled publishing)
                 $query = $pdo->query("SHOW COLUMNS FROM `articles` LIKE 'publish_at'");
                 if ($query->rowCount() === 0) {
                     $pdo->exec("ALTER TABLE `articles` ADD COLUMN `publish_at` DATETIME NULL DEFAULT NULL");
-                    // status'e 'scheduled' ekle — yalnızca hala ENUM kullanılıyor ve değer eksikse
+                    // Add 'scheduled' to status: only if still using ENUM and missing the value
                     $statusCol = $pdo->query("SHOW COLUMNS FROM `articles` LIKE 'status'")->fetch(\PDO::FETCH_ASSOC);
                     if ($statusCol && stripos($statusCol['Type'] ?? '', 'enum') !== false && stripos($statusCol['Type'] ?? '', 'scheduled') === false) {
                         $pdo->exec("ALTER TABLE `articles` MODIFY COLUMN `status` ENUM('published','draft','scheduled') DEFAULT 'published'");
                     }
                 }
-                // admins'te 'role' sütunu var mı kontrol et (çoklu admin)
+                // Check if 'role' column exists on admins (multi-admin)
                 $query = $pdo->query("SHOW COLUMNS FROM `admins` LIKE 'role'");
                 if ($query->rowCount() === 0) {
                     $pdo->exec("ALTER TABLE `admins` ADD COLUMN `role` ENUM('superadmin','editor','viewer') NOT NULL DEFAULT 'superadmin'");
                 }
-                // admins'te 'email' sütunu var mı kontrol et (şifre kurtarma)
+                // Check if 'email' column exists on admins (password recovery)
                 $query = $pdo->query("SHOW COLUMNS FROM `admins` LIKE 'email'");
                 if ($query->rowCount() === 0) {
                     $pdo->exec("ALTER TABLE `admins` ADD COLUMN `email` VARCHAR(255) NULL DEFAULT NULL");
                 }
-                // admins'te benzersiz email indeksi var mı kontrol et
+                // Check if a unique email index exists on admins
                 $query = $pdo->query("SHOW INDEX FROM `admins` WHERE Key_name = 'uniq_admins_email'");
                 if ($query->rowCount() === 0) {
                     $pdo->exec("ALTER TABLE `admins` ADD UNIQUE KEY `uniq_admins_email` (`email`)");
                 }
-                // admins'te 'author_id' sütunu var mı kontrol et (admin-yazar bağlantısı)
+                // Check if 'author_id' column exists on admins (admin-to-author linkage)
                 $query = $pdo->query("SHOW COLUMNS FROM `admins` LIKE 'author_id'");
                 if ($query->rowCount() === 0) {
                     $pdo->exec("ALTER TABLE `admins` ADD COLUMN `author_id` INT NULL DEFAULT NULL");
                     $pdo->exec("ALTER TABLE `admins` ADD KEY `idx_admins_author_id` (`author_id`)");
                 }
-                // articles'da 'og_image' sütunu var mı kontrol et (OG görsel üretimi)
+                // Check if 'og_image' column exists on articles (OG image generation)
                 $query = $pdo->query("SHOW COLUMNS FROM `articles` LIKE 'og_image'");
                 if ($query->rowCount() === 0) {
                     $pdo->exec("ALTER TABLE `articles` ADD COLUMN `og_image` VARCHAR(255) NULL DEFAULT NULL");
                 }
 
-                // articles'da 'audio_url' sütunu var mı kontrol et (metin-ses)
-                $query = $pdo->query("SHOW COLUMNS FROM `articles` LIKE 'audio_url'");
-                if ($query->rowCount() === 0) {
-                    $pdo->exec("ALTER TABLE `articles` ADD COLUMN `audio_url` VARCHAR(255) NULL DEFAULT NULL");
-                }
-
-                // 'admin_passkeys' tablosu var mı kontrol et
+                // Check if 'admin_passkeys' table exists
                 $tableCheck = $pdo->query("SHOW TABLES LIKE 'admin_passkeys'");
                 if ($tableCheck->rowCount() === 0) {
                     $pdo->exec("CREATE TABLE `admin_passkeys` (
@@ -172,7 +169,7 @@ try {
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
                 }
 
-                // 'admin_password_resets' tablosu var mı kontrol et
+                // Check if 'admin_password_resets' table exists
                 $tableCheck = $pdo->query("SHOW TABLES LIKE 'admin_password_resets'");
                 if ($tableCheck->rowCount() === 0) {
                     $pdo->exec("CREATE TABLE `admin_password_resets` (
@@ -201,7 +198,7 @@ try {
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
                 }
 
-                // 'authors' tablosu var mı kontrol et
+                // Check if 'authors' table exists
                 $tableCheck = $pdo->query("SHOW TABLES LIKE 'authors'");
                 if ($tableCheck->rowCount() === 0) {
                     $pdo->exec("CREATE TABLE `authors` (
@@ -222,7 +219,7 @@ try {
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
                 }
 
-                // 'article_authors' tablosu var mı kontrol et (çoklu yazar)
+                // Check if 'article_authors' table exists (multi-author)
                 $tableCheck = $pdo->query("SHOW TABLES LIKE 'article_authors'");
                 if ($tableCheck->rowCount() === 0) {
                     $pdo->exec("CREATE TABLE `article_authors` (
@@ -238,7 +235,7 @@ try {
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
                 }
 
-                // Kendi kendini iyileştirme: eksik yazar sütunlarını ekle (S57)
+                // Self-healing: add missing author columns (S57)
                 $authorCols = [
                     'twitter'           => 'VARCHAR(255) NULL DEFAULT NULL',
                     'instagram'         => 'VARCHAR(255) NULL DEFAULT NULL',
@@ -253,7 +250,7 @@ try {
                     }
                 }
 
-                // Kendi kendini iyileştirme: tüm içerik tablolarında updated_at olduğundan emin ol (S56)
+                // Self-healing: ensure updated_at exists on all content tables (S56)
                 foreach (['articles', 'notes', 'authors', 'portfolio_images', 'patch_notes'] as $t) {
                     $q = $pdo->query("SHOW COLUMNS FROM `$t` LIKE 'updated_at'");
                     if ($q->rowCount() === 0) {
@@ -264,7 +261,7 @@ try {
                     }
                 }
 
-                // 'article_corrections' tablosu var mı kontrol et (düzeltme günlüğü)
+                // Check if 'article_corrections' table exists (corrections log)
                 $tableCheck = $pdo->query("SHOW TABLES LIKE 'article_corrections'");
                 if ($tableCheck->rowCount() === 0) {
                     $pdo->exec("CREATE TABLE `article_corrections` (
@@ -280,23 +277,7 @@ try {
 
 
 
-                // 'article_reading_analytics' tablosu var mı kontrol et
-                $tableCheck = $pdo->query("SHOW TABLES LIKE 'article_reading_analytics'");
-                if ($tableCheck->rowCount() === 0) {
-                    $pdo->exec("CREATE TABLE `article_reading_analytics` (
-                      `id` int(11) NOT NULL AUTO_INCREMENT,
-                      `article_id` int(11) NOT NULL,
-                      `ip_hash` varchar(64) NOT NULL,
-                      `max_scroll_depth` int(11) NOT NULL DEFAULT 0,
-                      `seconds_spent` int(11) NOT NULL DEFAULT 0,
-                      `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-                      PRIMARY KEY (`id`),
-                      KEY `idx_reading_analytics_article` (`article_id`),
-                      CONSTRAINT `fk_reading_analytics_article` FOREIGN KEY (`article_id`) REFERENCES `articles` (`id`) ON DELETE CASCADE
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-                }
-
-                // Kendi kendini iyileştirme: portfolio_images'ı eski 'category' sütunundan 'type'a taşı
+                // Self-healing: migrate portfolio_images from old 'category' column to 'type'
                 try {
                     $hasCategory = $pdo->query("SHOW COLUMNS FROM `portfolio_images` LIKE 'category'")->rowCount() > 0;
                     $hasType     = $pdo->query("SHOW COLUMNS FROM `portfolio_images` LIKE 'type'")->rowCount() > 0;
@@ -311,10 +292,10 @@ try {
                         error_log("Self-healing: Removed legacy category column from portfolio_images");
                     }
                 } catch (\Exception $e) {
-                    // Tablo henüz yok, yoksaymak güvenli
+                    // Table might not exist yet, safe to ignore
                 }
 
-                // 'portfolio_images' tablosu var mı kontrol et
+                // Check if 'portfolio_images' table exists
                 $tableCheck = $pdo->query("SHOW TABLES LIKE 'portfolio_images'");
                 if ($tableCheck->rowCount() === 0) {
                     $pdo->exec("CREATE TABLE `portfolio_images` (
@@ -327,13 +308,23 @@ try {
                       `description_en` text DEFAULT NULL,
                       `display_order` int(11) NOT NULL DEFAULT 0,
                       `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+                      `deleted_at` timestamp NULL DEFAULT NULL,
                       PRIMARY KEY (`id`),
                       KEY `idx_portfolio_type` (`type`),
-                      KEY `idx_portfolio_display_order` (`display_order`)
+                      KEY `idx_portfolio_display_order` (`display_order`),
+                      KEY `idx_portfolio_deleted_at` (`deleted_at`)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
                 }
 
-                // 'patch_notes' tablosu var mı kontrol et
+                // Self-healing: add missing deleted_at column to portfolio_images
+                $query = $pdo->query("SHOW COLUMNS FROM `portfolio_images` LIKE 'deleted_at'");
+                if ($query->rowCount() === 0) {
+                    $pdo->exec("ALTER TABLE `portfolio_images` ADD COLUMN `deleted_at` TIMESTAMP NULL DEFAULT NULL");
+                    $pdo->exec("ALTER TABLE `portfolio_images` ADD KEY `idx_portfolio_deleted_at` (`deleted_at`)");
+                    error_log("Self-healing: Added deleted_at column to portfolio_images");
+                }
+
+                // Check if 'patch_notes' table exists
                 $tableCheck = $pdo->query("SHOW TABLES LIKE 'patch_notes'");
                 if ($tableCheck->rowCount() === 0) {
                     $pdo->exec("CREATE TABLE `patch_notes` (
@@ -347,66 +338,25 @@ try {
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
                 }
 
-                // Tablo boşsa gallery-data.js'den ilk verileri ek
-                $count = (int)$pdo->query("SELECT COUNT(*) FROM `portfolio_images`")->fetchColumn();
-                if ($count === 0) {
-                    $rootPath = defined('ROOT') ? ROOT : dirname(__DIR__, 2);
-                    $jsPath = $rootPath . '/public_html/ornek/assets/js/gallery-data.js';
-                    if (is_file($jsPath)) {
-                        $content = file_get_contents($jsPath);
-                        $photoImages = [];
-                        $artImages = [];
-
-                        if (preg_match('/var PHOTOGRAPHY_IMAGES = \[(.*?)\];/s', $content, $photoMatch)) {
-                            if (preg_match_all('/"([^"]+)"/', $photoMatch[1], $imgMatches)) {
-                                $photoImages = $imgMatches[1];
-                            }
-                        }
-
-                        if (preg_match('/var VISUAL_ART_IMAGES = \[(.*?)\];/s', $content, $artMatch)) {
-                            if (preg_match_all('/"([^"]+)"/', $artMatch[1], $imgMatches)) {
-                                $artImages = $imgMatches[1];
-                            }
-                        }
-
-                        $stmt = $pdo->prepare("INSERT INTO `portfolio_images` (type, image_url, title_tr, title_en, display_order) VALUES (?, ?, ?, ?, ?)");
-
-                        $order = 10;
-                        foreach ($photoImages as $idx => $img) {
-                            $filename = pathinfo($img, PATHINFO_FILENAME);
-                            $title = ucwords(str_replace(['-', '_'], ' ', $filename));
-                            $finalUrl = '/furkan/' . ltrim($img, '/');
-                            $stmt->execute(['photo', $finalUrl, $title, $title, $order]);
-                            $order += 10;
-                        }
-
-                        $order = 10;
-                        foreach ($artImages as $idx => $img) {
-                            $filename = pathinfo($img, PATHINFO_FILENAME);
-                            $title = ucwords(str_replace(['-', '_'], ' ', $filename));
-                            $finalUrl = '/furkan/' . ltrim($img, '/');
-                            $stmt->execute(['drawing', $finalUrl, $title, $title, $order]);
-                            $order += 10;
-                        }
-                    }
-                }
+                // Self-healing: purge legacy placeholder images (zoomin.jpg, hkmodular.png)
+                $pdo->exec("DELETE FROM `portfolio_images` WHERE image_url LIKE '%zoomin.jpg%' OR image_url LIKE '%hkmodular.png%'");
             } catch (\Exception $e) {
                 error_log("Database self-healing migration failed: " . $e->getMessage());
             }
 
-            // Kendi kendini iyileştirme: Boş SEO alanlarını makale içeriğinden doldur
+            // Self-healing: Fill empty SEO fields from article content
             try {
                 $seoUpdated = 0;
 
-                // seo_title: boşsa başlıktan kopyala
+                // seo_title: copy from title if empty
                 $missing = $pdo->query("SELECT COUNT(*) FROM articles WHERE (seo_title IS NULL OR seo_title = '') AND title != ''")->fetchColumn();
                 if ($missing > 0) {
                     $pdo->exec("UPDATE articles SET seo_title = title WHERE (seo_title IS NULL OR seo_title = '') AND title != ''");
                     $seoUpdated += (int) $missing;
                 }
 
-                // seo_description: boş olanları doldur VEYA HTML içeren değerleri strip_tags ile düzelt
-                // SQL strip_tags yapamaz; PHP döngüsü kullanılmalı.
+                // seo_description: fill empty OR fix HTML-containing values via PHP strip_tags
+                // SQL cannot strip_tags; must use PHP loop.
                 $rows = $pdo->query(
                     "SELECT id, content FROM articles
                      WHERE content IS NOT NULL AND content != ''
@@ -427,7 +377,7 @@ try {
                     }
                 }
 
-                // meta_keywords: boşsa başlığı kopyala (basit)
+                // meta_keywords: copy title if empty (simple)
                 $missing = $pdo->query("SELECT COUNT(*) FROM articles WHERE (meta_keywords IS NULL OR meta_keywords = '') AND title != ''")->fetchColumn();
                 if ($missing > 0) {
                     $pdo->exec("UPDATE articles SET meta_keywords = title WHERE (meta_keywords IS NULL OR meta_keywords = '') AND title != ''");
@@ -441,9 +391,9 @@ try {
                 error_log("SEO auto-fill failed: " . $e->getMessage());
             }
 
-            // Kendi kendini iyileştirme: Arama için FULLTEXT indeksleri
-            // Tablo seviyesi kilitleri önlemek için ALGORITHM=INPLACE LOCK=NONE kullanır
-            // (MariaDB 10.3+ / MySQL 5.6+ destekliyorsa).
+            // Self-healing: FULLTEXT indexes for search
+            // Uses ALGORITHM=INPLACE LOCK=NONE where supported (MariaDB 10.3+ / MySQL 5.6+)
+            // to avoid table-level locks on large article/note tables.
             try {
                 $ftArticles = $pdo->query(
                     "SHOW INDEX FROM `articles` WHERE Index_type = 'FULLTEXT'"
@@ -452,7 +402,7 @@ try {
                     $pdo->exec("ALTER TABLE `articles` ADD FULLTEXT idx_ft_articles (title, content), ALGORITHM=INPLACE, LOCK=NONE");
                 }
             } catch (\Exception $e) {
-                // Sunucu desteklemiyorsa ALGORITHM ipucu olmadan düş
+                // Fall back without ALGORITHM hint if the server doesn't support it
                 try {
                     $pdo->exec("ALTER TABLE `articles` ADD FULLTEXT idx_ft_articles (title, content)");
                 } catch (\Exception $e2) {
@@ -474,7 +424,21 @@ try {
                 }
             }
 
-            // PDF benzeri R2 anahtarına işaret etmeyen yerel/içe aktarılmış notlar için görünürlük kontrolü.
+            // articles.slug carried two identical UNIQUE indexes (`slug`, `uniq_slug`) from an old schema.
+            // Drop the duplicate only while both exist as single-column keys, so slugs always stay unique.
+            try {
+                $uniqueArticleKeys = [];
+                foreach ($pdo->query("SHOW INDEX FROM `articles` WHERE Non_unique = 0")->fetchAll(\PDO::FETCH_ASSOC) as $index) {
+                    $uniqueArticleKeys[$index['Key_name']][] = $index['Column_name'];
+                }
+                if (($uniqueArticleKeys['slug'] ?? null) === ['slug'] && ($uniqueArticleKeys['uniq_slug'] ?? null) === ['slug']) {
+                    $pdo->exec("ALTER TABLE `articles` DROP INDEX `slug`");
+                }
+            } catch (\Exception $e) {
+                error_log("Duplicate articles.slug index cleanup failed: " . $e->getMessage());
+            }
+
+            // Visibility check for local/imported notes that do not point at a PDF-like R2 key.
             try {
                 $invalidNotePaths = $pdo->query("SELECT id, slug, r2_path FROM `notes` WHERE r2_path IS NULL OR r2_path = '' OR r2_path NOT REGEXP '^notlar/.+\\.pdf$' LIMIT 20")
                     ->fetchAll(\PDO::FETCH_ASSOC);

@@ -2,6 +2,8 @@
 
 Projeyi baştan sona anlamak için aşağıdaki bölümleri sırayla okuyabilirsin.
 
+> Bu herkese açık kod aynasında `tests/`, `migrations/`, Docker dosyaları, deploy yapılandırması ve kişisel portfolyo bulunmaz. Dokümanlardaki bu klasörlere ait komutlar tam geliştirme deposu içindir.
+
 ---
 
 ## Bölümler
@@ -42,7 +44,6 @@ Projeyi baştan sona anlamak için aşağıdaki bölümleri sırayla okuyabilirs
 | 31 | [Proje Temizlik ve Bakım Notları](31-project-cleanup-and-maintenance.md) | Repo hijyeni, asset/vendor takibi, router whitelist ve mimari gecis kararlari |
 | 32 | [İsteğin Yolculuğu](32-journey-of-a-request.md) | Web isteğinin index.php'den controller ve view'a kadar olan yolculuğu |
 | — | [Robot Kontrol Testi](extras/robot-control-test.md) | "İnsan mısınız?" doğrulama sistemi, kaçış oyunu, davranışsal analiz |
-| — | [Portfolio](extras/portfolio.md) | Portfolyo modülü detayları |
 
 ---
 

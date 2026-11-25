@@ -19,11 +19,11 @@ class AuthorController extends Controller {
                 $this->view('errors/404_author');
                 exit;
             }
-            
+
             $contentLang = App::getLang();
 
-            $stmtAll = $pdo->prepare("SELECT * FROM articles WHERE author_id = ? AND status = 'published' AND lang = ? ORDER BY created_at DESC");
-            $stmtAll->execute([$author['id'], $contentLang]);
+            $stmtAll = $pdo->prepare("SELECT a.* FROM articles a WHERE " . ArticleQueries::byAuthor('?') . " AND " . ArticleQueries::PUBLISHED . " AND a.lang = ? ORDER BY a.created_at DESC");
+            $stmtAll->execute([$author['id'], $author['id'], $contentLang]);
             $all_articles = $stmtAll->fetchAll(\PDO::FETCH_ASSOC);
 
             $featured_articles = [];
@@ -34,7 +34,7 @@ class AuthorController extends Controller {
                 )));
                 if (!empty($featuredIds)) {
                     $inQuery = implode(',', array_fill(0, count($featuredIds), '?'));
-                    $stmtFeatured = $pdo->prepare("SELECT * FROM articles WHERE id IN ($inQuery) AND status = 'published' AND lang = ?");
+                    $stmtFeatured = $pdo->prepare("SELECT a.* FROM articles a WHERE a.id IN ($inQuery) AND " . ArticleQueries::PUBLISHED . " AND a.lang = ?");
                     $stmtFeatured->execute(array_merge($featuredIds, [$contentLang]));
                     $featured_articles = $stmtFeatured->fetchAll(\PDO::FETCH_ASSOC);
                 }
@@ -48,7 +48,7 @@ class AuthorController extends Controller {
             ]);
 
         } catch (\PDOException $e) {
-            throw new \Exception("Sistem Hatası: " . $e->getMessage());
+            throw new \Exception("Sistem Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 }

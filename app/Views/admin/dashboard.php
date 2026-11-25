@@ -4,27 +4,33 @@ function sortLink($col, $currentSort) {
     $params = $_GET;
     unset($params['page']);
     unset($params['url']);
-    
+
     // Sıralama yönü
     $newOrder = 'DESC';
     if ($currentSort['column'] == $col && $currentSort['order'] == 'DESC') {
         $newOrder = 'ASC';
     }
-    
+
     $params['sort'] = $col;
     $params['order'] = $newOrder;
-    
+
     return '?' . http_build_query($params);
 }
 
 function sortIndicator($col, $currentSort) {
     if ($currentSort['column'] != $col) return '<span class="opacity-50 ml-1 text-[10px]">↕</span>';
-    
-    return $currentSort['order'] == 'ASC' 
-        ? ' <span class="text-[#FEF9E1] font-bold text-lg">↑</span>' 
+
+    return $currentSort['order'] == 'ASC'
+        ? ' <span class="text-[#FEF9E1] font-bold text-lg">↑</span>'
         : ' <span class="text-[#FEF9E1] font-bold text-lg">↓</span>';
 }
 
+/**
+ * @var array $stats
+ * @var array $pagination
+ * @var array $sort
+ * @var array{time: int, ok: bool, running: bool, tail: string}|null $lastDeploy
+ */
 $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
 ?>
 
@@ -38,7 +44,7 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
     <link rel="icon" type="image/png" sizes="32x32" href="/cdn/dark-favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/cdn/dark-favicon-16x16.png">
     <link rel="apple-touch-icon" href="/cdn/dark-apple-touch-icon.png">
-    <link rel="icon" type="image/jpeg" href="<?php echo SITE_URL ?? ''; ?>/assets/uploads/logo.jpg">
+    <link rel="icon" type="image/jpeg" href="<?php echo SITE_URL; ?>/assets/uploads/logo.jpg">
     <link rel="stylesheet" href="/assets/css/admin.css">
     <link rel="stylesheet" href="/assets/css/fonts.css?v=<?= filemtime(ROOT . '/public_html/assets/css/fonts.css') ?>">
     <script src="/assets/js/admin.js?v=<?php echo filemtime(ROOT . '/public_html/assets/js/admin.js'); ?>"></script>
@@ -58,6 +64,10 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
         .font-syne { font-family: 'Syne', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
 
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: var(--line-color) var(--bg-paper);
+        }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: var(--bg-paper); border-left: 1px solid var(--line-color); }
         ::-webkit-scrollbar-thumb { background: var(--line-color); }
@@ -71,7 +81,7 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
         @keyframes blinker { 50% { opacity: 0; } }
 
         .brutalist-card { transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94); box-shadow: 8px 8px 0px var(--line-color); border: 2px solid var(--line-color); }
-        .brutalist-card:hover { transform: translate(-2px, -2px); box-shadow: 12px 12px 0px var(--text-accent); border-color: var(--text-accent); }
+        .brutalist-card:hover { box-shadow: 12px 12px 0px var(--text-accent); border-color: var(--text-accent); }
 
         .nav-item { position: relative; transition: all 0.3s; z-index: 1; }
         .nav-item::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--text-main); transition: width 0.3s; z-index: -1; }
@@ -94,21 +104,38 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
                 var raw = sessionStorage.getItem('fezadan_pending_draft_clear');
                 if (!raw) return;
                 var keys = JSON.parse(raw);
-                Object.keys(keys || {}).forEach(function (name) {
-                    localStorage.removeItem(keys[name]);
-                });
+                if (<?= in_array($_GET['status'], ['success', 'draft_saved', 'updated'], true) ? 'true' : 'false' ?>) {
+                    Object.keys(keys || {}).forEach(function (name) {
+                        localStorage.removeItem(keys[name]);
+                    });
+                }
                 sessionStorage.removeItem('fezadan_pending_draft_clear');
             } catch (e) {}
         })();
     </script>
     <?php endif; ?>
-    
+
     <?php include __DIR__ . '/_side_panel.php'; ?>
 
     <div class="scroll-smooth h-full"> <?php if ($flashMessage = Flash::pull()): ?>
         <div class="mb-8 p-6 bg-[#6D2323] text-[#FEF9E1] border-2 border-[var(--text-main)] shadow-[8px_8px_0px_#A31D1D] font-mono text-xs uppercase">
             <?= htmlspecialchars($flashMessage) ?>
         </div>
+    <?php endif; ?><?php if (!empty($lastDeploy)): ?>
+        <?php if ($lastDeploy['ok']): ?>
+            <p class="mb-6 font-mono text-xs opacity-70">Son deploy <?= date('d.m.Y H:i', $lastDeploy['time']) ?> tarihinde tamamlandı.</p>
+        <?php elseif ($lastDeploy['running']): ?>
+            <p class="mb-6 font-mono text-xs opacity-70">Deploy sürüyor olabilir (son kayıt <?= date('H:i', $lastDeploy['time']) ?>). Birkaç dakika sonra sayfayı yenileyin.</p>
+        <?php else: ?>
+            <div class="mb-8 p-6 bg-[#6D2323] text-[#FEF9E1] border-2 border-[var(--text-main)] shadow-[8px_8px_0px_#A31D1D] font-mono text-xs" role="alert">
+                <p class="font-bold uppercase mb-2">Son deploy yarıda kaldı (<?= date('d.m.Y H:i', $lastDeploy['time']) ?>)</p>
+                <p class="mb-3">Yedek veya veritabanı güncellemesi adımında durduysa yeni kod yayına alınmadı ve site önceki sürümle çalışıyor. Sebebi kaydın sonunda yazar; düzeltip yeniden deploy edin.</p>
+                <details>
+                    <summary class="cursor-pointer font-bold">Deploy kaydının sonu</summary>
+                    <pre class="mt-2 whitespace-pre-wrap overflow-x-auto"><?= htmlspecialchars($lastDeploy['tail']) ?></pre>
+                </details>
+            </div>
+        <?php endif; ?>
     <?php endif; ?><?php if (isset($_GET['status'])): ?>
         <div class="mb-8 p-6 bg-[#6D2323] text-[#FEF9E1] border-2 border-[var(--text-main)] shadow-[8px_8px_0px_#A31D1D] flex items-center justify-between">
             <div>
@@ -134,12 +161,12 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
             <a href="/yonetim/dashboard" class="px-4 py-2 border border-[#FEF9E1] hover:bg-[var(--bg-paper)] hover:text-[var(--text-main)] font-mono text-xs uppercase transition-colors">OK</a>
         </div>
         <?php endif; ?>
-        
+
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
             <div class="brutalist-card bg-[var(--bg-paper)] p-6 relative group overflow-hidden flex flex-col justify-between">
-                <div class="absolute top-0 right-0 p-4 opacity-10 font-syne text-9xl leading-none -mt-4 -mr-4 group-hover:scale-110 transition-transform pointer-events-none">01</div>
-                
-                <div class="relative z-10 border-b border-[var(--text-main)]/10 pb-3 mb-3">
+                <div class="absolute top-0 right-0 p-4 opacity-10 font-syne text-9xl leading-none -mt-4 -mr-4 pointer-events-none">01</div>
+
+                <div class="relative z-10">
                     <h3 class="font-mono text-[10px] text-[var(--text-accent)] mb-1 uppercase tracking-widest">
                         Toplam Makale
                     </h3>
@@ -158,19 +185,6 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
                     </div>
                 </div>
 
-                <div class="relative z-10">
-                    <h3 class="font-mono text-[10px] text-[var(--text-accent)] mb-1 uppercase tracking-widest">
-                        Toplam Okunma
-                    </h3>
-                    
-                    <div class="font-syne text-4xl font-bold text-[var(--text-main)] flex items-center gap-3">
-                        
-                        <svg class="w-8 h-8 opacity-85 text-[var(--text-accent)]" viewBox="0 -960 960 960" aria-hidden="true"><path fill="currentColor" d="M607.5-372.5Q660-425 660-500t-52.5-127.5Q555-680 480-680t-127.5 52.5Q300-575 300-500t52.5 127.5Q405-320 480-320t127.5-52.5Zm-204-51Q372-455 372-500t31.5-76.5Q435-608 480-608t76.5 31.5Q588-545 588-500t-31.5 76.5Q525-392 480-392t-76.5-31.5ZM214-281.5Q94-363 40-500q54-137 174-218.5T480-800q136 0 256 81.5T910-500Q856-363 736-281.5T480-200q-136 0-266-81.5ZM480-500Zm0 220q113 0 207.5-59.5T832-500q-50-101-144.5-160.5T480-720q-113 0-207.5 59.5T128-500q50 101 144.5 160.5T480-280Z"/></svg>
-                        
-                        <?php echo number_format($stats['total_reads'] ?? 0); ?>
-                        
-                    </div>
-                </div>
             </div>
 
             <div class="brutalist-card bg-[#6D2323] text-[#FEF9E1] p-6 relative group border-[var(--text-main)]">
@@ -192,10 +206,10 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
                     <span class="w-4 h-4 bg-[#6D2323]"></span>
                     MAKALELER
                 </h3>
-                
+
                 <form action="/yonetim/dashboard" method="GET" class="flex w-full md:w-auto">
-                    <input type="text" name="search" value="<?php echo htmlspecialchars($pagination['search'] ?? ''); ?>" 
-                           placeholder="Makale ara... veya id=5" 
+                    <input type="text" name="search" value="<?php echo htmlspecialchars($pagination['search'] ?? ''); ?>"
+                           placeholder="Makale ara... veya id=5"
                            class="bg-transparent border-2 border-[var(--text-main)] px-4 py-2 font-mono text-xs outline-none placeholder-[#6D2323]/50 w-full md:w-64">
                     <button type="submit" class="bg-[#6D2323] text-[#FEF9E1] px-4 py-2 font-bold uppercase text-xs hover:bg-[var(--text-accent)]">ARA</button>
                     <?php if(!empty($pagination['search'])): ?>
@@ -213,9 +227,9 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
                                     ID <?php echo sortIndicator('id', $sort); ?>
                                 </a>
                             </th>
-                            
+
                             <th class="bg-[#6D2323] w-32 p-4 border-r border-[#FEF9E1]/20 hidden md:table-cell">Kapak</th>
-                            
+
                             <th class="bg-[#6D2323] w-[35%] border-r border-[#FEF9E1]/20 cursor-pointer hover:bg-black transition-colors p-0">
                                 <a href="<?php echo sortLink('title', $sort); ?>" class="flex items-center justify-between w-full h-full p-4 text-[#FEF9E1] outline-none select-none [-webkit-tap-highlight-color:transparent]">
                                     Başlık <?php echo sortIndicator('title', $sort); ?>
@@ -234,12 +248,6 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
                                 </a>
                             </th>
 
-                            <th class="bg-[#6D2323] w-[7%] border-r border-[#FEF9E1]/20 hidden md:table-cell cursor-pointer hover:bg-black transition-colors p-0">
-                                <a href="<?php echo sortLink('reads', $sort); ?>" class="flex items-center justify-between w-full h-full p-4 text-[#FEF9E1] outline-none select-none [-webkit-tap-highlight-color:transparent]">
-                                    Okunma <?php echo sortIndicator('reads', $sort); ?>
-                                </a>
-                            </th>
-
                             <th class="bg-[#6D2323] w-[18%] p-4 text-center">İşlem</th>
                         </tr>
                     </thead>
@@ -247,48 +255,41 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
                         <?php if(!empty($articles)): ?>
                             <?php foreach($articles as $article): ?>
                             <tr class="border-b border-[var(--text-main)]/10 hover:bg-[var(--bg-secondary)]/20 transition-colors h-20">
-                                
+
                                 <td class="p-4 border-r border-[var(--text-main)]/10 font-bold text-center truncate">
                                     #<?php echo $article['id']; ?>
                                 </td>
-                                
+
                                 <td class="p-2 border-r border-[var(--text-main)]/10 hidden md:table-cell">
                                     <?php if($article['image_url']): ?>
                                         <div class="w-28 h-16 overflow-hidden border border-[var(--text-main)]">
-                                            <img src="<?php echo htmlspecialchars(Upload::assetUrl($article['image_url']), ENT_QUOTES, 'UTF-8'); ?>" 
-                                                class="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-300 transform hover:scale-105">
+                                            <img src="<?php echo htmlspecialchars(Upload::assetUrl($article['image_url']), ENT_QUOTES, 'UTF-8'); ?>"
+                                                class="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-300">
                                         </div>
                                     <?php else: ?>
                                         <div class="w-28 h-16 bg-[#6D2323]/10 border border-[var(--text-main)]/20 flex items-center justify-center opacity-50">GÖRSEL YOK</div>
                                     <?php endif; ?>
                                 </td>
-                                
+
                                 <td class="p-4 border-r border-[var(--text-main)]/10 font-bold font-sans text-sm italic group relative">
                                     <div class="truncate w-full absolute inset-0 p-4 flex items-center">
                                         <?php if(($article['status'] ?? 'published') === 'draft'): ?>
                                             <span class="text-[9px] font-bold font-mono bg-yellow-100 text-yellow-800 border border-yellow-500 px-1.5 py-0.5 uppercase mr-1 flex-shrink-0">TASLAK</span>
                                         <?php endif; ?>
-                                        <a href="<?php echo articleUrl($article['author_slug'] ?? 'yazar', $article['slug'], $article['lang'] ?? 'TR'); ?>" target="_blank"
+                                        <a href="<?php echo articleUrl($article['slug'], $article['lang'] ?? 'TR'); ?>" target="_blank"
                                         class="hover:text-[var(--text-accent)] transition-colors truncate"
                                         title="<?php echo htmlspecialchars($article['title']); ?>">
                                             <?php echo htmlspecialchars($article['title']); ?>
                                         </a>
                                     </div>
                                 </td>
-                                
+
                                 <td class="p-4 border-r border-[var(--text-main)]/10 hidden md:table-cell truncate">
                                     <?php echo htmlspecialchars($article['author_name'] ?: 'yonetim'); ?>
                                 </td>
-                                
+
                                 <td class="p-4 border-r border-[var(--text-main)]/10 uppercase opacity-70 text-[var(--text-accent)] font-bold text-xs truncate">
                                     <?php echo !empty($article['category_names']) ? $article['category_names'] : '-'; ?>
-                                </td>
-
-                                <td class="p-2 border-r border-[var(--text-main)]/10 hidden md:table-cell font-mono text-xs text-center">
-                                    <div class="inline-flex items-center gap-1 text-[var(--text-accent)] font-bold">
-                                        <svg class="w-4 h-4" viewBox="0 -960 960 960" aria-hidden="true"><path fill="currentColor" d="M607.5-372.5Q660-425 660-500t-52.5-127.5Q555-680 480-680t-127.5 52.5Q300-575 300-500t52.5 127.5Q405-320 480-320t127.5-52.5Zm-204-51Q372-455 372-500t31.5-76.5Q435-608 480-608t76.5 31.5Q588-545 588-500t-31.5 76.5Q525-392 480-392t-76.5-31.5ZM214-281.5Q94-363 40-500q54-137 174-218.5T480-800q136 0 256 81.5T910-500Q856-363 736-281.5T480-200q-136 0-266-81.5ZM480-500Zm0 220q113 0 207.5-59.5T832-500q-50-101-144.5-160.5T480-720q-113 0-207.5 59.5T128-500q50 101 144.5 160.5T480-280Z"/></svg>
-                                        <span><?php echo number_format($article['reads']); ?></span>
-                                    </div>
                                 </td>
 
                                 <td class="p-4 text-center">
@@ -314,20 +315,21 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
                             </tr>
                             <?php endforeach; ?>
                         <?php else: ?>
-                            <tr><td colspan="7" class="p-8 text-center opacity-50 uppercase">// Kayıt bulunamadı.</td></tr>
+                            <tr><td colspan="6" class="p-8 text-center opacity-50 uppercase">// Kayıt bulunamadı.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
-                
+
                 <?php if($pagination['total'] > 1): ?>
                 <div class="bg-[var(--bg-paper)] p-4 border-t border-[var(--text-main)] flex justify-center gap-2">
-                    <?php 
+                    <?php
                         $qs = $_GET;
                         unset($qs['page']);
+                        unset($qs['url']);
                         $baseQuery = http_build_query($qs);
                         $baseUrl = "/yonetim/dashboard?" . ($baseQuery ? $baseQuery . '&' : '');
                     ?>
-                    
+
                     <?php if($pagination['current'] > 1): ?>
                         <a href="<?php echo $baseUrl . 'page=' . ($pagination['current'] - 1); ?>" class="px-3 py-1 border border-[var(--text-main)] text-xs font-bold hover:bg-[#6D2323] hover:text-[#FEF9E1]">←</a>
                     <?php endif; ?>
@@ -349,7 +351,7 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
                 ISLEMLER
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                
+
                 <a href="/yonetim/create" class="group border-2 border-[var(--text-main)] hover:bg-[#6D2323] hover:text-[#FEF9E1] transition-all p-6 flex flex-col justify-between cursor-pointer h-32 relative overflow-hidden">
                     <div class="absolute top-2 right-2 opacity-20 font-syne text-4xl group-hover:opacity-10 font-bold">01</div>
                     <h4 class="font-syne text-lg font-bold uppercase mb-1 leading-tight">YENİ MAKALE<br>OLUŞTUR</h4>
@@ -393,7 +395,7 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
         </div>
 
         <?php if ($showSystemScan): ?>
-        <div class="border-2 border-[var(--text-main)] bg-[#1a1a1a] p-4 font-mono text-xs text-[#00ff00] h-96 overflow-hidden relative">
+        <div class="border-2 border-[var(--text-main)] bg-[#1a1a1a] p-4 font-mono text-xs text-[#00ff00] h-96 overflow-y-auto relative">
             <div class="absolute top-2 right-2 text-[10px] opacity-50 border border-[#00ff00] px-1">DURUM</div>
             <div id="terminal-content" class="space-y-1 opacity-90"></div>
             <div class="mt-2 animate-pulse">_</div>
@@ -401,17 +403,17 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
         <?php endif; ?>
 
         <footer class="mt-12 pt-6 border-t border-[var(--line-color)] pb-8"></footer>
-    
+
     </div> </div> </main> <?php if ($showSystemScan): ?><script nonce="<?= CSP_NONCE ?>">
     const healthChecks = <?= json_encode($healthChecks ?? [], JSON_UNESCAPED_UNICODE) ?>;
-    
+
     const logs = [
         "Oturum: <?php echo htmlspecialchars($_SERVER['REMOTE_ADDR'] ?? '', ENT_QUOTES, 'UTF-8'); ?>",
         "Kullanici: <?php echo htmlspecialchars($_SESSION['admin_user'] ?? 'yonetim', ENT_QUOTES, 'UTF-8'); ?> [<?php echo strtoupper($_SESSION['admin_role'] ?? 'admin'); ?>]",
         "=== Sistem Kontrolu Baslatiliyor ===",
         ""
     ];
-    
+
     healthChecks.forEach(function(check) {
         const icon = check.status === 'ok' ? '[✓]' : (check.status === 'warn' ? '[!]' : (check.status === 'fail' ? '[✗]' : '[i]'));
         logs.push(icon + ' ' + check.label + ': ' + check.message);
@@ -420,12 +422,12 @@ $showSystemScan = isset($_GET['scan']) && $_GET['scan'] == '1';
         }
         logs.push('');
     });
-    
+
     logs.push('=== Kontrol Tamamlandi ===');
     logs.push('_');
-    
+
     const terminal = document.getElementById('terminal-content');
-    
+
     function addLog(line) {
         const p = document.createElement('div');
 

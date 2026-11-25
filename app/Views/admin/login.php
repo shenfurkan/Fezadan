@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="/assets/css/admin.css">
     <link rel="stylesheet" href="/assets/css/fonts.css?v=<?= filemtime(ROOT . '/public_html/assets/css/fonts.css') ?>">
     <script src="/assets/js/admin.js?v=<?php echo filemtime(ROOT . '/public_html/assets/js/admin.js'); ?>"></script>
-    
+
     <script nonce="<?= CSP_NONCE ?>">
         (function () {
             const userTheme = localStorage.getItem('theme');
@@ -22,18 +22,18 @@
     </script>
 
     <style>
-        :root { 
+        :root {
             --bg-paper: #0a0a0a;
             --bg-secondary: #1a1a1a;
-            --text-main: #f0f0f0; 
+            --text-main: #f0f0f0;
             --text-accent: #ff3333;
             --line-color: #333333;
         }
-        
-        body { 
-            background-color: var(--bg-paper); 
-            color: var(--text-main); 
-            font-family: 'Space Grotesk', sans-serif; 
+
+        body {
+            background-color: var(--bg-paper);
+            color: var(--text-main);
+            font-family: 'Space Grotesk', sans-serif;
             background-image: radial-gradient(var(--line-color) 1px, transparent 1px);
             background-size: 24px 24px;
             min-height: 100svh;
@@ -41,13 +41,13 @@
             overflow-y: auto;
         }
         .font-syne { font-family: 'Syne', sans-serif; }
-        
-        input { 
-            background: transparent; 
-            border: 1px solid var(--text-main); 
-            padding: 1rem; 
-            width: 100%; 
-            outline: none; 
+
+        input {
+            background: transparent;
+            border: 1px solid var(--text-main);
+            padding: 1rem;
+            width: 100%;
+            outline: none;
             color: var(--text-main);
             transition: background-color 0.3s, border-color 0.3s;
         }
@@ -60,14 +60,14 @@
             opacity: 0.42;
             cursor: not-allowed !important;
         }
-        
-        button { 
-            background: var(--text-main); 
-            color: var(--bg-paper); 
-            width: 100%; 
-            padding: 1rem; 
-            font-weight: bold; 
-            text-transform: uppercase; 
+
+        button {
+            background: var(--text-main);
+            color: var(--bg-paper);
+            width: 100%;
+            padding: 1rem;
+            font-weight: bold;
+            text-transform: uppercase;
             transition: background-color 0.3s, color 0.3s;
         }
         button:hover {
@@ -115,13 +115,6 @@
             flex: 0 0 auto;
         }
 
-        .litecaptcha-mini-secure {
-            margin-left: auto;
-            font-size: 0.64rem;
-            font-weight: 700;
-            color: rgba(240, 240, 240, 0.42);
-        }
-
         .litecaptcha-check-label {
             display: flex;
             align-items: center;
@@ -160,6 +153,18 @@
             overflow-wrap: anywhere;
         }
 
+        .litecaptcha-response-link {
+            display: inline-block;
+            margin-top: 0.65rem;
+            color: inherit;
+            font-size: 0.75rem;
+            text-decoration: underline;
+        }
+
+        .litecaptcha-response-link[hidden] {
+            display: none;
+        }
+
         .litecaptcha-check-row.is-active .litecaptcha-detail-pop,
         .litecaptcha-check-row.is-done .litecaptcha-detail-pop,
         .litecaptcha-check-row.is-error .litecaptcha-detail-pop {
@@ -183,7 +188,7 @@
             pointer-events: none;
         }
 
-        /* Catch button — large touch target, centered on mobile */
+        /* Catch button / large touch target, centered on mobile */
         .litecaptcha-page-btn {
             position: fixed;
             z-index: 9999;
@@ -322,7 +327,6 @@
                             <path d="M12 3.5 18 6v5.2c0 4-2.3 7.4-6 9.3-3.7-1.9-6-5.3-6-9.3V6l6-2.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
                         </svg>
                         <span>LiteCaptcha</span>
-                        <span class="litecaptcha-mini-secure">secure</span>
                     </div>
                     <label class="litecaptcha-check-label" for="litecaptcha-check">
                         <input id="litecaptcha-check" type="checkbox" <?= $captchaVerified ? 'checked' : '' ?>>
@@ -332,6 +336,9 @@
                     <div class="litecaptcha-detail-pop" id="litecaptcha-detail">
                         <?= $captchaVerified ? 'Verification complete. You may now log in.' : 'Check the box to start verification.' ?>
                     </div>
+                    <a class="litecaptcha-response-link" id="litecaptcha-response-link"
+                       href="<?= htmlspecialchars($litecaptchaEmbedUrl, ENT_QUOTES, 'UTF-8') ?>"
+                       target="_blank" rel="noopener noreferrer" hidden>Open LiteCaptcha response</a>
                     <iframe
                         class="litecaptcha-bridge"
                         src="<?= htmlspecialchars($litecaptchaEmbedUrl, ENT_QUOTES, 'UTF-8') ?>"
@@ -349,7 +356,7 @@
             </div>
         </form>
     </div>
-    
+
     <script nonce="<?= CSP_NONCE ?>">
         function base64UrlToBuffer(base64url) {
             const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
@@ -444,18 +451,22 @@
         const litecaptchaRow = document.getElementById('litecaptcha-check-row');
         const litecaptchaStatus = document.getElementById('litecaptcha-status');
         const litecaptchaDetail = document.getElementById('litecaptcha-detail');
+        const litecaptchaResponseLink = document.getElementById('litecaptcha-response-link');
         const litecaptchaOrigin = (() => {
-            if (!litecaptchaFrame) return '*';
+            if (!litecaptchaFrame) return '';
             try {
-                return new URL(litecaptchaFrame.getAttribute('src') || '', window.location.href).origin;
+                const url = new URL(litecaptchaFrame.getAttribute('src') || '', window.location.href);
+                return ['http:', 'https:'].includes(url.protocol) ? url.origin : '';
             } catch (error) {
-                return '*';
+                return '';
             }
         })();
         let litecaptchaReady = false;
         let litecaptchaActive = false;
         let litecaptchaStartRequested = false;
         let litecaptchaReadyTimer = null;
+        let litecaptchaFailure = null;
+        let litecaptchaFrameLoaded = false;
         let litecaptchaRequired = 3;
         let litecaptchaEscapes = 0;
         let litecaptchaLastEscapeAt = 0;
@@ -484,7 +495,7 @@
         }
 
         function postLitecaptcha(message) {
-            if (litecaptchaFrame && litecaptchaFrame.contentWindow) {
+            if (litecaptchaOrigin && litecaptchaFrame && litecaptchaFrame.contentWindow) {
                 litecaptchaFrame.contentWindow.postMessage(message, litecaptchaOrigin);
             }
         }
@@ -503,18 +514,38 @@
         }
 
         function failLitecaptchaBridge(reason, detail) {
-            if (!litecaptchaActive || litecaptchaReady) return;
+            litecaptchaFailure = { reason, detail };
             if (litecaptchaReadyTimer) {
                 clearTimeout(litecaptchaReadyTimer);
                 litecaptchaReadyTimer = null;
             }
-            setLitecaptchaStatus('Failed', detail || ('Reason: ' + reason + '. LiteCaptcha bridge failed to load.'), 'is-error');
+            setLitecaptchaStatus('Failed', '[' + reason + '] ' + (detail || 'LiteCaptcha could not complete verification. Refresh the page after fixing this error.'), 'is-error');
+            if (litecaptchaResponseLink) litecaptchaResponseLink.hidden = !litecaptchaOrigin;
+            if (litecaptchaButton) litecaptchaButton.style.display = 'none';
             if (litecaptchaCheck) {
                 litecaptchaCheck.checked = false;
                 litecaptchaCheck.disabled = false;
             }
             litecaptchaActive = false;
+            litecaptchaReady = false;
             litecaptchaStartRequested = false;
+        }
+
+        function describeLitecaptchaFailure(data) {
+            const reason = typeof data.reason === 'string' ? data.reason.slice(0, 100) : 'REJECTED';
+            const hints = {
+                SESSION_COOKIES_BLOCKED: 'The browser blocked the LiteCaptcha session cookie. Allow cookies or use full-page verification.',
+                SESSION_MISSING: 'The LiteCaptcha session cookie is missing. Check browser cookie restrictions.',
+                CHALLENGE_EXPIRED: 'The verification session expired. Refresh the page to create a new challenge.',
+                CHALLENGE_CHANGED: 'Another tab or request replaced this challenge. Refresh the page and verify in one tab.'
+            };
+            let detail = typeof data.message === 'string' && data.message.trim()
+                ? data.message.slice(0, 1200)
+                : (hints[reason] || 'Verification was rejected. Refresh the page and try again.');
+            if (Number.isInteger(data.httpStatus) && data.httpStatus >= 400 && data.httpStatus <= 599) {
+                detail = 'HTTP ' + data.httpStatus + '. ' + detail;
+            }
+            failLitecaptchaBridge(reason, detail);
         }
 
         function handleLitecaptchaSuccess(data) {
@@ -557,15 +588,28 @@
             if (passkeyBtn) passkeyBtn.disabled = false;
 
             setLitecaptchaStatus('Verified', 'Verification complete. You may now log in.', 'is-done');
+            if (litecaptchaResponseLink) litecaptchaResponseLink.hidden = true;
         }
 
         function requestLitecaptchaStart() {
+            if (!litecaptchaOrigin) {
+                failLitecaptchaBridge('LITECAPTCHA_URL_INVALID', 'The configured LiteCaptcha iframe URL must use HTTP or HTTPS.');
+                return;
+            }
+            if (litecaptchaFailure) {
+                failLitecaptchaBridge(litecaptchaFailure.reason, litecaptchaFailure.detail);
+                return;
+            }
             litecaptchaStartRequested = true;
-            if (!litecaptchaReadyTimer) {
+            if (!litecaptchaReady && !litecaptchaReadyTimer) {
                 litecaptchaReadyTimer = setTimeout(() => {
+                    if (litecaptchaReady) return;
                     failLitecaptchaBridge(
                         'LITECAPTCHA_IFRAME_NOT_READY',
-                        'LiteCaptcha did not respond. Check litecaptcha.fezadan.org embed response, secret/env settings, and frame permissions.'
+                        'No lc:ready message was received within 8 seconds. Iframe load event: '
+                        + (litecaptchaFrameLoaded ? 'received' : 'not received')
+                        + '. Expected message origin: ' + litecaptchaOrigin
+                        + '. No service error was received. Open the LiteCaptcha response below to check the server response or frame policy.'
                     );
                 }, 8000);
             }
@@ -574,9 +618,7 @@
             }
         }
 
-        /* -------------------------------------------------------
-           Catch button — mouse + touch unified
-        ------------------------------------------------------- */
+        /* Catch button / mouse + touch unified */
         function createLitecaptchaButton() {
             if (litecaptchaButton) return litecaptchaButton;
             litecaptchaButton = document.createElement('button');
@@ -608,7 +650,7 @@
                 fireFinalClick(event.clientX, event.clientY);
             });
 
-            // Dokunmatik: touchend'i butona tıklama olarak değerlendir
+            // Touch: treat touchend as a tap on the button
             litecaptchaButton.addEventListener('touchend', (event) => {
                 event.preventDefault(); // prevent ghost mouse click
                 const touch = event.changedTouches[0];
@@ -645,13 +687,13 @@
         function getParentButtonCoords(leftPct, topPct) {
             const btn = createLitecaptchaButton();
             const bounds = litecaptchaButtonBounds(btn);
-            
+
             const expectedX = bounds.minX + (leftPct / 100.0) * (bounds.maxX - bounds.minX);
             const expectedY = bounds.minY + (topPct / 100.0) * (bounds.maxY - bounds.minY);
-            
+
             const left = expectedX - bounds.width / 2;
             const top = expectedY - bounds.height / 2;
-            
+
             return clampLitecaptchaButtonPosition(btn, left, top);
         }
 
@@ -682,7 +724,7 @@
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top  + rect.height / 2;
             const distance = Math.hypot(pointerX - centerX, pointerY - centerY);
-            // Dokunmatik: yakındaki parmak da sayılsın diye daha geniş tetikleme yarıçapı kullan
+            // Touch: use a larger trigger radius so a finger nearby still counts
             const triggerRadius = window.matchMedia('(pointer: coarse)').matches ? 160 : 130;
             if (distance >= triggerRadius) return;
 
@@ -720,14 +762,14 @@
             sampleLitecaptchaButtonRect();
         }, { passive: true });
 
-        // Fare hareketi (masaüstü)
+        // Mouse movement (desktop)
         document.addEventListener('mousemove', (event) => {
             if (!litecaptchaActive) return;
             postLitecaptcha({ type: 'lc:pointer', x: event.clientX, y: event.clientY, viewport: { width: window.innerWidth, height: window.innerHeight } });
             moveLitecaptchaButton(event.clientX, event.clientY);
         }, { passive: true });
 
-        // Dokunmatik hareket (mobil / tablet)
+        // Touch movement (mobile / tablet)
         document.addEventListener('touchmove', (event) => {
             if (!litecaptchaActive) return;
             const touch = event.touches[0];
@@ -756,28 +798,43 @@
 
         if (litecaptchaFrame) {
             litecaptchaFrame.addEventListener('error', () => {
-                failLitecaptchaBridge('LITECAPTCHA_IFRAME_LOAD_ERROR', 'LiteCaptcha iframe failed to load. Check domain, HTTPS, and document root settings.');
+                failLitecaptchaBridge('LITECAPTCHA_IFRAME_LOAD_ERROR', 'The browser reported an iframe load error for ' + litecaptchaOrigin + '. Check domain reachability and HTTPS.');
             });
 
             litecaptchaFrame.addEventListener('load', () => {
+                litecaptchaFrameLoaded = true;
+                // A boot-error frame re-sends its diagnostic after this handshake,
+                // even if its initial message arrived before our listener.
+                postLitecaptcha({ type: 'lc:diagnose' });
                 try {
                     const frameUrl = new URL(litecaptchaFrame.contentWindow.location.href);
                     if ((frameUrl.pathname === '/yonetim' || frameUrl.pathname === '/yonetim/login') && frameUrl.searchParams.get('captcha') === 'ok') {
                         window.location.href = '/yonetim?captcha=ok';
                     }
                 } catch (error) {
-                    // LiteCaptcha challenge açıkken çapraz kaynak.
+                    // Cross-origin while the LiteCaptcha challenge is open.
                 }
             });
         }
 
+        document.addEventListener('securitypolicyviolation', (event) => {
+            if (!litecaptchaFrame || !litecaptchaOrigin || event.disposition === 'report' || !['frame-src', 'child-src'].includes(event.effectiveDirective)) return;
+            try {
+                if (new URL(event.blockedURI, window.location.href).origin !== litecaptchaOrigin) return;
+            } catch (error) {
+                return;
+            }
+            failLitecaptchaBridge('PARENT_FRAME_CSP_BLOCKED', 'This page\'s Content-Security-Policy (' + event.effectiveDirective + ') blocked the LiteCaptcha iframe at ' + litecaptchaOrigin + '. Add that origin to the parent page\'s frame-src policy.');
+        });
+
         window.addEventListener('message', (event) => {
-            if (litecaptchaFrame && event.source !== litecaptchaFrame.contentWindow) return;
-            if (litecaptchaOrigin !== '*' && event.origin !== litecaptchaOrigin) return;
+            if (!litecaptchaFrame || !litecaptchaOrigin || event.source !== litecaptchaFrame.contentWindow || event.origin !== litecaptchaOrigin) return;
             const data = event.data || {};
             if (typeof data.type !== 'string' || !data.type.startsWith('lc:')) return;
             if (data.type === 'lc:ready') {
                 litecaptchaReady = true;
+                litecaptchaFailure = null;
+                if (litecaptchaResponseLink) litecaptchaResponseLink.hidden = true;
                 if (litecaptchaReadyTimer) {
                     clearTimeout(litecaptchaReadyTimer);
                     litecaptchaReadyTimer = null;
@@ -797,7 +854,7 @@
                 const label  = data.label || ((data.escapeCount || 0) + '/' + litecaptchaRequired);
                 const detail = escapeCount >= litecaptchaRequired
                     ? 'Final step: tap the button to complete verification.'
-                    : 'Keep chasing the button — tap or swipe near it.';
+                    : 'Keep chasing the button / tap or swipe near it.';
                 setLitecaptchaStatus(label, detail, 'is-active');
                 if (escapeCount >= litecaptchaRequired && litecaptchaButton) {
                     litecaptchaButton.textContent = 'Verify ✓';
@@ -811,8 +868,7 @@
             } else if (data.type === 'lc:success') {
                 handleLitecaptchaSuccess(data);
             } else if (data.type === 'lc:failure') {
-                setLitecaptchaStatus('Failed', 'Reason: ' + (data.reason || 'REJECTED') + '. Refresh the page and try again.', 'is-error');
-                if (litecaptchaButton) litecaptchaButton.style.display = 'none';
+                describeLitecaptchaFailure(data);
             }
         });
     </script>

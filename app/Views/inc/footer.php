@@ -1,18 +1,30 @@
 <?php
 $footerLangTrUrl = function_exists('getLanguageSwitchUrl')
-    ? getLanguageSwitchUrl('TR')
+    ? getLanguageSwitchUrl('TR', $page_alternates ?? [])
     : (defined('SITE_URL') ? rtrim(SITE_URL, '/') . '/tr' : '/tr');
 $footerLangEnUrl = function_exists('getLanguageSwitchUrl')
-    ? getLanguageSwitchUrl('EN')
+    ? getLanguageSwitchUrl('EN', $page_alternates ?? [])
     : (defined('SITE_URL') ? rtrim(SITE_URL, '/') . '/en' : '/en');
-
-$isLocal = in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', 'localhost:8080', '127.0.0.1', '127.0.0.1:8080', '::1']);
-$portfolioUrl = $isLocal ? '/furkan' : 'https://ornek.fezadan.org';
 ?>
 
 <style>
     [data-theme="dark"] .dynamic-footer-border {
         border-top-color: var(--text-main) !important;
+    }
+
+    .site-footer a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        min-width: 44px;
+        color: var(--text-main);
+        transition: color 0.2s ease;
+    }
+    .site-footer a:hover {
+        color: var(--text-accent);
+        text-decoration: underline;
+        text-underline-offset: 4px;
     }
 
     .pwa-install-banner {
@@ -92,8 +104,8 @@ $portfolioUrl = $isLocal ? '/furkan' : 'https://ornek.fezadan.org';
     }
 </style>
 
-<footer class="py-10 px-6 md:px-12 flex flex-col md:flex-row justify-between items-center text-[10px] uppercase tracking-widest opacity-60 text-[var(--text-main)] border-t border-[var(--line-color)] dynamic-footer-border mt-auto">
-    <div class="mb-4 md:mb-0 flex flex-col md:flex-row items-center gap-2 md:gap-4">
+<footer class="site-footer py-10 px-6 md:px-12 flex flex-col md:flex-row justify-between items-center text-[10px] uppercase tracking-widest text-[var(--text-main)] border-t border-[var(--line-color)] dynamic-footer-border mt-auto gap-4">
+    <div class="mb-4 md:mb-0 flex flex-col md:flex-row flex-wrap justify-center items-center gap-2 md:gap-4">
         <span>FEZADAN</span>
 
         <span class="hidden md:inline opacity-50">|</span>
@@ -103,28 +115,26 @@ $portfolioUrl = $isLocal ? '/furkan' : 'https://ornek.fezadan.org';
         <span class="hidden md:inline opacity-50">|</span>
         <a href="https://github.com/shenfurkan/Fezadan" rel="noopener" class="hover:text-[#E1C89E] hover:opacity-100 transition-all duration-300"><?= __('nav.source_code', 'Source Code') ?></a>
         <span class="hidden md:inline opacity-50">|</span>
-        <a href="<?= htmlspecialchars($portfolioUrl) ?>" class="hover:text-[#E1C89E] hover:opacity-100 transition-all duration-300"><?= __('nav.portfolios', 'My Portfolios') ?></a>
-        <span class="hidden md:inline opacity-50">|</span>
-        <?php 
-            $host = str_replace('www.', '', $_SERVER['HTTP_HOST']);
-            $anonymity_url = (isset($_SERVER['HTTPS']) ? "https://" : "http://") . (strpos($host, 'anonymitycheck.') === 0 ? $host : "anonymitycheck." . $host);
-        ?>
-        <a href="<?= htmlspecialchars($anonymity_url) ?>" class="hover:text-[#E1C89E] hover:opacity-100 transition-all duration-300"><?= __('nav.anonymity', 'Anonymity Check') ?></a>
+        <a href="<?= htmlspecialchars(anonymityUrl(), ENT_QUOTES, 'UTF-8') ?>"><?= __('nav.anonymity', 'Anonymity Check') ?></a>
         <span class="hidden md:inline opacity-50">|</span>
         <a href="/rss" class="hover:text-[#E1C89E] hover:opacity-100 transition-all duration-300">RSS</a>
     </div>
-    <div class="flex gap-6 items-center">
+    <div class="flex flex-wrap justify-center gap-x-4 gap-y-1 items-center">
         <a href="https://www.instagram.com/fezadanorg" target="_blank" rel="noopener noreferrer" class="hover:text-[#E1C89E] hover:opacity-100 transition-all duration-300">Instagram</a>
         <a href="https://www.x.com/fezadanorg" target="_blank" rel="noopener noreferrer" class="hover:text-[#E1C89E] hover:opacity-100 transition-all duration-300">X</a>
         <a href="mailto:info@fezadan.org" class="hover:text-[#E1C89E] hover:opacity-100 transition-all duration-300">info@fezadan.org</a>
         <span class="opacity-50">|</span>
         <div class="inline-flex gap-1">
-            <a href="<?= htmlspecialchars($footerLangTrUrl, ENT_QUOTES, 'UTF-8') ?>" class="hover:text-[#E1C89E] hover:opacity-100 transition-all duration-300 <?= App::getLang() === 'TR' ? 'text-[var(--text-accent)] font-bold' : 'opacity-70' ?>">TR</a>
+            <a href="<?= htmlspecialchars($footerLangTrUrl, ENT_QUOTES, 'UTF-8') ?>" class="<?= App::getLang() === 'TR' ? 'font-bold' : '' ?>">TR</a>
             <span class="opacity-30">/</span>
-            <a href="<?= htmlspecialchars($footerLangEnUrl, ENT_QUOTES, 'UTF-8') ?>" class="hover:text-[#E1C89E] hover:opacity-100 transition-all duration-300 <?= App::getLang() === 'EN' ? 'text-[var(--text-accent)] font-bold' : 'opacity-70' ?>">EN</a>
+            <a href="<?= htmlspecialchars($footerLangEnUrl, ENT_QUOTES, 'UTF-8') ?>" class="<?= App::getLang() === 'EN' ? 'font-bold' : '' ?>">EN</a>
         </div>
     </div>
 </footer>
+
+<?php if (defined('WEB_ANALYTICS_ENABLED') && WEB_ANALYTICS_ENABLED && http_response_code() === 200): ?>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" nonce="<?= CSP_NONCE ?>" data-cf-beacon='<?= json_encode(['token' => WebAnalytics::SITE_TOKEN], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>'></script>
+<?php endif; ?>
 
 <div id="pwa-install-banner" class="pwa-install-banner" role="status" aria-live="polite">
     <span class="pwa-install-text"><?= __('pwa.install', 'FEZADAN\'i ana ekrana ekle') ?></span>
@@ -174,7 +184,7 @@ $portfolioUrl = $isLocal ? '/furkan' : 'https://ornek.fezadan.org';
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('/sw.js').catch(function () {});
+                navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(function () {});
             });
         }
 

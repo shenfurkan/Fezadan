@@ -1,4 +1,4 @@
-﻿    .font-body {
+    .font-body {
         font-family: 'EB Garamond', serif;
     }
 
@@ -134,6 +134,42 @@
         marker: #A31D1D;
     }
 
+    .journal-text ol {
+        list-style-type: decimal;
+        padding-left: 1.5em;
+        margin-bottom: 1.5em;
+    }
+
+    /* Imported Word/LaTeX tables; wide ones scroll instead of widening the page. */
+    .journal-text table {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+        border-collapse: collapse;
+        margin: 1.5rem 0;
+    }
+
+    .journal-text th,
+    .journal-text td {
+        border-bottom: 1px solid var(--line-color);
+        padding: .5rem .9rem;
+        text-align: left;
+        vertical-align: top;
+    }
+
+    .journal-text th {
+        font-weight: 700;
+        border-bottom-width: 2px;
+    }
+
+    .journal-text caption {
+        caption-side: bottom;
+        padding-top: .5rem;
+        font-size: .85em;
+        opacity: .75;
+        text-align: left;
+    }
+
     .journal-text blockquote {
         border-left: 4px solid var(--text-accent);
         padding-left: 1.5rem;
@@ -158,7 +194,7 @@
         border: 1px solid rgba(255, 92, 92, 0.3) !important;
     }
 
-    /* ===== ToC ===== */
+    /* ToC */
 
     .article-grid {
         display: grid;
@@ -388,7 +424,7 @@
         background: var(--text-accent);
     }
 
-    /* ===== Mobil ToC ===== */
+    /* Mobil ToC */
     #toc-mobile-overlay {
         position: fixed;
         inset: 0;
@@ -643,7 +679,7 @@
         cursor: pointer;
     }
 
-    /* ===== Ä°Ã§erik gÃ¶rseli caption ===== */
+    /* Ä°Ã§erik gÃ¶rseli caption */
     .journal-text figure {
         margin: 2rem 0;
         display: block;
@@ -809,15 +845,4 @@
             font-size: 9pt;
             word-break: break-all;
         }
-    }
-
-    .tts-player-wrapper {
-        border: 2px solid var(--line-color);
-        background: var(--bg-secondary);
-        box-shadow: 6px 6px 0px var(--line-color);
-        transition: transform 0.2s;
-    }
-    .tts-player-wrapper:hover {
-        transform: translate(-1px, -1px);
-        box-shadow: 7px 7px 0px var(--line-color);
     }

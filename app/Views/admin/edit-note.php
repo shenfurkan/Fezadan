@@ -1,10 +1,17 @@
+<?php
+/**
+ * @var array $note
+ * @var array $categories
+ * @var array $noteCategoryIds
+ */
+?>
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FEZADAN | NOT DÜZENLE</title>
-    
+
     <script nonce="<?= CSP_NONCE ?>">
         (function () {
             const userTheme = localStorage.getItem('theme');
@@ -16,14 +23,14 @@
 
     <link rel="stylesheet" href="/assets/css/admin.css">
     <link rel="stylesheet" href="/assets/css/fonts.css?v=<?= filemtime(ROOT . '/public_html/assets/css/fonts.css') ?>">
-    
+
     <style>
-        :root { 
-            --bg-paper: #FEF9E1; 
-            --bg-secondary: #E5D0AC; 
-            --text-main: #6D2323; 
-            --text-accent: #A31D1D; 
-            --line-color: #6D2323; 
+        :root {
+            --bg-paper: #FEF9E1;
+            --bg-secondary: #E5D0AC;
+            --text-main: #6D2323;
+            --text-accent: #A31D1D;
+            --line-color: #6D2323;
         }
 
         /* DARK THEME DEĞİŞKENLERİ */
@@ -35,23 +42,23 @@
             --line-color: #3D1F1F;
         }
 
-        body { 
-            background-color: var(--bg-paper); 
-            color: var(--text-main); 
-            font-family: 'Space Grotesk', sans-serif; 
+        body {
+            background-color: var(--bg-paper);
+            color: var(--text-main);
+            font-family: 'Space Grotesk', sans-serif;
             overflow-x: hidden;
             transition: background-color 0.3s ease, color 0.3s ease;
         }
 
         .font-syne  { font-family: 'Syne', sans-serif; }
         .font-mono  { font-family: 'JetBrains Mono', monospace; }
-        
-        .grid-bg { 
-            background-image: linear-gradient(var(--line-color) 1px, transparent 1px), 
-                            linear-gradient(90deg, var(--line-color) 1px, transparent 1px); 
-            background-size: 40px 40px; 
-            opacity: 0.05; 
-            pointer-events: none; 
+
+        .grid-bg {
+            background-image: linear-gradient(var(--line-color) 1px, transparent 1px),
+                            linear-gradient(90deg, var(--line-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.05;
+            pointer-events: none;
         }
 
         /* Form Elemanları İçin Tema Uyumu */
@@ -81,6 +88,10 @@
             color: var(--bg-paper);
         }
 
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: var(--line-color) var(--bg-paper);
+        }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: var(--bg-paper); border-left: 1px solid var(--line-color); }
         ::-webkit-scrollbar-thumb { background: var(--line-color); }
@@ -92,7 +103,7 @@
     <?php include __DIR__ . '/_side_panel.php'; ?>
 
     <main class="flex-1 flex flex-col relative z-10 overflow-y-auto">
-        
+
         <header class="h-24 border-b-2 border-[var(--text-main)] bg-[var(--bg-paper)]/90 backdrop-blur-sm flex justify-between items-center px-6 md:px-12 flex-shrink-0 sticky top-0 z-50">
             <div>
                 <h2 class="font-syne text-xl md:text-3xl font-bold uppercase text-[var(--text-main)]">NOT DÜZENLE</h2>
@@ -114,7 +125,7 @@
 
             <form action="/yonetim/update-note" method="POST" enctype="multipart/form-data" class="space-y-8 brutalist-container border-2 p-8">
                 <?= Csrf::field() ?>
-                
+
                 <input type="hidden" name="id" value="<?php echo $note['id']; ?>">
 
                 <div>
@@ -136,7 +147,7 @@
                         <label class="block font-syne font-bold uppercase text-sm mb-2">KATEGORILER</label>
                         <input type="text" id="category-search" placeholder="Kategori ara..." autocomplete="off"
                                class="w-full border-2 px-4 py-3 font-mono outline-none transition-colors">
-                        
+
                         <div id="category-results" class="absolute z-20 w-full border-x-2 border-b-2 hidden max-h-48 overflow-y-auto">
                             <?php foreach($categories as $cat): ?>
                                 <div class="cat-option p-3 cursor-pointer font-mono text-sm transition-colors border-b border-[var(--text-main)]/10"
@@ -161,36 +172,36 @@
                 </div>
 
                 <div>
-                    <label class="block font-syne font-bold uppercase text-sm mb-2">ICERIK NOTU / OZET</label>
+                    <label class="block font-syne font-bold uppercase text-sm mb-2">İÇERİK NOTU / ÖZET</label>
                     <textarea name="description" rows="5"
                                class="w-full border-2 px-4 py-3 font-mono outline-none transition-colors"><?php echo htmlspecialchars($note['description']); ?></textarea>
                 </div>
 
                 <div>
-                    <label class="block font-syne font-bold uppercase text-sm mb-2">PDF DOSYASINI DEGISTIR</label>
+                    <label class="block font-syne font-bold uppercase text-sm mb-2">PDF DOSYASINI DEĞİŞTİR</label>
                     <input type="file" name="pdf_file" accept=".pdf" class="w-full border-2 px-4 py-3 font-mono outline-none transition-colors">
                     <p class="font-mono text-xs mt-2 opacity-70">Boş bırakırsanız mevcut PDF korunur. Maksimum 50MB.</p>
                 </div>
 
                 <div class="pt-6 border-t-2 border-dashed border-[var(--text-main)]/30">
                     <button type="submit" class="w-full bg-[var(--text-main)] text-[var(--bg-paper)] font-syne font-bold uppercase py-4 text-xl border-2 border-[var(--text-main)] hover:bg-[var(--text-accent)] hover:border-[var(--text-accent)] transition-colors">
-                        DEGISIKLIKLERI KAYDET
+                        DEĞİŞİKLİKLERİ KAYDET [ENTER]
                     </button>
                 </div>
 
             </form>
         </div>
     </main>
-    
+
     <script nonce="<?= CSP_NONCE ?>">
         const searchInput = document.getElementById('category-search');
         const resultsContainer = document.getElementById('category-results');
         const tagsContainer = document.getElementById('selected-categories');
         const options = document.querySelectorAll('.cat-option');
-        let selectedIds = [<?php echo implode(',', $noteCategoryIds); ?>]; 
+        let selectedIds = [<?php echo implode(',', $noteCategoryIds); ?>];
 
         searchInput.addEventListener('focus', () => resultsContainer.classList.remove('hidden'));
-        
+
         searchInput.addEventListener('input', function(e) {
             const term = e.target.value.toLowerCase();
             let hasMatch = false;
@@ -220,14 +231,21 @@
         function addCategoryTag(cat) {
             const tag = document.createElement('span');
             tag.className = 'bg-[var(--text-accent)] text-[var(--bg-paper)] px-3 py-1 text-xs font-mono font-bold uppercase flex items-center gap-2';
-            tag.innerHTML = `${cat.name} <span class="remove-cat-btn cursor-pointer hover:opacity-70" data-cat="${cat.id}">✕</span>`;
-            
+            tag.textContent = cat.name;
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'remove-cat-btn cursor-pointer hover:opacity-70';
+            remove.dataset.cat = String(cat.id);
+            remove.setAttribute('aria-label', cat.name + ' kategorisini kaldır');
+            remove.textContent = '✕';
+            tag.appendChild(remove);
+
             const input = document.createElement('input');
             input.type = 'hidden';
             input.name = 'categories[]';
             input.value = cat.id;
             input.id = `input-cat-${cat.id}`;
-            
+
             tagsContainer.appendChild(tag);
             tagsContainer.appendChild(input);
             searchInput.value = '';

@@ -1,13 +1,4 @@
 <?php
-
-/**
- * View render ve slug yardımcılarını sağlayan temel controller.
- *
- * Tüm uygulama controller'ları bu sınıfı genişleterek şunlara erişir:
- * - view()         — app/Views/ altındaki PHP şablonunu render eder
- * - createSlug()   — Türkçe karakter güvenli URL slug'ı üretir
- * - uniqueSlug()   — veritabanı benzersizlik kontrollü slug üretir
- */
 class Controller {
     public function view($view, $data = []) {
         if (file_exists(ROOT . '/app/Views/' . $view . '.php')) {
@@ -17,7 +8,7 @@ class Controller {
             throw new \RuntimeException("View dosyası bulunamadı: " . $view);
         }
     }
-    
+
     // Slug fonksiyonu
     public function createSlug($str) {
         $find = array('Ç', 'Ş', 'Ğ', 'Ü', 'İ', 'Ö', 'ç', 'ş', 'ğ', 'ü', 'ö', 'ı');
@@ -82,7 +73,7 @@ class Controller {
         }
     }
 
-    // --- RSS / XML yardımcı metodları ---
+    // RSS / XML yardımcı metodları
 
     protected function xmlEscape(string $s): string {
         return htmlspecialchars($s, ENT_XML1 | ENT_QUOTES, 'UTF-8');
@@ -91,6 +82,31 @@ class Controller {
     protected function cdata(string $s): string {
         $safe = str_replace(']]>', ']]]]><![CDATA[>', $s);
         return '<![CDATA[' . $safe . ']]>';
+    }
+
+    /** Feed validators cover every item, including edits/deletions and download counters. */
+    protected function feedCacheHeaders(array $items, string $identity): int {
+        $source = (new \ReflectionClass($this))->getFileName();
+        $sourceTime = $source !== false ? (int)filemtime($source) : 0;
+        $lastModified = $sourceTime;
+        foreach ($items as $item) {
+            foreach (['created_at', 'updated_at'] as $column) {
+                $lastModified = max($lastModified, (int)strtotime((string)($item[$column] ?? '')));
+            }
+        }
+        $etag = '"' . hash('sha256', $identity . '|' . $sourceTime . '|' . json_encode($items)) . '"';
+        header('Content-Type: application/rss+xml; charset=UTF-8');
+        header('Cache-Control: public, max-age=900');
+        header('ETag: ' . $etag);
+        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
+        // Last-Modified alone cannot detect deletion of an older item or counter changes.
+        foreach (explode(',', (string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) as $candidate) {
+            if (trim($candidate) === '*' || preg_replace('/^W\//', '', trim($candidate)) === $etag) {
+                http_response_code(304);
+                exit;
+            }
+        }
+        return $lastModified;
     }
 
     protected function absoluteUrl(string $url, string $siteBase): string {

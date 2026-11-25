@@ -11,7 +11,7 @@ class ArticlesController extends Controller {
 
             $catId = isset($_GET['cat']) ? (int)$_GET['cat'] : null;
             $authorId = isset($_GET['author']) ? (int)$_GET['author'] : null;
-            $searchQuery = isset($_GET['q']) ? trim($_GET['q']) : '';
+            $searchQuery = is_string($_GET['q'] ?? null) ? mb_substr(trim($_GET['q']), 0, 200, 'UTF-8') : '';
             $allowedSorts = ['newest', 'oldest', 'az', 'za'];
             $sortOrder = isset($_GET['sort']) && in_array($_GET['sort'], $allowedSorts, true)
                 ? $_GET['sort']
@@ -47,12 +47,12 @@ class ArticlesController extends Controller {
                 ],
             ]);
         } catch (\PDOException $e) {
-            throw new \Exception("Hata: " . $e->getMessage());
+            throw new \Exception("Hata: " . $e->getMessage(), 0, $e);
         }
     }
 
     private function buildFilters(string $lang, ?int $catId, ?int $authorId, string $searchQuery): array {
-        $whereClauses = ["a.status = 'published'", "a.lang = :lang"];
+        $whereClauses = [ArticleQueries::PUBLISHED, "a.lang = :lang"];
         $params = [':lang' => $lang];
 
         if ($catId) {
@@ -61,12 +61,13 @@ class ArticlesController extends Controller {
         }
 
         if ($authorId) {
-            $whereClauses[] = "a.author_id = :author";
+            $whereClauses[] = ArticleQueries::byAuthor(':author', ':co_author');
             $params[':author'] = $authorId;
+            $params[':co_author'] = $authorId;
         }
 
         if ($searchQuery !== '') {
-            $whereClauses[] = "MATCH(a.title, a.content) AGAINST(:q IN BOOLEAN MODE)";
+            $whereClauses[] = "MATCH(a.title, a.content) AGAINST(:q IN NATURAL LANGUAGE MODE)";
             $params[':q'] = $searchQuery;
         }
 
@@ -140,7 +141,7 @@ class ArticlesController extends Controller {
             SELECT DISTINCT c.* FROM categories c
             JOIN article_categories ac ON c.id = ac.category_id
             JOIN articles a ON ac.article_id = a.id
-            WHERE a.status = 'published' AND a.lang = ?
+            WHERE " . ArticleQueries::PUBLISHED . " AND a.lang = ?
             ORDER BY c.name ASC
         ");
         $catStmt->execute([$lang]);
@@ -152,8 +153,8 @@ class ArticlesController extends Controller {
         $authorStmt = $pdo->prepare("
             SELECT DISTINCT au.id, au.name
             FROM authors au
-            JOIN articles a ON au.id = a.author_id
-            WHERE a.status = 'published' AND a.lang = ?
+            JOIN articles a ON " . ArticleQueries::byAuthor('au.id') . "
+            WHERE " . ArticleQueries::PUBLISHED . " AND a.lang = ?
             ORDER BY au.name ASC
         ");
         $authorStmt->execute([$lang]);

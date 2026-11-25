@@ -16,7 +16,7 @@
         .font-syne { font-family: 'Syne', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         .grid-bg { background-image: linear-gradient(var(--line-color) 1px, transparent 1px), linear-gradient(90deg, var(--line-color) 1px, transparent 1px); background-size: 40px 40px; opacity: 0.05; pointer-events: none; }
-        
+
         /* Side Panel İçin Gerekli Navigasyon Stilleri */
         .nav-item { position: relative; transition: all 0.3s; z-index: 1; }
         .nav-item::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--text-main); transition: width 0.3s; z-index: -1; }
@@ -29,11 +29,8 @@
         .brutalist-input:focus { background: var(--bg-secondary); border-color: var(--text-accent); }
         .terminal-area { background: transparent; color: var(--text-main); border: 2px solid var(--line-color); font-family: 'JetBrains Mono', monospace; padding: 15px; width: 100%; min-height: 200px; resize: vertical; outline: none; }
         .terminal-area:focus { background: var(--bg-secondary); border-color: var(--text-accent); }
-        
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; border-left: 1px dashed rgba(109,35,35,0.2); }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(109,35,35,0.5); border-radius: 0px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(109,35,35,1); }
+
+
     </style>
 </head>
 <body class="flex h-screen w-full overflow-hidden relative">
@@ -44,7 +41,7 @@
 
         <form action="/yonetim/store-patch" method="POST" class="max-w-4xl mx-auto pb-12">
             <?= Csrf::field() ?>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
                 <div class="flex flex-col justify-end">
                     <label class="block font-syne font-bold uppercase text-xs mb-2 opacity-50">Sistem Sürümü</label>
@@ -52,7 +49,7 @@
                         OTOMATİK (1.x)
                     </div>
                 </div>
-                
+
                 <div class="col-span-2">
                     <label class="block font-syne font-bold uppercase text-xs mb-2">Güncelleme Başlığı</label>
                     <input type="text" name="title" placeholder="Örn. Yeni Yazar Sistemi Eklendi" class="brutalist-input" required>

@@ -26,7 +26,10 @@ trait AdminPortfolio
                 'items' => $items
             ]);
         } catch (\Exception $e) {
-            throw new \Exception("Portfolyo Verisi Çekilemedi: " . $e->getMessage());
+            error_log("Portfolyo Verisi Çekilemedi: " . $e->getMessage());
+            $this->view('admin/portfolio_manager', [
+                'items' => []
+            ]);
         }
     }
 
@@ -35,24 +38,32 @@ trait AdminPortfolio
         $this->requirePost();
 
         $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
-
-        $title_tr = trim($_POST['title_tr'] ?? '') ?: 'Görsel';
-        $title_en = trim($_POST['title_en'] ?? '') ?: null;
-        $description_tr = trim($_POST['description_tr'] ?? '') ?: null;
-        $description_en = trim($_POST['description_en'] ?? '') ?: null;
-        $type = $_POST['type'] ?? 'photo';
-        if (!in_array($type, ['photo', 'drawing'], true)) {
-            $type = 'photo';
-        }
-        $display_order = (int)($_POST['display_order'] ?? 0);
+        $portfolioId = 0;
 
         try {
-            if (!isset($_FILES['image']) || $_FILES['image']['error'] === UPLOAD_ERR_NO_FILE) {
+            $title_tr = trim((string)($_POST['title_tr'] ?? ''));
+            $title_en = trim((string)($_POST['title_en'] ?? '')) ?: null;
+            $description_tr = trim((string)($_POST['description_tr'] ?? '')) ?: null;
+            $description_en = trim((string)($_POST['description_en'] ?? '')) ?: null;
+            $type = 'photo';
+            $display_order = (int)($_POST['display_order'] ?? 0);
+
+            $image = $_FILES['image'] ?? null;
+            if (!is_array($image)
+                || !isset($image['error'], $image['name'], $image['tmp_name'], $image['size'])
+                || is_array($image['error'])
+                || is_array($image['name'])
+                || is_array($image['tmp_name'])
+                || is_array($image['size'])) {
+                throw new \InvalidArgumentException('Yükleme verisi geçersiz. Lütfen görseli yeniden seçip tekrar deneyin.');
+            }
+
+            if ($image['error'] === UPLOAD_ERR_NO_FILE) {
                 throw new \Exception("Lütfen yüklemek için bir görsel seçin.");
             }
 
             // Orijinal dosya kalitesinde R2'ye yükle (WebP dönüşümü/sıkıştırma yapmadan)
-            $storedPath = Upload::saveOriginalImageToR2($_FILES['image'], 'portfolio', 'port_', 20971520, $this->createSlug($title_tr));
+            $storedPath = Upload::saveOriginalImageToR2($image, 'portfolio', 'port_', 104857600, 'portfolio');
             if ($storedPath === null) {
                 throw new \Exception("Görsel yüklenemedi: " . Upload::lastError());
             }
@@ -68,27 +79,51 @@ trait AdminPortfolio
                 $description_en,
                 $display_order
             ]);
+            $portfolioId = (int) $pdo->lastInsertId();
+            \App\Services\SitemapService::markSitemapDirty();
 
-            AdminLog::write('info', 'Portfolyo görseli yüklendi.', [
-                'endpoint' => 'storePortfolio',
-                'path' => $storedPath,
-                'title' => $title_tr
-            ]);
+            try {
+                AdminLog::write('info', 'Portfolyo görseli yüklendi.', [
+                    'endpoint' => 'storePortfolio',
+                    'path' => $storedPath,
+                    'title' => $title_tr
+                ]);
+            } catch (\Throwable $logError) {
+                error_log('[PortfolioUpload] success log failed: ' . $logError->getMessage());
+            }
 
-            $_SESSION['success'] = "Görsel başarıyla eklendi.";
-        } catch (\Exception $e) {
+            // AJAX akışında session'a yazmıyoruz — JS toast gösteriyor.
+            // Yalnızca doğrudan form submit (sayfa yenileme) için set et.
+            if (!$isAjax) {
+                $_SESSION['success'] = "Görsel başarıyla eklendi.";
+            }
+        } catch (\Throwable $e) {
+            $message = $e instanceof \Exception
+                ? $e->getMessage()
+                : 'Görsel yüklenirken beklenmeyen bir sunucu hatası oluştu.';
+            error_log('[PortfolioUpload] ' . get_class($e) . ': ' . $e->getMessage());
+            try {
+                AdminLog::write('error', 'Portfolyo görseli yüklenemedi.', [
+                    'endpoint' => 'storePortfolio',
+                    'exception' => get_class($e),
+                    'message' => $e->getMessage(),
+                    'content_length' => (int)($_SERVER['CONTENT_LENGTH'] ?? 0),
+                ]);
+            } catch (\Throwable $logError) {
+                error_log('[PortfolioUpload] failure log failed: ' . $logError->getMessage());
+            }
             if ($isAjax) {
                 header('Content-Type: application/json; charset=utf-8');
                 http_response_code(400);
-                echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+                echo json_encode(['success' => false, 'error' => $message], JSON_UNESCAPED_UNICODE);
                 exit;
             }
-            $_SESSION['error'] = $e->getMessage();
+            $_SESSION['error'] = $message;
         }
 
         if ($isAjax) {
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['success' => true], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['success' => true, 'id' => $portfolioId, 'edit_url' => '/yonetim/portfolio-edit?id=' . $portfolioId], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
@@ -125,7 +160,7 @@ trait AdminPortfolio
                 'item' => $item
             ]);
         } catch (\Exception $e) {
-            throw new \Exception("Portfolyo Düzenleme Hatası: " . $e->getMessage());
+            throw new \Exception("Portfolyo Düzenleme Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -134,7 +169,7 @@ trait AdminPortfolio
         $this->requirePost();
 
         $id = (int)($_POST['id'] ?? 0);
-        $title_tr = trim($_POST['title_tr'] ?? '') ?: 'Görsel';
+        $title_tr = trim((string)($_POST['title_tr'] ?? ''));
         $title_en = trim($_POST['title_en'] ?? '') ?: null;
         $description_tr = trim($_POST['description_tr'] ?? '') ?: null;
         $description_en = trim($_POST['description_en'] ?? '') ?: null;
@@ -159,7 +194,7 @@ trait AdminPortfolio
             // Eğer yeni bir görsel yüklendiyse
             if (isset($_FILES['image']) && $_FILES['image']['error'] !== UPLOAD_ERR_NO_FILE) {
                 // R2'ye orijinal formatta yükle
-                $storedPath = Upload::saveOriginalImageToR2($_FILES['image'], 'portfolio', 'port_', 20971520, $this->createSlug($title_tr));
+                $storedPath = Upload::saveOriginalImageToR2($_FILES['image'], 'portfolio', 'port_', 104857600, 'portfolio');
                 if ($storedPath === null) {
                     throw new \Exception("Görsel güncellenemedi: " . Upload::lastError());
                 }
@@ -191,21 +226,20 @@ trait AdminPortfolio
                 $id
             ]);
 
-            AdminLog::write('info', 'Portfolyo görseli güncellendi.', [
+            AdminLog::write('info', 'Albüm görseli güncellendi.', [
                 'endpoint' => 'updatePortfolio',
-                'id' => $id,
-                'path' => $image_url
+                'id' => $id
             ]);
 
-            $_SESSION['success'] = "Görsel başarıyla güncellendi.";
+            $_SESSION['success'] = "Albüm görseli başarıyla güncellendi.";
+            \App\Services\SitemapService::markSitemapDirty();
+            header('Location: /yonetim/portfolio');
+            exit;
         } catch (\Exception $e) {
             $_SESSION['error'] = $e->getMessage();
             header('Location: /yonetim/portfolio-edit?id=' . $id);
             exit;
         }
-
-        header('Location: /yonetim/portfolio');
-        exit;
     }
 
     public function portfolioUpdate()
@@ -228,20 +262,17 @@ trait AdminPortfolio
                 throw new \Exception("Silinecek öge bulunamadı.");
             }
 
-            // R2'den dosyayı sil
-            try {
+            // R2 CDN'den görseli sil
+            $key = $this->portfolioObjectKey((string)($item['image_url'] ?? ''));
+            if ($key !== null) {
                 require_once ROOT . '/app/Core/R2Storage.php';
-                $r2 = \App\Core\R2Storage::instance();
-                $key = $this->portfolioObjectKey((string)$item['image_url']);
-                if ($key !== null) {
-                    $r2->deleteObject($key);
+                if (!\App\Core\R2Storage::instance()->deleteObject($key)) {
+                    throw new \RuntimeException("Görsel R2'den silinemedi. Kayıt korundu; tekrar deneyin.");
                 }
-            } catch (\Throwable $e) {
-                error_log("Portfolyo görseli R2'den silinirken hata: " . $e->getMessage());
             }
 
-            $stmtDel = $pdo->prepare("DELETE FROM portfolio_images WHERE id = ?");
-            $stmtDel->execute([$id]);
+            $pdo->prepare("DELETE FROM portfolio_images WHERE id = ?")->execute([$id]);
+            \App\Services\SitemapService::markSitemapDirty();
 
             AdminLog::write('info', 'Portfolyo görseli silindi.', [
                 'endpoint' => 'deletePortfolio',
@@ -249,8 +280,8 @@ trait AdminPortfolio
                 'title' => $item['title_tr']
             ]);
 
-            $_SESSION['success'] = "Görsel başarıyla silindi.";
-        } catch (\Exception $e) {
+            $_SESSION['success'] = "Görsel CDN ve veritabanından başarıyla silindi.";
+        } catch (\Throwable $e) {
             $_SESSION['error'] = $e->getMessage();
         }
 
@@ -261,6 +292,70 @@ trait AdminPortfolio
     public function portfolioDelete()
     {
         $this->deletePortfolio();
+    }
+
+    public function deleteAllPortfolio()
+    {
+        $this->requirePost();
+
+        try {
+            $pdo = Db::pdo();
+            $stmt = $pdo->query("SELECT id, image_url FROM portfolio_images");
+            $items = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            $deletedR2Count = 0;
+            $failedR2Count = 0;
+            $deletedCount = 0;
+            $delete = $pdo->prepare("DELETE FROM portfolio_images WHERE id = ?");
+
+            if (!empty($items)) {
+                require_once ROOT . '/app/Core/R2Storage.php';
+                $r2 = \App\Core\R2Storage::instance();
+
+                foreach ($items as $item) {
+                    $key = $this->portfolioObjectKey((string)($item['image_url'] ?? ''));
+                    if ($key !== null) {
+                        try {
+                            if (!$r2->deleteObject($key)) {
+                                $failedR2Count++;
+                                continue;
+                            }
+                            $deletedR2Count++;
+                        } catch (\Throwable $e) {
+                            $failedR2Count++;
+                            error_log("Portfolyo tümünü silme esnasında R2 görseli silinemedi (ID: {$item['id']}): " . $e->getMessage());
+                            continue;
+                        }
+                    }
+                    $delete->execute([$item['id']]);
+                    $deletedCount += $delete->rowCount();
+                }
+            }
+
+            \App\Services\SitemapService::markSitemapDirty();
+
+            AdminLog::write('info', $deletedCount . ' adet portfolyo görseli CDN ve veritabanından kalıcı olarak silindi.', [
+                'endpoint' => 'deleteAllPortfolio',
+                'db_count' => $deletedCount,
+                'r2_deleted' => $deletedR2Count,
+                'r2_failed' => $failedR2Count
+            ]);
+
+            $_SESSION['success'] = $deletedCount . " adet portfolyo görseli silindi.";
+            if ($failedR2Count > 0) {
+                $_SESSION['error'] = $failedR2Count . " görsel R2'den silinemedi. Bu kayıtlar korundu; tekrar deneyin.";
+            }
+        } catch (\Throwable $e) {
+            $_SESSION['error'] = "Portfolyo temizlenirken hata oluştu: " . $e->getMessage();
+        }
+
+        header('Location: /yonetim/portfolio');
+        exit;
+    }
+
+    public function portfolioDeleteAll()
+    {
+        $this->deleteAllPortfolio();
     }
 
     public function portfolioReorder()
@@ -309,5 +404,42 @@ trait AdminPortfolio
 
         header('Location: /yonetim/portfolio');
         exit;
+    }
+    public function cleanupPortfolioTrash()
+    {
+        try {
+            $pdo = Db::pdo();
+            // Fetch items deleted more than 1 day ago
+            $stmt = $pdo->query("SELECT id, image_url FROM portfolio_images WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL 1 DAY");
+            $expiredItems = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            if (!empty($expiredItems)) {
+                require_once ROOT . '/app/Core/R2Storage.php';
+                $r2 = \App\Core\R2Storage::instance();
+
+                $idsToDelete = [];
+                foreach ($expiredItems as $item) {
+                    $key = $this->portfolioObjectKey((string)$item['image_url']);
+                    if ($key !== null) {
+                        try {
+                            $r2->deleteObject($key);
+                        } catch (\Throwable $e) {
+                            error_log("Çöp kutusundan R2 görseli silinirken hata (ID: {$item['id']}): " . $e->getMessage());
+                        }
+                    }
+                    $idsToDelete[] = (int)$item['id'];
+                }
+
+                $placeholders = implode(',', array_fill(0, count($idsToDelete), '?'));
+                $delStmt = $pdo->prepare("DELETE FROM portfolio_images WHERE id IN ($placeholders)");
+                $delStmt->execute($idsToDelete);
+
+                AdminLog::write('info', count($idsToDelete) . ' adet portfolyo görseli çöp kutusundan kalıcı olarak silindi.', [
+                    'endpoint' => 'cleanupPortfolioTrash'
+                ]);
+            }
+        } catch (\Exception $e) {
+            error_log("Portfolyo çöp kutusu temizlenirken hata: " . $e->getMessage());
+        }
     }
 }

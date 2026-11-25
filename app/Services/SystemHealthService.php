@@ -4,12 +4,37 @@ namespace App\Services;
 
 class SystemHealthService
 {
+    /**
+     * Read the most recent manual cPanel or automatic Fezadan deployment.
+     * Matching the whole completion line ignores the command text itself.
+     *
+     * @return array{time: int, ok: bool, running: bool, tail: string}|null
+     */
+    public static function lastDeploy(string $logDir): ?array
+    {
+        $logs = glob($logDir . '/{vc_*_git_deploy.log,fezadan-auto_git_deploy.log}', GLOB_BRACE) ?: [];
+        if (!$logs) {
+            return null;
+        }
+        usort($logs, fn($a, $b) => filemtime($b) <=> filemtime($a));
+        $size = (int)@filesize($logs[0]);
+        $text = (string)@file_get_contents($logs[0], false, null, max(0, $size - 16384));
+        $time = (int)filemtime($logs[0]);
+        $ok = preg_match('/^\s*Deploy \+ cleanup complete\s*$/m', $text) === 1;
+        return [
+            'time' => $time,
+            'ok' => $ok,
+            'running' => !$ok && time() - $time < 180,
+            'tail' => implode("\n", array_slice(preg_split('/\R/', trim($text)) ?: [], -15)),
+        ];
+    }
+
     public function runHealthChecks(\PDO $pdo, array $stats): array
     {
         $forceRefresh = isset($_GET['scan']) && $_GET['scan'] == '1';
 
         if (!$forceRefresh) {
-            $stats['overall_status'] = 'TARAMA BEKLENİYOR';
+            $stats['overall_status'] = 'KONTROL EDİLMEDİ';
             $stats['overall_status_type'] = 'info';
             return [[['label' => 'SİSTEM TARAMASI', 'status' => 'info', 'message' => 'Tarama henüz başlatılmadı', 'detail' => 'Taramayı başlatmak için SİSTEMİ TARA butonuna tıklayın.']], $stats];
         }
@@ -71,8 +96,8 @@ class SystemHealthService
             $warnCount++;
         }
 
-        require_once ROOT . '/app/Controllers/SeoController.php';
-        if (class_exists('SeoController') && method_exists('SeoController', 'robots')) {
+        $seoControllerFile = ROOT . '/app/Controllers/SeoController.php';
+        if (is_file($seoControllerFile)) {
             $healthChecks[] = ['label' => 'ROBOTS.TXT', 'status' => 'ok', 'message' => 'Mevcut ve calisiyor', 'detail' => 'Dinamik uretim aktif'];
         } else {
             $healthChecks[] = ['label' => 'ROBOTS.TXT', 'status' => 'fail', 'message' => 'SeoController eksik', 'detail' => 'robots.txt uretilemiyor'];
@@ -80,10 +105,10 @@ class SystemHealthService
         }
 
         try {
-            $seoMissingTitle = $pdo->query("SELECT COUNT(*) FROM articles WHERE status = 'published' AND (seo_title IS NULL OR seo_title = '')")->fetchColumn();
-            $seoMissingDesc = $pdo->query("SELECT COUNT(*) FROM articles WHERE status = 'published' AND (seo_description IS NULL OR seo_description = '')")->fetchColumn();
-            $seoMissingKeywords = $pdo->query("SELECT COUNT(*) FROM articles WHERE status = 'published' AND (meta_keywords IS NULL OR meta_keywords = '')")->fetchColumn();
-            $seoMissingOg = $pdo->query("SELECT COUNT(*) FROM articles WHERE status = 'published' AND (og_image IS NULL OR og_image = '') AND (image_url IS NULL OR image_url = '')")->fetchColumn();
+            $seoMissingTitle = $pdo->query("SELECT COUNT(*) FROM articles a WHERE " . \ArticleQueries::PUBLISHED . " AND (seo_title IS NULL OR seo_title = '')")->fetchColumn();
+            $seoMissingDesc = $pdo->query("SELECT COUNT(*) FROM articles a WHERE " . \ArticleQueries::PUBLISHED . " AND (seo_description IS NULL OR seo_description = '')")->fetchColumn();
+            $seoMissingKeywords = $pdo->query("SELECT COUNT(*) FROM articles a WHERE " . \ArticleQueries::PUBLISHED . " AND (meta_keywords IS NULL OR meta_keywords = '')")->fetchColumn();
+            $seoMissingOg = $pdo->query("SELECT COUNT(*) FROM articles a WHERE " . \ArticleQueries::PUBLISHED . " AND (og_image IS NULL OR og_image = '') AND (image_url IS NULL OR image_url = '')")->fetchColumn();
 
             $seoIssues = [];
             if ($seoMissingTitle > 0) $seoIssues[] = 'seo_title: ' . $seoMissingTitle;
@@ -107,7 +132,7 @@ class SystemHealthService
                 SELECT COUNT(DISTINCT a.id)
                 FROM articles a
                 LEFT JOIN article_categories ac ON a.id = ac.article_id
-                WHERE ac.article_id IS NULL AND a.status = 'published'
+                WHERE ac.article_id IS NULL AND " . \ArticleQueries::PUBLISHED . "
             ")->fetchColumn();
             if ($orphanArticles > 0) {
                 $healthChecks[] = ['label' => 'YETIM MAKALE', 'status' => 'warn', 'message' => $orphanArticles . ' makale kategorisiz', 'detail' => 'Kategori atanmamis'];
@@ -123,7 +148,7 @@ class SystemHealthService
         try {
             $lastModStmt = $pdo->query("
                 SELECT MAX(lastmod) FROM (
-                    SELECT MAX(COALESCE(updated_at, created_at)) AS lastmod FROM articles WHERE status = 'published'
+                    SELECT MAX(COALESCE(updated_at, created_at)) AS lastmod FROM articles a WHERE " . \ArticleQueries::PUBLISHED . "
                     UNION
                     SELECT MAX(COALESCE(updated_at, created_at)) AS lastmod FROM notes
                 ) AS t
@@ -175,7 +200,7 @@ class SystemHealthService
         }
 
         try {
-            $emptyContent = $pdo->query("SELECT COUNT(*) FROM articles WHERE status = 'published' AND (content IS NULL OR content = '')")->fetchColumn();
+            $emptyContent = $pdo->query("SELECT COUNT(*) FROM articles a WHERE " . \ArticleQueries::PUBLISHED . " AND (content IS NULL OR content = '')")->fetchColumn();
             if ($emptyContent > 0) {
                 $healthChecks[] = ['label' => 'BOS ICERIK', 'status' => 'warn', 'message' => $emptyContent . ' makale', 'detail' => 'content kolonu bos'];
                 $warnCount++;
@@ -206,8 +231,8 @@ class SystemHealthService
 
         try {
             $slugConflicts = $pdo->query("
-                SELECT slug, COUNT(*) as cnt FROM articles
-                WHERE status = 'published'
+                SELECT slug, COUNT(*) as cnt FROM articles a
+                WHERE " . \ArticleQueries::PUBLISHED . "
                 GROUP BY slug
                 HAVING cnt > 1
             ")->fetchAll(\PDO::FETCH_COLUMN);
@@ -224,8 +249,8 @@ class SystemHealthService
 
         try {
             $missingAuthor = $pdo->query("
-                SELECT COUNT(*) FROM articles
-                WHERE status = 'published'
+                SELECT COUNT(*) FROM articles a
+                WHERE " . \ArticleQueries::PUBLISHED . "
                 AND (author_id IS NULL OR author_id NOT IN (SELECT id FROM authors))
             ")->fetchColumn();
             if ($missingAuthor > 0) {
@@ -240,7 +265,7 @@ class SystemHealthService
         }
 
         try {
-            $missingImage = $pdo->query("SELECT COUNT(*) FROM articles WHERE status = 'published' AND (image_url IS NULL OR image_url = '')")->fetchColumn();
+            $missingImage = $pdo->query("SELECT COUNT(*) FROM articles a WHERE " . \ArticleQueries::PUBLISHED . " AND (image_url IS NULL OR image_url = '')")->fetchColumn();
             if ($missingImage > 0) {
                 $healthChecks[] = ['label' => 'RESIMSIZ MAKALE', 'status' => 'warn', 'message' => $missingImage . ' makale', 'detail' => 'image_url bos (OG/sosyal paylasimda kotu gorunur)'];
                 $warnCount++;
@@ -253,7 +278,7 @@ class SystemHealthService
         }
 
         try {
-            $thinContent = $pdo->query("SELECT COUNT(*) FROM articles WHERE status = 'published' AND CHAR_LENGTH(content) < 300")->fetchColumn();
+            $thinContent = $pdo->query("SELECT COUNT(*) FROM articles a WHERE " . \ArticleQueries::PUBLISHED . " AND CHAR_LENGTH(content) < 300")->fetchColumn();
             if ($thinContent > 0) {
                 $healthChecks[] = ['label' => 'KISA ICERIK', 'status' => 'warn', 'message' => $thinContent . ' makale <300 karakter', 'detail' => 'Thin content SEO cezasi riski'];
                 $warnCount++;
@@ -407,9 +432,9 @@ class SystemHealthService
 
         $healthChecks[] = ['label' => 'PHP / SUNUCU', 'status' => 'info', 'message' => 'PHP ' . PHP_VERSION, 'detail' => 'memory_limit: ' . ini_get('memory_limit') . ' | max_execution: ' . ini_get('max_execution_time') . 's'];
 
-        // --- Extended health checks ---
+        // Extended health checks
 
-        // Composer bağımlılıkları
+        // Composer dependencies
         $vendorAutoload = $rootPath . '/vendor/autoload.php';
         if (file_exists($vendorAutoload)) {
             $healthChecks[] = ['label' => 'COMPOSER', 'status' => 'ok', 'message' => 'vendor/autoload.php mevcut', 'detail' => 'Bagimliliklar yuklu'];
@@ -418,7 +443,7 @@ class SystemHealthService
             $failCount++;
         }
 
-        // HTTPS kontrolü
+        // HTTPS check
         $siteIsHttps = (defined('SITE_URL') && strpos(SITE_URL, 'https://') === 0);
         if ($siteIsHttps) {
             $healthChecks[] = ['label' => 'HTTPS', 'status' => 'ok', 'message' => 'Site URL HTTPS', 'detail' => 'Guvenli baglanti'];
@@ -427,7 +452,7 @@ class SystemHealthService
             $warnCount++;
         }
 
-        // Güvenlik başlıkları kontrolü (yerel HTTP isteği ile)
+        // Security headers check (via local HTTP request)
         try {
             $healthUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36 FezadanHealthCheck/1.0';
             $ctx = stream_context_create(['http' => [
@@ -437,7 +462,7 @@ class SystemHealthService
                 'header' => "User-Agent: {$healthUserAgent}\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n",
             ]]);
             $testUrl = (defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'http://localhost:8080') . '/tr';
-            $headers = @get_headers($testUrl, 1, $ctx);
+            $headers = @get_headers($testUrl, true, $ctx);
             $hstsPresent = false;
             $cspPresent = false;
             if ($headers) {
@@ -466,7 +491,7 @@ class SystemHealthService
             $healthChecks[] = ['label' => 'SECURITY HEADERS', 'status' => 'info', 'message' => 'Kontrol yapilamadi', 'detail' => $e->getMessage()];
         }
 
-        // APP_SALT / .security_salt kontrolü
+        // APP_SALT / .security_salt check
         $saltFile = $rootPath . '/app/Config/.security_salt';
         if (file_exists($saltFile)) {
             $saltSize = filesize($saltFile);
@@ -486,20 +511,23 @@ class SystemHealthService
             }
         }
 
-        // Cron kalp atışı — her cron işinin en son ne zaman başarıyla çalıştığını kontrol et
+        // Cron heartbeat: check when each cron job last ran successfully
         try {
             $cronDir = $rootPath . '/storage/cron_heartbeat';
             $cronJobs = [
                 'publish-scheduled'     => 'Zamanli makale yayinlama',
                 'generate-sitemap'      => 'Sitemap uretimi',
                 'backup-db'             => 'Veritabani yedegi',
+                'autodeploy'            => 'Git otomatik deploy',
             ];
+            // Autodeploy checks every five minutes and leaves the heartbeat stale on failure.
+            $maxAge = ['autodeploy' => 900];
             foreach ($cronJobs as $job => $label) {
                 $hbFile = $cronDir . '/' . $job . '.heartbeat';
                 if (is_file($hbFile)) {
                     $hbAge = time() - (int)@file_get_contents($hbFile);
                     $ageText = $hbAge < 60 ? 'az once' : ($hbAge < 3600 ? floor($hbAge / 60) . ' dk once' : ($hbAge < 86400 ? floor($hbAge / 3600) . ' saat once' : floor($hbAge / 86400) . ' gun once'));
-                    $hbs = ($hbAge > 86400 * 2) ? 'warn' : 'ok';
+                    $hbs = ($hbAge > ($maxAge[$job] ?? 86400 * 2)) ? 'warn' : 'ok';
                     $healthChecks[] = ['label' => 'CRON: ' . strtoupper($job), 'status' => $hbs, 'message' => $ageText, 'detail' => $label];
                     if ($hbs === 'warn') $warnCount++;
                 } else {
@@ -511,11 +539,10 @@ class SystemHealthService
             $healthChecks[] = ['label' => 'CRON HEARTBEAT', 'status' => 'info', 'message' => 'Kontrol basarisiz', 'detail' => $e->getMessage()];
         }
 
-        // LiteCaptcha erişilebilirliği
+        // LiteCaptcha reachability
         if (defined('LITECAPTCHA_ENABLED') && LITECAPTCHA_ENABLED) {
             try {
                 $litecaptchaUrl = rtrim(env_value('LITECAPTCHA_URL', 'https://litecaptcha.fezadan.org'), '/');
-                $healthUserAgent = $healthUserAgent ?? 'Mozilla/5.0 FezadanHealthCheck/1.0';
                 $ctx = stream_context_create(['http' => [
                     'timeout' => 5,
                     'ignore_errors' => true,
@@ -562,9 +589,9 @@ class SystemHealthService
         }
         $healthChecks[] = ['label' => '.HTACCESS', 'status' => $failCount > 0 ? 'fail' : 'ok', 'message' => implode(', ', $htaccessFiles), 'detail' => 'Guvenlik yapilandirmasi'];
 
-        // Yinelenen makale başlıkları
+        // Duplicate article titles
         try {
-            $dupTitles = $pdo->query("SELECT COUNT(*) FROM (SELECT title FROM articles WHERE status = 'published' GROUP BY title HAVING COUNT(*) > 1) AS dup")->fetchColumn();
+            $dupTitles = $pdo->query("SELECT COUNT(*) FROM (SELECT title FROM articles a WHERE " . \ArticleQueries::PUBLISHED . " GROUP BY title HAVING COUNT(*) > 1) AS dup")->fetchColumn();
             if ($dupTitles > 0) {
                 $healthChecks[] = ['label' => 'DUPLICATE TITLES', 'status' => 'warn', 'message' => $dupTitles . ' yinelenen baslik', 'detail' => 'SEO icin benzersiz olmali'];
                 $warnCount++;
@@ -575,7 +602,7 @@ class SystemHealthService
             $healthChecks[] = ['label' => 'DUPLICATE TITLES', 'status' => 'info', 'message' => 'Kontrol basarisiz', 'detail' => $e->getMessage()];
         }
 
-        // Boş kategoriler
+        // Empty categories
         try {
             $emptyCats = $pdo->query("
                 SELECT COUNT(*)
@@ -585,7 +612,7 @@ class SystemHealthService
                     FROM article_categories ac
                     JOIN articles a ON a.id = ac.article_id
                     WHERE ac.category_id = c.id
-                      AND a.status = 'published'
+                      AND " . \ArticleQueries::PUBLISHED . "
                 )
                 AND NOT EXISTS (
                     SELECT 1
@@ -604,12 +631,12 @@ class SystemHealthService
             $healthChecks[] = ['label' => 'BOS KATEGORILER', 'status' => 'info', 'message' => 'Kontrol basarisiz', 'detail' => $e->getMessage()];
         }
 
-        // Oturum güvenliği
+        // Session security
         $sessionHttpOnly = ini_get('session.cookie_httponly');
         $sessionSecure = ini_get('session.cookie_secure');
         $sessionSameSite = ini_get('session.cookie_samesite');
-        $sessionOk = ($sessionHttpOnly == '1' || $sessionHttpOnly === 'On' || $sessionHttpOnly === true);
-        $secureOk = ($sessionSecure == '1' || $sessionSecure === 'On' || $sessionSecure === true);
+        $sessionOk = ($sessionHttpOnly == '1' || $sessionHttpOnly === 'On' );
+        $secureOk = ($sessionSecure == '1' || $sessionSecure === 'On' );
         if ($sessionOk && $secureOk) {
             $healthChecks[] = ['label' => 'SESSION SECURITY', 'status' => 'ok', 'message' => 'HttpOnly + Secure aktif', 'detail' => 'SameSite: ' . ($sessionSameSite ?: 'default')];
         } elseif ($sessionOk) {
@@ -620,14 +647,25 @@ class SystemHealthService
             $failCount++;
         }
 
+        // Deep scan: every public and admin page, every stored file, the schema, the PHP error log
+        require_once __DIR__ . '/DeepScanService.php';
+        foreach ((new DeepScanService())->run($pdo) as $check) {
+            $healthChecks[] = $check;
+            if ($check['status'] === 'fail') {
+                $failCount++;
+            } elseif ($check['status'] === 'warn') {
+                $warnCount++;
+            }
+        }
+
         if ($failCount > 0) {
-            $overallStatus = 'KRITIK HATA TESPIT EDILDI';
+            $overallStatus = $failCount . ' SORUN BULUNDU';
             $overallStatusType = 'fail';
         } elseif ($warnCount > 0) {
-            $overallStatus = 'SISTEM STABIL (' . $warnCount . ' uyari)';
+            $overallStatus = $warnCount . ' UYARI';
             $overallStatusType = 'warn';
         } else {
-            $overallStatus = 'TUM SISTEMLER NORMAL';
+            $overallStatus = 'SORUN YOK';
             $overallStatusType = 'ok';
         }
         $healthChecks[] = ['label' => 'GENEL DURUM', 'status' => $overallStatusType, 'message' => $overallStatus, 'detail' => date('H:i:s') . ' - Tarama tamamlandi'];

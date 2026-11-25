@@ -1,3 +1,38 @@
+# Public mirror only: private infrastructure and personal files
+/AGENTS.md
+/claude.md
+/.claude/
+/skills-lock.json
+/webmail/
+/trex/
+/.cpanel.yml
+/public_html/furkan/
+/public_html/yandex_*
+/public_html/run_deploy.php
+/public_html/test-deploy.php
+/public_html/scripts/deploy-logic.php
+/migrations/
+
+# AnonymityCheck is maintained in its own repository
+/app/Controllers/AnonymityCheck/
+/app/Controllers/AnonymityCheckController.php
+/app/Views/front/anonymity/
+/app/Views/front/anonymity_check.php
+/public_html/anonymitycheck/
+/public_html/assets/img/anonymity-bg*
+/cron/update-tor-exits.php
+
+# Database dumps and keys
+*.sql
+*.sql.gz
+*.dump
+*.sqlite
+*.sqlite3
+*.db
+*.pem
+*.key
+id_rsa*
+
 # Environment and secrets
 .env
 .env.*
@@ -118,7 +153,7 @@ migration_galeri.php
 test_apis.php
 test_deepl.php
 
-# Database dumps (exclude root SQL dumps, keep migrations)
+# Database dumps (no SQL files are published)
 /*.sql
 /*.sql.gz
 /*.dump
@@ -200,7 +235,6 @@ public_html/scripts/deploy-logic.php
 # Ignore temporary plan and brainstorm markdown files at root
 /*.md
 !/README.md
-!/AGENTS.md
 cron_dosyalar.txt
 tum_dosyalar.txt
 devammetni.ini

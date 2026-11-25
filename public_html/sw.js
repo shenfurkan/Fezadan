@@ -1,15 +1,17 @@
-const CACHE_VERSION = 'fezadan-2026-06-12';
+// @ts-check
+// `self` is the ServiceWorkerGlobalScope here; the alias lets TypeScript (jsconfig.sw.json) type it.
+const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
+
+const CACHE_VERSION = 'fezadan-2026-10-30-analytics';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 
 const CORE_ASSETS = [
-  '/tr',
-  '/tr/makaleler',
   '/site.webmanifest',
   '/assets/css/admin.css',
   '/assets/css/fonts.css',
-  '/cdn/logo-light.png',
-  '/cdn/logo-dark.png',
+  '/cdn/logo-light-320.webp',
+  '/cdn/logo-dark-320.webp',
   '/cdn/light-android-chrome-192x192.png',
   '/cdn/light-android-chrome-512x512.png',
   '/assets/fonts/space-grotesk-v22-latin-ext-regular.woff2',
@@ -17,28 +19,40 @@ const CORE_ASSETS = [
 ];
 
 const STATIC_DESTINATIONS = new Set(['style', 'script', 'font', 'image', 'manifest']);
-const BYPASS_PREFIXES = ['/yonetim', '/git-deploy.php', '/health.php'];
+const BYPASS_PREFIXES = ['/yonetim', '/git-deploy.php', '/health.php', '/anonymitycheck', '/not/view', '/not/download'];
 
 function shouldBypass(url) {
-  return BYPASS_PREFIXES.some((prefix) => url.pathname === prefix || url.pathname.startsWith(`${prefix}/`));
+  let path;
+  try { path = decodeURIComponent(url.pathname).replace(/^\/(?:tr|en)(?=\/|$)/i, ''); }
+  catch (_) { return true; }
+  return /^(?:anonymitycheck|notlar)\./i.test(url.hostname)
+    || BYPASS_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+}
+
+async function storeResponse(cache, request, response) {
+  if (response.status !== 200 || response.redirected || request.cache === 'no-store'
+    || /\b(?:no-store|private|no-cache)\b/i.test(response.headers.get('Cache-Control') || '')) return;
+  // Cache quota/storage failure must not turn a successful network request into an error.
+  try { await cache.put(request, response.clone()); } catch (_) {}
 }
 
 async function warmCache() {
   const cache = await caches.open(STATIC_CACHE);
   await Promise.allSettled(
-    CORE_ASSETS.map((asset) => cache.add(new Request(asset, { cache: 'reload' })))
+    CORE_ASSETS.map(async (asset) => {
+      const request = new Request(asset, { cache: 'reload' });
+      await storeResponse(cache, request, await fetch(request));
+    })
   );
 }
 
 async function cacheFirst(request) {
-  const cached = await caches.match(request);
+  const cache = await caches.open(STATIC_CACHE);
+  const cached = await cache.match(request);
   if (cached) return cached;
 
   const response = await fetch(request);
-  if (response && response.ok) {
-    const cache = await caches.open(STATIC_CACHE);
-    cache.put(request, response.clone());
-  }
+  await storeResponse(cache, request, response);
   return response;
 }
 
@@ -47,23 +61,22 @@ async function networkFirst(request) {
 
   try {
     const response = await fetch(request);
-    if (response && response.ok) {
-      cache.put(request, response.clone());
-    }
+    await storeResponse(cache, request, response);
     return response;
   } catch (error) {
     const cached = await cache.match(request);
     if (cached) return cached;
 
-    return (await cache.match('/tr')) || Response.error();
+    // Never substitute the Turkish home page for a different requested page.
+    return Response.error();
   }
 }
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(warmCache().then(() => self.skipWaiting()));
+sw.addEventListener('install', (event) => {
+  event.waitUntil(warmCache().then(() => sw.skipWaiting()));
 });
 
-self.addEventListener('activate', (event) => {
+sw.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(
@@ -71,16 +84,17 @@ self.addEventListener('activate', (event) => {
           .filter((key) => key.startsWith('fezadan-') && !key.startsWith(CACHE_VERSION))
           .map((key) => caches.delete(key))
       ))
-      .then(() => self.clients.claim())
+      .then(() => sw.clients.claim())
   );
 });
 
-self.addEventListener('fetch', (event) => {
+sw.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || shouldBypass(url)) return;
+  if (url.origin !== sw.location.origin || request.headers.has('Range')
+    || request.cache === 'no-store' || shouldBypass(url)) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(networkFirst(request));

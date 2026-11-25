@@ -14,42 +14,18 @@ class RssController extends Controller {
                            au.name AS author_name, au.slug AS author_slug
                     FROM articles a
                     LEFT JOIN authors au ON au.id = a.author_id
-                    WHERE a.status = 'published'
+                    WHERE " . ArticleQueries::PUBLISHED . "
                     ORDER BY a.created_at DESC
                     LIMIT 30";
             $articles = $pdo->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
 
-            // Site tabanı (header.php ile aynı yaklaşım)
-            $isHttps  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-                        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')
-                        || (($_SERVER['SERVER_PORT'] ?? '') == 443);
-            $scheme   = $isHttps ? 'https' : 'http';
-            $host     = $_SERVER['HTTP_HOST'] ?? 'fezadan.org';
-            $siteBase = $scheme . '://' . $host;
-
-            // lastBuildDate
-            $lastBuild = !empty($articles)
-                ? date(DATE_RSS, strtotime($articles[0]['created_at']))
-                : date(DATE_RSS);
-
-            // 304 Not Modified desteği (opsiyonel hafif cache)
-            $lastModifiedTs = !empty($articles) ? strtotime($articles[0]['created_at']) : time();
-            $lastModifiedHttp = gmdate('D, d M Y H:i:s', $lastModifiedTs) . ' GMT';
-            $ifModifiedSince = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
-            if ($ifModifiedSince && strtotime($ifModifiedSince) >= $lastModifiedTs) {
-                header('HTTP/1.1 304 Not Modified');
-                header('Last-Modified: ' . $lastModifiedHttp);
-                header('Cache-Control: public, max-age=900');
-                exit;
-            }
-
-            header('Content-Type: application/rss+xml; charset=UTF-8');
-            header('Cache-Control: public, max-age=900');
-            header('Last-Modified: ' . $lastModifiedHttp);
+            $siteBase = rtrim(SITE_URL, '/');
+            $lastModifiedTs = $this->feedCacheHeaders($articles, $siteBase . '/tr/rss');
+            $lastBuild = date(DATE_RSS, $lastModifiedTs);
 
             $channelTitle = 'FEZADAN - Özgür Bilgi Platformu';
             $channelDesc  = 'Veri ve estetik arasındaki sessiz çatışma. FEZADAN - bilim, estetik ve fikir üzerine bağımsız bir yayın.';
-            $feedSelf     = $siteBase . '/rss';
+            $feedSelf     = $siteBase . '/tr/rss';
 
             echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
             ?>
@@ -65,13 +41,12 @@ class RssController extends Controller {
     <lastBuildDate><?= $this->xmlEscape($lastBuild) ?></lastBuildDate>
     <atom:link href="<?= $this->xmlEscape($feedSelf) ?>" rel="self" type="application/rss+xml" />
     <image>
-      <url><?= $this->xmlEscape($siteBase . '/cdn/notlar-social-preview.png') ?></url>
+      <url><?= $this->xmlEscape($siteBase . '/cdn/logo-light.png') ?></url>
       <title><?= $this->xmlEscape($channelTitle) ?></title>
       <link><?= $this->xmlEscape($siteBase . '/') ?></link>
     </image>
 <?php foreach ($articles as $a):
-        // Kanonik URL — /{lang}/{yazar_slug}/{makale_slug}
-        $link    = articleUrl($a['author_slug'] ?? 'yazar', $a['slug'], strtolower($a['lang'] ?? 'tr'));
+        $link    = articleUrl($a['slug'], $a['lang'] ?? 'tr');
         $pubDate = date(DATE_RSS, strtotime($a['created_at']));
         $img     = $this->absoluteUrl($a['image_url'] ?? '', $siteBase);
 ?>
@@ -94,7 +69,7 @@ class RssController extends Controller {
     </rss>
 <?php
         } catch (\PDOException $e) {
-            throw new \Exception("RSS Hatası: " . $e->getMessage());
+            throw new \Exception("RSS Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 

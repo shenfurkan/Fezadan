@@ -16,7 +16,8 @@ trait AdminAuthAndLogs
 
         $mail = $this->buildAdminPasswordResetMail(str_repeat('a', 64));
         header('Content-Type: text/html; charset=utf-8');
-        echo $mail['body'];
+        // CID images are embedded in the email; the browser preview uses a local asset.
+        echo str_replace('cid:fezadan-logo', '/cdn/logo-light.png', $mail['body']);
         exit;
     }
 
@@ -72,17 +73,7 @@ trait AdminAuthAndLogs
                 $recentCount = (int)$recentStmt->fetchColumn();
 
                 if ($recentCount === 0) {
-                    $rawToken = bin2hex(random_bytes(32));
-                    $tokenHash = hash('sha256', $rawToken);
-                    $expiresAt = date('Y-m-d H:i:s', time() + 900); // 15 minutes validity
-
-                    $pdo->prepare("DELETE FROM admin_password_resets WHERE admin_id = ?")
-                        ->execute([(int)$admin['id']]);
-                    $insert = $pdo->prepare(
-                        "INSERT INTO admin_password_resets (admin_id, token_hash, expires_at)
-                         VALUES (?, ?, ?)"
-                    );
-                    $insert->execute([(int)$admin['id'], $tokenHash, $expiresAt]);
+                    $rawToken = $this->createPasswordResetToken($pdo, (int)$admin['id']);
 
                     if (!$this->sendAdminPasswordResetMail((string)$admin['email'], $rawToken)) {
                         AdminLog::write('error', 'Şifre sıfırlama e-postası gönderilemedi.', [
@@ -100,8 +91,24 @@ trait AdminAuthAndLogs
             header('Location: /yonetim/forgot-password?status=sent');
             exit;
         } catch (\PDOException $e) {
-            throw new \Exception("Şifre Sıfırlama Hatası: " . $e->getMessage());
+            throw new \Exception("Şifre Sıfırlama Hatası: " . $e->getMessage(), 0, $e);
         }
+    }
+
+    /** Single-use, 15-minute token; replaces any earlier one for the account. */
+    private function createPasswordResetToken(\PDO $pdo, int $adminId): string
+    {
+        $rawToken = bin2hex(random_bytes(32));
+        $pdo->prepare("DELETE FROM admin_password_resets WHERE admin_id = ?")->execute([$adminId]);
+        $pdo->prepare("INSERT INTO admin_password_resets (admin_id, token_hash, expires_at) VALUES (?, ?, ?)")
+            ->execute([$adminId, hash('sha256', $rawToken), date('Y-m-d H:i:s', time() + 900)]);
+        return $rawToken;
+    }
+
+    private function adminResetUrl(string $token): string
+    {
+        $base = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
+        return $base . '/yonetim/reset-password?token=' . rawurlencode($token);
     }
 
     private function ensureAdminPasswordResetRateLimitTable(\PDO $pdo): void
@@ -134,7 +141,7 @@ trait AdminAuthAndLogs
                 $stmt->execute([hash('sha256', $token), date('Y-m-d H:i:s')]);
                 $valid = (bool)$stmt->fetchColumn();
             } catch (\PDOException $e) {
-                throw new \Exception("Şifre Sıfırlama Hatası: " . $e->getMessage());
+                throw new \Exception("Şifre Sıfırlama Hatası: " . $e->getMessage(), 0, $e);
             }
         }
 
@@ -194,6 +201,10 @@ trait AdminAuthAndLogs
 
             $pdo->prepare("UPDATE admins SET password = ? WHERE id = ?")
                 ->execute([$hashedPass, $adminId]);
+            // Otherwise a lockout from the forgotten password rejects the new one for 3 hours.
+            $userStmt = $pdo->prepare("SELECT username FROM admins WHERE id = ?");
+            $userStmt->execute([$adminId]);
+            $this->clearLoginAttempts($pdo, (string)$userStmt->fetchColumn());
             $pdo->prepare("DELETE FROM admin_password_resets WHERE admin_id = ?")
                 ->execute([$adminId]);
             $pdo->commit();
@@ -204,7 +215,7 @@ trait AdminAuthAndLogs
             if (isset($pdo) && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            throw new \Exception("Şifre Sıfırlama Hatası: " . $e->getMessage());
+            throw new \Exception("Şifre Sıfırlama Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -230,11 +241,26 @@ trait AdminAuthAndLogs
                     a.username ASC"
             );
 
+            $admins = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            // Same window and hash as login(); 10 or more means the account is locked out.
+            $failedByUser = $pdo->query(
+                "SELECT username_hash, COUNT(*) FROM login_attempts
+                 WHERE username_hash IS NOT NULL AND attempt_time > NOW() - INTERVAL 3 HOUR
+                 GROUP BY username_hash"
+            )->fetchAll(\PDO::FETCH_KEY_PAIR);
+            foreach ($admins as &$admin) {
+                $admin['failed_logins'] = (int)($failedByUser[$this->adminRateLimitHash((string)$admin['username'], 'admin_login_username')] ?? 0);
+            }
+            unset($admin);
+            $resetLink = $_SESSION['admin_reset_link'] ?? null;
+            unset($_SESSION['admin_reset_link']);
+
             $this->view('admin/admins', [
-                'admins' => $stmt->fetchAll(\PDO::FETCH_ASSOC),
+                'admins' => $admins,
+                'resetLink' => $resetLink,
             ]);
         } catch (\PDOException $e) {
-            throw new \Exception("Kullanıcı Yönetimi Hatası: " . $e->getMessage());
+            throw new \Exception("Kullanıcı Yönetimi Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -325,12 +351,96 @@ trait AdminAuthAndLogs
                 $role,
             ]);
 
+            AdminLog::write('info', 'Kullanıcı oluşturuldu.', ['endpoint' => 'storeAdmin', 'target' => $username, 'role' => $role]);
             Flash::set('Kullanıcı başarıyla oluşturuldu.');
             header('Location: ' . $redirect . '?status=success');
             exit;
         } catch (\PDOException $e) {
-            throw new \Exception("Kullanıcı Oluşturma Hatası: " . $e->getMessage());
+            throw new \Exception("Kullanıcı Oluşturma Hatası: " . $e->getMessage(), 0, $e);
         }
+    }
+
+    /**
+     * The account a superadmin action targets. $changeable: deleting and role changes are only
+     * for editor/viewer accounts, so one compromised superadmin session can't remove the other.
+     */
+    private function managedAdminOrFail(bool $changeable = false): array
+    {
+        $stmt = $this->getPDO()->prepare("SELECT id, username, role FROM admins WHERE id = ?");
+        $stmt->execute([(int)($_POST['id'] ?? 0)]);
+        $admin = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$admin) {
+            Flash::set('Kullanıcı bulunamadı.');
+            header('Location: /yonetim/admins?status=not_found');
+            exit;
+        }
+        if ($changeable && $admin['role'] === 'superadmin') {
+            Flash::set('Superadmin hesapları bu ekrandan silinemez ve rolleri değiştirilemez.');
+            header('Location: /yonetim/admins?status=forbidden');
+            exit;
+        }
+        return $admin;
+    }
+
+    public function unlockAdmin()
+    {
+        $this->requirePost();
+        $this->requireRole(['superadmin']);
+        $admin = $this->managedAdminOrFail();
+        $this->clearLoginAttempts($this->getPDO(), (string)$admin['username'], false);
+        AdminLog::write('info', 'Giriş kilidi açıldı.', ['endpoint' => 'unlockAdmin', 'target' => $admin['username']]);
+        Flash::set($admin['username'] . ' için başarısız giriş denemeleri temizlendi.');
+        header('Location: /yonetim/admins?status=unlocked');
+        exit;
+    }
+
+    /** Shown once on screen, so recovery doesn't depend on mail delivery; the superadmin never learns the password. */
+    public function adminResetLink()
+    {
+        $this->requirePost();
+        $this->requireRole(['superadmin']);
+        $admin = $this->managedAdminOrFail();
+        $token = $this->createPasswordResetToken($this->getPDO(), (int)$admin['id']);
+        $_SESSION['admin_reset_link'] = ['username' => $admin['username'], 'url' => $this->adminResetUrl($token)];
+        AdminLog::write('warning', 'Şifre sıfırlama linki oluşturuldu.', ['endpoint' => 'adminResetLink', 'target' => $admin['username']]);
+        header('Location: /yonetim/admins?status=reset_link');
+        exit;
+    }
+
+    public function updateAdminRole()
+    {
+        $this->requirePost();
+        $this->requireRole(['superadmin']);
+        $admin = $this->managedAdminOrFail(true);
+        $role = (string)($_POST['role'] ?? '');
+        if (!in_array($role, ['editor', 'viewer'], true)) {
+            Flash::set('Geçersiz rol.');
+            header('Location: /yonetim/admins?status=invalid_role');
+            exit;
+        }
+        $this->getPDO()->prepare("UPDATE admins SET role = ? WHERE id = ?")->execute([$role, (int)$admin['id']]);
+        AdminLog::write('warning', 'Kullanıcı rolü değiştirildi.', ['endpoint' => 'updateAdminRole', 'target' => $admin['username'], 'from' => $admin['role'], 'to' => $role]);
+        Flash::set($admin['username'] . ' artık ' . $role . '.');
+        header('Location: /yonetim/admins?status=role_updated');
+        exit;
+    }
+
+    /** Passkeys and reset tokens go with the account (FK cascade); a linked author profile stays. */
+    public function deleteAdmin()
+    {
+        $this->requirePost();
+        $this->requireRole(['superadmin']);
+        $admin = $this->managedAdminOrFail(true);
+        if (trim((string)($_POST['confirm_username'] ?? '')) !== $admin['username']) {
+            Flash::set('Silmek için kullanıcı adını aynen yazın.');
+            header('Location: /yonetim/admins?status=confirm_mismatch');
+            exit;
+        }
+        $this->getPDO()->prepare("DELETE FROM admins WHERE id = ?")->execute([(int)$admin['id']]);
+        AdminLog::write('warning', 'Kullanıcı silindi.', ['endpoint' => 'deleteAdmin', 'target' => $admin['username'], 'role' => $admin['role']]);
+        Flash::set($admin['username'] . ' silindi; açık oturumu bir sonraki isteğinde kapanır.');
+        header('Location: /yonetim/admins?status=deleted');
+        exit;
     }
 
     public function profile()
@@ -366,7 +476,7 @@ trait AdminAuthAndLogs
                 'linkedAuthor' => $linkedAuthor,
             ]);
         } catch (\PDOException $e) {
-            throw new \Exception("Profil Hatası: " . $e->getMessage());
+            throw new \Exception("Profil Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -393,7 +503,7 @@ trait AdminAuthAndLogs
                 exit;
             }
 
-            // Kullanıcı adı doğrulaması
+            // Username validation
             if (!preg_match('/\A[a-zA-Z0-9._-]{3,64}\z/', $username)) {
                 header('Location: /yonetim/profile?status=invalid_username');
                 exit;
@@ -406,13 +516,13 @@ trait AdminAuthAndLogs
                 exit;
             }
 
-            // İsim doğrulaması
+            // Name validation
             if ($name === '' || mb_strlen($name, 'UTF-8') > 150) {
                 header('Location: /yonetim/profile?status=invalid_name');
                 exit;
             }
 
-            // E-posta doğrulaması
+            // Email validation
             $email = $emailInput !== '' ? strtolower($emailInput) : null;
             if ($email !== null && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 header('Location: /yonetim/profile?status=invalid_email');
@@ -431,7 +541,7 @@ trait AdminAuthAndLogs
                 }
             }
 
-            // Yazar bağlantı doğrulaması
+            // Author linkage validation
             if ($authorId && $authorId > 0) {
                 $authorCheck = $pdo->prepare("SELECT id FROM authors WHERE id = ? LIMIT 1");
                 $authorCheck->execute([$authorId]);
@@ -440,7 +550,7 @@ trait AdminAuthAndLogs
                 }
             }
 
-            // Biyografi doğrulaması
+            // Bio validation
             if ($bio !== '' && mb_strlen($bio, 'UTF-8') > 2000) {
                 header('Location: /yonetim/profile?status=invalid_bio');
                 exit;
@@ -452,11 +562,11 @@ trait AdminAuthAndLogs
                 exit;
             }
 
-            // admins tablosunu güncelle
+            // Update admins table
             $pdo->prepare("UPDATE admins SET username = ?, name = ?, email = ?, author_id = ? WHERE id = ?")
                 ->execute([$username, $name, $email, $authorId, $user['id']]);
 
-            // Yazar bağlantılıysa bağlı yazar biyografi/görselini güncelle
+            // Update linked author bio/image if author is linked
             if ($authorId && $authorId > 0) {
                 $fields = [];
                 $params = [];
@@ -474,7 +584,7 @@ trait AdminAuthAndLogs
                 }
             }
 
-            // Oturumu yenile
+            // Refresh session
             $_SESSION['admin_user'] = $username;
             $_SESSION['admin_name'] = $name;
 
@@ -483,19 +593,18 @@ trait AdminAuthAndLogs
                     ->execute([$user['id']]);
             }
 
+            AdminLog::write('info', 'Profil güncellendi.', ['endpoint' => 'updateProfile', 'email_changed' => $email !== ($user['email'] ?? '')]);
             header('Location: /yonetim/profile?status=profile_success');
             exit;
         } catch (\PDOException $e) {
-            throw new \Exception("Profil Güncelleme Hatası: " . $e->getMessage());
+            throw new \Exception("Profil Güncelleme Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
     public function logs()
     {
-        if (!isset($_SESSION['admin_logged_in'])) {
-            header('Location: /yonetim');
-            exit;
-        }
+        // Crash entries carry file paths, SQL errors and traces.
+        $this->requireRole(['superadmin']);
         $filters = [
             'level' => $_GET['level'] ?? '',
             'endpoint' => $_GET['endpoint'] ?? '',
@@ -567,9 +676,11 @@ trait AdminAuthAndLogs
                 $params[] = $email;
             }
 
+            $newPasswordHash = null;
             if ($wantsPasswordChange) {
+                $newPasswordHash = password_hash((string)$new_pass, PASSWORD_DEFAULT);
                 $fields[] = 'password = ?';
-                $params[] = password_hash((string)$new_pass, PASSWORD_DEFAULT);
+                $params[] = $newPasswordHash;
             }
 
             if (empty($fields)) {
@@ -585,12 +696,17 @@ trait AdminAuthAndLogs
                 $pdo->prepare("DELETE FROM admin_password_resets WHERE admin_id = ?")
                     ->execute([$user['id']]);
             }
+            if ($newPasswordHash !== null) {
+                // Keep this session; every other session of the account ends on its next request.
+                $_SESSION['admin_credential'] = self::credentialFingerprint($newPasswordHash);
+                AdminLog::write('info', 'Kullanıcı kendi şifresini değiştirdi.', ['endpoint' => 'updatePassword']);
+            }
 
             header('Location: /yonetim/profile?status=success');
             exit;
         }
         catch (\PDOException $e) {
-            throw new \Exception("Güncelleme Hatası: " . $e->getMessage());
+            throw new \Exception("Güncelleme Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -610,103 +726,49 @@ trait AdminAuthAndLogs
     private function buildAdminPasswordResetMail(string $token): array
     {
         $base = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
-        $link = $base . '/yonetim/reset-password?token=' . rawurlencode($token);
+        $link = $this->adminResetUrl($token);
         $subjectText = 'FEZADAN Yönetim Şifre Sıfırlama';
         $subject = '=?UTF-8?B?' . base64_encode($subjectText) . '?=';
 
-        $body = <<<HTML
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FEZADAN Şifre Sıfırlama</title>
-</head>
-<body style="margin: 0; padding: 0; background-color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1d1d1f;">
-    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f5f5f7; padding: 40px 16px;">
-        <tr>
-            <td align="center">
-                <!-- Center Card -->
-                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 560px; background-color: #ffffff; border-radius: 12px; border: 1px solid #e5e5ea; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); overflow: hidden;">
-                    <!-- Top Accent Line -->
-                    <tr>
-                        <td height="4" style="background-color: #A31D1D; line-height: 4px; font-size: 4px;">&nbsp;</td>
-                    </tr>
+        $linkHtml = htmlspecialchars($link, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $homeHtml = htmlspecialchars($base, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        ob_start();
+        require ROOT . '/app/Views/admin/emails/password-reset.php';
+        $body = (string)ob_get_clean();
 
-                    <!-- Header / Logo -->
-                    <tr>
-                        <td align="center" style="padding: 40px 40px 20px 40px;">
-                            <img src="https://fezadan.org/cdn/logo-light.png" alt="FEZADAN" width="140" style="display: block; border: 0; outline: none; height: auto;" />
-                        </td>
-                    </tr>
+        $text = "FEZADAN — Yönetim hesabı\n\nŞifrenizi yenileyin\n\n"
+            . "FEZADAN yönetim hesabınız için bir şifre sıfırlama isteği aldık.\n"
+            . "Yeni şifrenizi belirlemek için bu bağlantıyı açın:\n" . $link . "\n\n"
+            . "Bağlantı 15 dakika geçerlidir ve yalnızca bir kez kullanılabilir.\n\n"
+            . "Bu isteği siz yapmadıysanız e-postayı yok sayabilirsiniz.\n"
+            . "Bağlantıyı kullanmadığınız sürece şifreniz değişmez.\n"
+            . "Sıfırlama bağlantısını kimseyle paylaşmayın.\n";
 
-                    <!-- Content -->
-                    <tr>
-                        <td style="padding: 20px 40px 40px 40px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-                            <h2 style="margin: 0 0 16px 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: #1d1d1f; text-align: center;">
-                                Şifre Sıfırlama Talebi
-                            </h2>
-                            <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #515154; text-align: center;">
-                                FEZADAN yönetim paneli hesabınız için şifre sıfırlama talebinde bulundunuz. Yeni şifrenizi güvenle belirlemek için aşağıdaki butona tıklayın:
-                            </p>
-
-                            <!-- Centered Button -->
-                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 30px 0;">
-                                <tr>
-                                    <td align="center">
-                                        <a href="{$link}" target="_blank" style="display: inline-block; background-color: #A31D1D; color: #ffffff; text-decoration: none; padding: 14px 32px; font-size: 14px; font-weight: 500; border-radius: 8px; box-shadow: 0 2px 4px rgba(163, 29, 29, 0.2); transition: background-color 0.2s;">
-                                            Şifremi Sıfırla
-                                        </a>
-                                    </td>
-                                </tr>
-                            </table>
-
-                            <!-- Security Box -->
-                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fbfbfd; border: 1px solid #e5e5ea; border-radius: 8px; margin-bottom: 24px;">
-                                <tr>
-                                    <td style="padding: 16px; font-size: 13px; line-height: 1.5; color: #86868b; text-align: center;">
-                                        Güvenliğiniz için bu bağlantı <strong>15 dakika</strong> boyunca geçerlidir. Bu sürenin ardından bağlantı kendiliğinden geçersiz olacaktır.
-                                    </td>
-                                </tr>
-                            </table>
-
-                            <p style="margin: 0 0 8px 0; font-size: 12px; line-height: 1.4; color: #86868b; text-align: center;">
-                                Butona tıklayamıyorsanız aşağıdaki bağlantıyı tarayıcınızın adres çubuğuna yapıştırın:
-                            </p>
-                            <p style="margin: 0; font-size: 11px; line-height: 1.5; word-break: break-all; font-family: monospace; background-color: #f5f5f7; padding: 12px; border-radius: 6px; border: 1px solid #e5e5ea; color: #515154; text-align: center;">
-                                <a href="{$link}" target="_blank" style="color: #A31D1D; text-decoration: none;">{$link}</a>
-                            </p>
-                        </td>
-                    </tr>
-
-                    <!-- Footer Information -->
-                    <tr>
-                        <td align="center" style="background-color: #f5f5f7; border-top: 1px solid #e5e5ea; padding: 24px 40px; color: #86868b; font-size: 12px; line-height: 1.5;">
-                            Bu e-posta şifre sıfırlama işlemi başlatıldığı için gönderilmiştir. Talebi siz oluşturmadıysanız, bu e-postayı güvenle yok sayabilirsiniz. Hesabınız güvendedir.
-                        </td>
-                    </tr>
-                </table>
-
-                <!-- Extra Footer info -->
-                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 560px; margin-top: 24px;">
-                    <tr>
-                        <td align="center" style="font-size: 11px; color: #86868b; line-height: 1.5;">
-                            FEZADAN © 2026 • Bilim, Estetik ve Bağımsız Düşünce
-                            <br>
-                            <a href="{$base}" style="color: #86868b; text-decoration: underline;">fezadan.org</a>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>
-HTML;
+        // No remote images, webfonts or trackers. Keep a readable plain-text part.
+        $logo = file_get_contents(ROOT . '/public_html/cdn/logo-light.png');
+        if ($logo === false) {
+            throw new \RuntimeException('Şifre sıfırlama e-postasının yerel logosu okunamadı.');
+        }
+        $alternative = 'fezadan-alt-' . bin2hex(random_bytes(16));
+        $related = 'fezadan-related-' . bin2hex(random_bytes(16));
+        $message = '--' . $alternative . "\r\n"
+            . "Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+            . chunk_split(base64_encode($text), 76, "\r\n")
+            . '--' . $alternative . "\r\n"
+            . 'Content-Type: multipart/related; boundary="' . $related . '"; type="text/html"' . "\r\n\r\n"
+            . '--' . $related . "\r\n"
+            . "Content-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+            . chunk_split(base64_encode($body), 76, "\r\n")
+            . '--' . $related . "\r\n"
+            . "Content-Type: image/png\r\nContent-Transfer-Encoding: base64\r\n"
+            . "Content-ID: <fezadan-logo>\r\nContent-Disposition: inline; filename=\"fezadan.png\"\r\n\r\n"
+            . chunk_split(base64_encode($logo), 76, "\r\n")
+            . '--' . $related . "--\r\n"
+            . '--' . $alternative . "--\r\n";
 
         $headers = [
             'MIME-Version: 1.0',
-            'Content-Type: text/html; charset=UTF-8',
+            'Content-Type: multipart/alternative; boundary="' . $alternative . '"',
             'From: FEZADAN <info@fezadan.org>',
             'Reply-To: info@fezadan.org',
             'X-Mailer: PHP/' . phpversion(),
@@ -716,6 +778,8 @@ HTML;
             'subject_text' => $subjectText,
             'subject' => $subject,
             'body' => $body,
+            'text' => $text,
+            'message' => $message,
             'headers' => $headers,
             'link' => $link,
         ];
@@ -724,7 +788,7 @@ HTML;
     private function sendAdminPasswordResetMail(string $email, string $token): bool
     {
         $mail = $this->buildAdminPasswordResetMail($token);
-        $sent = @mail($email, $mail['subject'], $mail['body'], implode("\r\n", $mail['headers']));
+        $sent = @mail($email, $mail['subject'], $mail['message'], implode("\r\n", $mail['headers']));
         if (!$sent) {
             error_log('Admin password reset mail() returned false for domain=' . (string)substr(strrchr($email, '@') ?: '', 1));
         }

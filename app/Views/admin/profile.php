@@ -1,3 +1,8 @@
+<?php
+/**
+ * @var array $authors
+ */
+?>
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -33,12 +38,12 @@
 <body class="flex h-screen w-full overflow-hidden relative">
 
     <div class="grid-bg fixed inset-0 z-0"></div>
-    
+
     <?php include __DIR__ . '/_side_panel.php'; ?>
 
     <?php if(isset($_GET['status'])): ?>
             <div class="mb-8 p-4 bg-[#6D2323] text-[#FEF9E1] font-mono text-xs uppercase shadow-[4px_4px_0px_#A31D1D]">
-                <?php 
+                <?php
                     if($_GET['status'] == 'success') echo "PROFIL GUVENLIGI BASARIYLA GUNCELLENDI.";
                     elseif($_GET['status'] == 'profile_success') echo "PROFIL BILGILERI BASARIYLA GUNCELLENDI.";
                     elseif($_GET['status'] == 'wrong_pass') echo "MEVCUT SIFRE HATALI.";
@@ -143,7 +148,7 @@
         <!-- Sag Kolon: Giris Anahtarlari (Passkey) -->
         <div>
             <h3 class="font-syne font-bold uppercase text-lg mb-6 border-b border-[var(--text-main)] pb-2">GIRIS ANAHTARLARI (PASSKEY)</h3>
-            
+
             <div class="space-y-6 mb-8">
                 <?php
                 $pdo = Db::pdo();

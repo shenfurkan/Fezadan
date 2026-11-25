@@ -1,27 +1,50 @@
 <?php
+/**
+ * @var array $article
+ * @var string $contentLang
+ */
+require_once ROOT . '/app/Services/ScientificContent.php';
+require_once ROOT . '/app/Services/CoverImage.php';
 $siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
 $slug     = $article['slug'] ?? '';
 $isEn     = (App::getLang() === 'EN');
 
-// --- Meta / OG (header.php'nin standart değişkenleri) ---
-$page_title       = !empty($article['seo_title']) ? $article['seo_title'] : (($article['title'] ?? 'Makale') . ' | FEZADAN');
+// Meta / OG (header.php'nin standart değişkenleri)
+$authorName = !empty($article['author_name']) ? trim($article['author_name']) : '';
+$rawTitle   = !empty($article['seo_title']) ? $article['seo_title'] : ($article['title'] ?? 'Makale');
+$cleanTitle = preg_replace('/\s*[|\-\/]\s*FEZADAN\s*$/i', '', trim($rawTitle));
+
+if ($authorName !== '' && strpos($cleanTitle, '|') === false) {
+    $page_title = $cleanTitle . ' | ' . $authorName;
+} elseif (strpos($cleanTitle, '|') === false) {
+    $page_title = $cleanTitle . ' | FEZADAN';
+} else {
+    $page_title = $cleanTitle;
+}
 $page_description = !empty($article['seo_description'])
     ? $article['seo_description']
     : (!empty($article['short_desc'])
         ? $article['short_desc']
         : mb_substr(trim(strip_tags($article['content'] ?? '')), 0, 160));
-$page_canonical   = $page_canonical ?? articleUrl($article['author_slug'] ?? 'yazar', $slug, $contentLang);
+$page_canonical   = $page_canonical ?? articleUrl($slug, $contentLang);
 $og_url           = $page_canonical;
 $og_type          = 'article';
 $hero_image_url = !empty($article['image_url'])
     ? Upload::assetUrl($article['image_url'])
     : '';
 
-$og_image = !empty($article['og_image'])
+$social_image = !empty($article['og_image'])
     ? Upload::assetUrl($article['og_image'])
-    : ($hero_image_url !== '' && !preg_match('/\.webp(\?|$)/i', $hero_image_url)
-        ? $hero_image_url
-        : $siteBase . '/cdn/notlar-social-preview.png');
+    : $hero_image_url;
+$social_cover = CoverImage::url((int)$article['id'], (string)($article['image_url'] ?? ''), 1200, 'jpg');
+$og_image = preg_match('/\.(?:jpe?g|png|gif)(?:[?#]|$)/i', $social_image)
+    ? $social_image
+    : ($social_cover !== '' ? $siteBase . $social_cover : $siteBase . '/cdn/logo-light.png');
+$twitter_image = $og_image;
+if ($social_cover !== '' && $og_image === $siteBase . $social_cover) {
+    $og_image_width = 1200;
+    $og_image_height = 675;
+}
 
 $preload_image = $hero_image_url !== '' ? $hero_image_url : $og_image;
 
@@ -62,12 +85,7 @@ if (!function_exists('fezadan_is_own_upload_image')) {
 if (!function_exists('fezadan_sanitize_article_html')) {
     function fezadan_sanitize_article_html(string $html): string
     {
-        $dangerousTags = '<(script|iframe|object|embed|form|input|select|textarea|button|applet|audio|video|source|track|link|style|meta|base|frame|frameset)\b[^>]*>.*?</\1>|<(script|iframe|object|embed|form|input|select|textarea|button|applet|audio|video|source|track|link|style|meta|base|frame|frameset)\b[^>]*/?\s*>';
-        $html = preg_replace('@' . $dangerousTags . '@is', '', $html);
-        $html = preg_replace('/\s+on\w+\s*=\s*(["\'])(?:(?!\1).)*\1/is', '', $html);
-        $html = preg_replace('/\s+on\w+\s*=\s*[^\s>]+/is', '', $html);
-        $html = preg_replace('/\s+href\s*=\s*(["\'])javascript:/is', ' href=$1#', $html);
-        return $html;
+        return ScientificContent::sanitizeArticle($html);
     }
 }
 
@@ -95,8 +113,8 @@ if (!function_exists('fezadan_normalize_article_images')) {
     }
 }
 
-// --- JSON-LD: BlogPosting + BreadcrumbList ---
-$wordCount = str_word_count(strip_tags($article['content'] ?? ''));
+// JSON-LD: BlogPosting + BreadcrumbList
+$wordCount = ArticleController::wordCount($article['content'] ?? '');
 $blogPosting = [
     '@context' => 'https://schema.org',
     '@type'    => 'BlogPosting',
@@ -113,11 +131,14 @@ $blogPosting = [
     'publisher' => [
         '@type' => 'Organization',
         'name'  => 'FEZADAN',
+        'url'   => $siteBase . '/',
         'logo'  => [
             '@type' => 'ImageObject',
             'url'   => $siteBase . '/cdn/logo-light.png',
         ],
     ],
+    'url' => $page_canonical,
+    'isAccessibleForFree' => true,
     'mainEntityOfPage' => [
         '@type' => 'WebPage',
         '@id'   => $page_canonical,
@@ -154,13 +175,11 @@ require_once ROOT . '/app/Views/inc/header.php';
 
 $word_count = $wordCount;
 $reading_time = max(1, (int)ceil($word_count / 200));
-$total_seconds = $reading_time * 60;
-$threshold_seconds = max(10, (int)ceil($total_seconds * 0.20));
 $previousArticleUrl = !empty($previousArticle['slug'])
-    ? articleUrl($previousArticle['author_slug'] ?? 'yazar', $previousArticle['slug'], $contentLang)
+    ? articleUrl($previousArticle['slug'], $contentLang)
     : null;
 $nextArticleUrl = !empty($nextArticle['slug'])
-    ? articleUrl($nextArticle['author_slug'] ?? 'yazar', $nextArticle['slug'], $contentLang)
+    ? articleUrl($nextArticle['slug'], $contentLang)
     : null;
 
 ?>
@@ -206,7 +225,7 @@ $nextArticleUrl = !empty($nextArticle['slug'])
                         <?php echo isset($article['created_at']) ? date('d F Y', strtotime($article['created_at'])) : date('d F Y'); ?>
                     </span>
 
-                    <span class="text-[var(--text-accent)] opacity-60 font-light px-1">&mdash;</span>
+                    <span class="text-[var(--text-accent)] opacity-60 font-light px-1">/</span>
 
                     <div class="flex gap-3">
                         <?php if (!empty($categories)): ?>
@@ -221,14 +240,14 @@ $nextArticleUrl = !empty($nextArticle['slug'])
                         <?php endif; ?>
                     </div>
 
-                    <span class="text-[var(--text-accent)] opacity-60 font-light px-1">&mdash;</span>
+                    <span class="text-[var(--text-accent)] opacity-60 font-light px-1">/</span>
 
                     <span class="flex items-center gap-2 text-[var(--text-accent)]">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
-                        <?php echo isset($reading_time) ? $reading_time : '1'; ?> <?= $isEn ? 'MIN READ' : 'DK OKUMA' ?>
+                        <?php echo $reading_time; ?> <?= $isEn ? 'MIN READ' : 'DK OKUMA' ?>
                     </span>
 
                 </div>
@@ -270,25 +289,12 @@ $nextArticleUrl = !empty($nextArticle['slug'])
                 </button>
             </div>
 
-            <?php if (!empty($article['audio_url'])): ?>
-            <div class="tts-player-wrapper mb-8 p-4 flex flex-col sm:flex-row items-center gap-4">
-                <div class="flex items-center gap-3">
-                    <span class="text-xl">🎙️</span>
-                    <div class="text-left">
-                        <span class="block font-syne text-[10px] font-bold uppercase tracking-widest text-[var(--text-accent)]"><?= $isEn ? 'AUDIO ARTICLE' : 'SESLİ MAKALE' ?></span>
-                        <span class="block font-mono text-[9px] opacity-65"><?= $isEn ? 'AI voice narration' : 'Yapay zeka seslendirmesi' ?></span>
-                    </div>
-                </div>
-                <audio src="<?php echo \App\Core\Upload::assetUrl($article['audio_url']); ?>" controls class="flex-grow w-full"></audio>
-            </div>
-            <?php endif; ?>
-
             <div class="journal-text font-body">
                 <?php if (!empty($article['image_url'])):
                     $coverRel  = '/' . ltrim($article['image_url'], '/');
                     $coverUrl  = Upload::assetUrl($coverRel);
                     $coverWebp = Upload::webpUrl($coverRel);
-                    $coverAlt  = !empty($article['title']) ? htmlspecialchars($article['title'], ENT_QUOTES, 'UTF-8') . ($isEn ? ' — cover image' : ' — kapak görseli') : ($isEn ? 'Cover image' : 'Kapak görseli');
+                    $coverAlt  = !empty($article['title']) ? htmlspecialchars($article['title'], ENT_QUOTES, 'UTF-8') . ($isEn ? ' / cover image' : ' / kapak görseli') : ($isEn ? 'Cover image' : 'Kapak görseli');
                 ?>
                 <figure class="my-12">
                     <div class="p-2 border border-[#2B1B17] bg-[var(--bg-secondary)]/20">
@@ -309,19 +315,11 @@ $nextArticleUrl = !empty($nextArticle['slug'])
                 <?php endif; ?>
                 <?php
 if (isset($article['content'])) {
-    $processedContent = preg_replace_callback('/\[(\d+)\]/', function ($matches) {
-        static $seenRefs = [];
-        $refNum = $matches[1];
-        $idAttr = '';
-        if (!in_array($refNum, $seenRefs)) {
-            $idAttr = 'id="ref-link-' . $refNum . '"';
-            $seenRefs[] = $refNum;
-        }
-        return '<sup class="reference-sup"><a href="#ref-item-' . $refNum . '" ' . $idAttr . ' class="text-[var(--text-accent)] hover:underline" style="scroll-margin-top: 250px;">[' . $refNum . ']</a></sup>';
-    }, $article['content']);
+    $processedContent = $article['content'];
     $processedContent = preg_replace('/(<figcaption)\s+contenteditable="true"/', '$1', $processedContent);
     $processedContent = preg_replace('/(<figcaption)\s+data-placeholder="[^"]*"/', '$1', $processedContent);
     $processedContent = fezadan_normalize_article_images($processedContent);
+    $processedContent = ScientificContent::linkReferences($processedContent);
     $processedContent = fezadan_sanitize_article_html($processedContent);
     $processedContent = preg_replace('/<img\s(?!.*\bloading\b)/i', '<img loading="lazy" decoding="async" ', $processedContent);
     echo $processedContent;
@@ -436,24 +434,35 @@ else {
                 </div>
             </div>
             <?php endif; ?>
-            
+
+            <?php
+                // A ready citation: readers and AI answer engines reuse it as written.
+                $citationAuthors = !empty($articleAuthors) ? implode(', ', array_column($articleAuthors, 'name')) : ($article['author_name'] ?? 'FEZADAN');
+                $citationDate = !empty($article['created_at']) ? date($isEn ? 'F j, Y' : 'd.m.Y', strtotime($article['created_at'])) : '';
+            ?>
+            <p class="article-citation mt-12 font-mono text-xs leading-relaxed opacity-80">
+                <span class="font-syne font-bold uppercase tracking-widest text-[var(--text-accent)]"><?= $isEn ? 'To cite this article:' : 'Bu yazıyı kaynak gösterirken:' ?></span>
+                <?= htmlspecialchars($citationAuthors) ?>, “<?= htmlspecialchars($article['title'] ?? '') ?>”, FEZADAN<?= $citationDate !== '' ? ', ' . $citationDate : '' ?>.
+                <a href="<?= htmlspecialchars($page_canonical) ?>" class="underline break-all"><?= htmlspecialchars($page_canonical) ?></a>
+            </p>
+
             <div class="article-share mt-12 mb-8 flex items-center justify-center md:justify-start gap-4 border-y border-[var(--line-color)] py-6">
                 <span class="font-syne text-xs font-bold uppercase tracking-widest text-[var(--text-accent)]"><?= $isEn ? 'Share:' : 'Paylaş:' ?></span>
-                
-                <a href="https://twitter.com/intent/tweet?text=<?php echo urlencode($article['title']); ?>&url=<?php echo urlencode($og_url); ?>" 
-                target="_blank" 
+
+                <a href="https://twitter.com/intent/tweet?text=<?php echo urlencode($article['title']); ?>&url=<?php echo urlencode($og_url); ?>"
+                target="_blank"
                 class="p-2 border border-[var(--line-color)] hover:bg-[var(--text-accent)] hover:text-[#FEF9E1] transition-all group">
                     <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path></svg>
                 </a>
 
-                <a href="https://www.facebook.com/sharer/sharer.php?u=<?php echo urlencode($og_url); ?>" 
-                target="_blank" 
+                <a href="https://www.facebook.com/sharer/sharer.php?u=<?php echo urlencode($og_url); ?>"
+                target="_blank"
                 class="p-2 border border-[var(--line-color)] hover:bg-[var(--text-accent)] hover:text-[#FEF9E1] transition-all">
                     <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"></path></svg>
                 </a>
 
-                <a href="https://api.whatsapp.com/send?text=<?php echo urlencode($article['title'] . ' ' . $og_url); ?>" 
-                target="_blank" 
+                <a href="https://api.whatsapp.com/send?text=<?php echo urlencode($article['title'] . ' ' . $og_url); ?>"
+                target="_blank"
                 class="p-2 border border-[var(--line-color)] hover:bg-[var(--text-accent)] hover:text-[#FEF9E1] transition-all">
                     <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.72.94 3.659 1.437 5.634 1.437h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"></path></svg>
                 </a>
@@ -484,7 +493,7 @@ else {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                     </svg>
                 </button>
-            </div>                                    
+            </div>
 
             <?php if (!empty($articleAuthors)): ?>
             <div class="article-author-box mt-12 space-y-6">
@@ -493,7 +502,8 @@ else {
 
                     <a href="<?php echo authorUrl($aut['slug'] ?? $aut['id']); ?>"
                         class="w-24 h-24 flex-shrink-0 border-2 border-[var(--text-accent)] rounded-full overflow-hidden p-1 group cursor-pointer block">
-                        <img src="<?php echo !empty($aut['image_url']) ? SITE_URL . '/' . ltrim($aut['image_url'], '/') : SITE_URL . '/assets/default-avatar.jpg'; ?>"
+                        <img src="<?= htmlspecialchars(!empty($aut['image_url']) ? Upload::assetUrl($aut['image_url']) : SITE_URL . '/assets/default-avatar.jpg', ENT_QUOTES, 'UTF-8') ?>"
+                            width="96" height="96" loading="lazy" decoding="async"
                             class="w-full h-full object-cover rounded-full grayscale group-hover:grayscale-0 transition-all duration-500"
                             alt="<?php echo htmlspecialchars($aut['name']); ?>">
                     </a>
@@ -524,72 +534,7 @@ else {
             </div>
             <?php endif; ?>
 
-            <?php if ($previousArticleUrl || $nextArticleUrl): ?>
-            <nav class="article-neighbors" aria-label="<?= $isEn ? 'Article navigation' : 'Makale gezinme' ?>">
-                <?php if ($previousArticleUrl): ?>
-                    <a class="article-neighbor previous" rel="prev" href="<?= htmlspecialchars($previousArticleUrl, ENT_QUOTES, 'UTF-8') ?>">
-                        <span class="article-neighbor-label"><?= $isEn ? 'Previous article' : 'Onceki makale' ?></span>
-                        <span class="article-neighbor-title"><?= htmlspecialchars($previousArticle['title'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
-                    </a>
-                <?php endif; ?>
-
-                <?php if ($nextArticleUrl): ?>
-                    <a class="article-neighbor next" rel="next" href="<?= htmlspecialchars($nextArticleUrl, ENT_QUOTES, 'UTF-8') ?>">
-                        <span class="article-neighbor-label"><?= $isEn ? 'Next article' : 'Sonraki makale' ?></span>
-                        <span class="article-neighbor-title"><?= htmlspecialchars($nextArticle['title'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
-                    </a>
-                <?php endif; ?>
-            </nav>
-            <?php endif; ?>
         </article>
-
-        <?php if (!empty($related)): ?>
-        <section aria-labelledby="related-heading" class="related-articles max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 mt-16 mb-12">
-            <h2 id="related-heading" class="text-xs uppercase tracking-[0.3em] font-bold text-[var(--text-accent)] border-b border-[var(--line-color)] pb-3 mb-8">
-                <?= $isEn ? 'Related Articles' : 'İlgili Makaleler' ?>
-            </h2>
-            <ul class="grid grid-cols-1 md:grid-cols-3 gap-8 list-none p-0">
-                <?php foreach ($related as $rel): ?>
-                    <?php
-                        $relUrl   = articleUrl($rel['author_slug'] ?? 'yazar', $rel['slug'], $contentLang);
-                        $relImg   = !empty($rel['image_url'])
-                            ? Upload::assetUrl($rel['image_url'])
-                            : $siteBase . '/cdn/notlar-social-preview.png';
-                        $relDesc  = !empty($rel['short_desc'])
-                            ? mb_substr($rel['short_desc'], 0, 120)
-                            : '';
-                    ?>
-                    <li>
-                        <article class="group">
-                            <a href="<?= htmlspecialchars($relUrl, ENT_QUOTES, 'UTF-8') ?>" class="block">
-                                <div class="aspect-[16/10] overflow-hidden border border-[var(--line-color)] mb-3 bg-[var(--bg-secondary)]">
-                                    <img src="<?= htmlspecialchars($relImg, ENT_QUOTES, 'UTF-8') ?>"
-                                         alt="<?= htmlspecialchars($rel['title'], ENT_QUOTES, 'UTF-8') ?>"
-                                         loading="lazy" decoding="async"
-                                         width="800" height="500"
-                                         class="w-full h-full object-cover transition-transform duration-500"
-                                         style="filter: var(--img-filter); mix-blend-mode: var(--img-blend); opacity: var(--img-opacity);">
-                                </div>
-                                <h3 class="font-syne text-lg font-bold leading-tight text-[var(--text-main)] group-hover:text-[var(--text-accent)] transition-colors">
-                                    <?= htmlspecialchars($rel['title'], ENT_QUOTES, 'UTF-8') ?>
-                                </h3>
-                                <?php if ($relDesc): ?>
-                                    <p class="text-sm mt-2 opacity-80 leading-relaxed">
-                                        <?= htmlspecialchars($relDesc, ENT_QUOTES, 'UTF-8') ?><?= mb_strlen($rel['short_desc'] ?? '') > 120 ? '…' : '' ?>
-                                    </p>
-                                <?php endif; ?>
-                                <?php if (!empty($rel['author_name'])): ?>
-                                    <div class="text-xs uppercase tracking-widest mt-3 opacity-60">
-                                        <?= htmlspecialchars($rel['author_name'], ENT_QUOTES, 'UTF-8') ?>
-                                    </div>
-                                <?php endif; ?>
-                            </a>
-                        </article>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-        </section>
-        <?php endif; ?>
     </main>
 
     <div class="hidden xl:block"></div>
@@ -607,12 +552,15 @@ else {
 
 <script nonce="<?= CSP_NONCE ?>">
     window.FezadanArticleData = {
-        articleId: <?= (int)($article['id'] ?? 0) ?>,
-        shareUrl: <?= json_encode($og_url, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+        shareUrl: <?= json_encode($og_url, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>,
         shareTitle: <?= json_encode($article['title'] ?? '', JSON_UNESCAPED_UNICODE) ?>,
-        previousArticleUrl: <?= json_encode($previousArticleUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
-        nextArticleUrl: <?= json_encode($nextArticleUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>
+        previousArticleUrl: <?= json_encode($previousArticleUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>,
+        nextArticleUrl: <?= json_encode($nextArticleUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>
     };
 </script>
+<?php if (strpos($article['content'] ?? '', 'fezadan-math') !== false): ?>
+<link rel="stylesheet" href="/assets/css/article-math.css?v=<?= filemtime(ROOT . '/public_html/assets/css/article-math.css') ?>">
+<script src="/assets/js/article-math.js?v=<?= filemtime(ROOT . '/public_html/assets/js/article-math.js') ?>" nonce="<?= CSP_NONCE ?>"></script>
+<?php endif; ?>
 <script src="/assets/js/article-reader.js?v=<?= filemtime(ROOT . '/public_html/assets/js/article-reader.js') ?>" nonce="<?= CSP_NONCE ?>"></script>
 <?php require_once ROOT . '/app/Views/inc/footer.php'; ?>

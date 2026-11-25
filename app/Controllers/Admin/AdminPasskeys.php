@@ -5,14 +5,7 @@ trait AdminPasskeys
     private function expectedWebAuthnOrigin(): string
     {
         $host = $_SERVER['HTTP_HOST'] ?? 'fezadan.org';
-        $scheme = 'http';
-        $forwardedProto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')[0]));
-        $cfVisitor = $_SERVER['HTTP_CF_VISITOR'] ?? '';
-        if ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on')
-            || $forwardedProto === 'https'
-            || strpos($cfVisitor, '"https"') !== false) {
-            $scheme = 'https';
-        }
+        $scheme = HttpRequest::isHttps() ? 'https' : 'http';
 
         return $scheme . '://' . $host;
     }
@@ -70,7 +63,7 @@ trait AdminPasskeys
         $clientDataJSON = $_POST['clientDataJSON'] ?? '';
         $attestationObject = $_POST['attestationObject'] ?? '';
         $challenge = $_SESSION['webauthn_challenge'] ?? '';
-        
+
         if (!$clientDataJSON || !$attestationObject || !$challenge) {
             echo json_encode(['success' => false, 'error' => 'Geçersiz parametreler.']);
             exit;
@@ -88,15 +81,16 @@ trait AdminPasskeys
             );
 
             $pdo = Db::pdo();
-            // Kimlik bilgisini veritabanına kaydet
+            // Store credential in database
             $stmt = $pdo->prepare("INSERT INTO admin_passkeys (admin_id, credential_id, public_key) VALUES (?, ?, ?)");
             $stmt->execute([
                 $_SESSION['admin_id'],
                 $regData['credentialId'],
                 $regData['publicKey']
             ]);
+            AdminLog::write('info', 'Giriş anahtarı (passkey) eklendi.', ['endpoint' => 'registerPasskeyVerify']);
 
-            // Challenge'ı oturumdan temizle
+            // Clear challenge from session
             unset($_SESSION['webauthn_challenge']);
 
             echo json_encode(['success' => true]);
@@ -148,7 +142,7 @@ trait AdminPasskeys
 
         try {
             $pdo = Db::pdo();
-            // Veritabanında passkey bul
+            // Find passkey in DB
             $stmt = $pdo->prepare("SELECT * FROM admin_passkeys WHERE credential_id = ?");
             $stmt->execute([$credentialId]);
             $passkey = $stmt->fetch(\PDO::FETCH_ASSOC);
@@ -159,7 +153,7 @@ trait AdminPasskeys
             }
 
             require_once ROOT . '/app/Core/WebAuthn.php';
-            // Veritabanındaki açık anahtarla imzayı doğrula
+            // Verify signature using the public key stored in DB
             \App\Core\WebAuthn::verifyAssertion(
                 $clientDataJSON,
                 $authenticatorData,
@@ -182,7 +176,7 @@ trait AdminPasskeys
                 exit;
             }
 
-            // Admin'i getir
+            // Fetch admin
             $stmtAdmin = $pdo->prepare("SELECT * FROM admins WHERE id = ?");
             $stmtAdmin->execute([$passkey['admin_id']]);
             $user = $stmtAdmin->fetch(\PDO::FETCH_ASSOC);
@@ -192,15 +186,13 @@ trait AdminPasskeys
                 exit;
             }
 
-            // Başarılı giriş:
-            // Bu IP için brute-force denemelerini temizle
-            $userIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-            $ipHash = $this->adminRateLimitHash($userIp, 'admin_login_ip');
-            $usernameHash = $this->adminRateLimitHash($user['username'], 'admin_login_username');
-            $pdo->prepare("DELETE FROM login_attempts WHERE ip_hash = ? OR (username_hash IS NOT NULL AND username_hash = ?)")->execute([$ipHash, $usernameHash]);
+            // Successful login:
+            // Clear brute-force attempts for this IP
+            $this->clearLoginAttempts($pdo, $user['username']);
 
-            // Session fixation koruması: oturum kimliğini yenile
+            // Session fixation protection: regenerate session id
             session_regenerate_id(true);
+            $this->refreshSessionCookie();
             $_SESSION = [];
             Csrf::rotate();
 
@@ -209,6 +201,8 @@ trait AdminPasskeys
             $_SESSION['admin_user'] = $user['username'];
             $_SESSION['admin_name'] = $user['name'];
             $_SESSION['admin_role'] = $user['role'] ?? 'viewer';
+            $_SESSION['admin_credential'] = self::credentialFingerprint((string)$user['password']);
+            AdminLog::write('info', 'Giriş yapıldı.', ['endpoint' => 'loginPasskeyVerify', 'method' => 'passkey']);
             $_SESSION['admin_login_at'] = time();
             $_SESSION['admin_last_seen_at'] = time();
 
@@ -218,7 +212,7 @@ trait AdminPasskeys
                     ->execute([$signCount, (int)$passkey['id']]);
             }
 
-            // Challenge'ı oturumdan temizle
+            // Clear challenge from session
             unset($_SESSION['webauthn_challenge']);
 
             echo json_encode(['success' => true, 'role' => $user['role'] ?? 'superadmin']);
@@ -241,9 +235,12 @@ trait AdminPasskeys
         if ($passkeyId > 0) {
             try {
                 $pdo = Db::pdo();
-                // Passkey'in giriş yapmış admin'e ait olduğundan emin ol
+                // Ensure the passkey belongs to the logged-in admin
                 $stmt = $pdo->prepare("DELETE FROM admin_passkeys WHERE id = ? AND admin_id = ?");
                 $stmt->execute([$passkeyId, $_SESSION['admin_id']]);
+                if ($stmt->rowCount() > 0) {
+                    AdminLog::write('warning', 'Giriş anahtarı (passkey) silindi.', ['endpoint' => 'deletePasskey', 'passkey_id' => $passkeyId]);
+                }
                 Flash::set('Giriş anahtarı başarıyla silindi.');
             } catch (\Exception $e) {
                 Flash::set('Giriş anahtarı silinirken hata oluştu.');

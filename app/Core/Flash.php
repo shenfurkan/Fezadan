@@ -26,11 +26,4 @@ class Flash
         unset($_SESSION[self::KEY]);
         return is_string($msg) ? $msg : null;
     }
-
-    /** Sadece kontrol — değeri silmez. */
-    public static function peek(): ?string
-    {
-        $m = $_SESSION[self::KEY] ?? null;
-        return is_string($m) ? $m : null;
-    }
 }

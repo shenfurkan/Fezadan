@@ -8,7 +8,7 @@ class UploadsController extends Controller
             return $part !== '' && strpos($part, "\0") === false;
         }));
 
-        $objectKey = 'uploads/' . implode('/', $parts);
+        $objectKey = 'portfolio/' . implode('/', $parts);
         if (empty($parts) || strpos($objectKey, '..') !== false) {
             http_response_code(404);
             echo 'Dosya bulunamadı.';

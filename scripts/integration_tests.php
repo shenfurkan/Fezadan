@@ -1,7 +1,7 @@
 <?php
 /**
- * Fezadan için Minimal Entegrasyon Test Paketi.
- * localhost:8080'e karşı temel HTTP doğrulamaları çalıştırır.
+ * Minimal Integration Test Suite for Fezadan
+ * Runs basic HTTP assertions against localhost:8080
  */
 
 $baseUrl = 'http://127.0.0.1';
@@ -28,7 +28,7 @@ function fetchUrl($path, $options = []) {
         curl_setopt($ch, CURLOPT_HTTPHEADER, $options['headers']);
     }
     if (!empty($options['post'])) {
-        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($options['post']));
     }
     if (!empty($options['follow'])) {
@@ -47,7 +47,7 @@ function fetchUrl($path, $options = []) {
 
 echo "Running Fezadan Integration Tests...\n\n";
 
-// 1. Kanonikleştirme
+// 1. Canonicalization
 $res = fetchUrl('/');
 assertTest("Root canonicalization redirects", $res['code'] === 307 || $res['code'] === 301, "Expected 307 or 301, got " . $res['code']);
 if (preg_match('/Location: \/(tr|en)/', $res['header'])) {
@@ -56,25 +56,25 @@ if (preg_match('/Location: \/(tr|en)/', $res['header'])) {
     assertTest("Root canonicalization target", false, "Did not redirect to /tr or /en");
 }
 
-// 2. Genel Metotta Admin CSRF Koruması
+// 2. Admin CSRF Protection on Public Method
 $res = fetchUrl('/yonetim/sendResetLink', ['post' => ['email' => 'test@test.com']]);
 assertTest("POST to public write method without CSRF returns 403", $res['code'] === 403, "Expected 403 Forbidden, got " . $res['code']);
 
-// 3. Admin Auth Koruması
+// 3. Admin Auth Protection
 $res = fetchUrl('/yonetim/dashboard');
 assertTest("Admin Dashboard without auth redirects", $res['code'] === 302, "Expected 302 Redirect, got " . $res['code']);
 
 // 4. Robots.txt
 $res = fetchUrl('/robots.txt');
 assertTest("Robots.txt returns 200", $res['code'] === 200, "Got " . $res['code']);
-assertTest("Robots.txt blocks AI bots", strpos($res['body'], 'User-agent: GPTBot') !== false, "GPTBot rule missing");
+assertTest("Robots.txt lets AI answer engines read the site", strpos($res['body'], 'Content-Signal: search=yes, ai-input=yes') !== false && strpos($res['body'], 'User-agent: GPTBot') === false, "AI crawlers are still blocked or the content signal is missing");
 
-// 5. Sitemap Temel URL
+// 5. Sitemap Base URL
 $res = fetchUrl('/sitemap.xml');
 assertTest("Sitemap.xml returns 200", $res['code'] === 200, "Got " . $res['code']);
 assertTest("Sitemap.xml is valid XML format", strpos($res['body'], '<sitemapindex') !== false || strpos($res['body'], '<urlset') !== false, "Invalid XML structure");
 
-// 6. PDF Koruma Doğrulaması
+// 6. PDF Guard Verification
 if (!defined('ROOT')) {
     define('ROOT', dirname(__DIR__));
 }
@@ -104,5 +104,6 @@ try {
 }
 
 echo "\nSummary: $passed passed, $failed failed.\n";
+// @phpstan-ignore greater.alwaysFalse (assertTest() increments $failed through `global`)
 if ($failed > 0) exit(1);
 exit(0);

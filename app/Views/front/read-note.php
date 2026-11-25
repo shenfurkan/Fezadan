@@ -1,8 +1,14 @@
 <?php
-    $page_title = htmlspecialchars($note['title']);
+/**
+ * @var array $note
+ * @var string $pdfUrl
+ * @var string $downloadPath
+ * @var string $downloadUrl
+ */
+    $page_title = (string)($note['title'] ?? '');
     $page_description = !empty($note['description'])
         ? mb_substr(strip_tags($note['description']), 0, 160)
-        : 'FEZADAN Notlar - ' . htmlspecialchars($note['title']);
+        : 'FEZADAN Notlar - ' . (string)($note['title'] ?? '');
     include __DIR__ . '/../inc/notes_header.php';
 
     $isLocal = function_exists('litecaptcha_is_local_request') && litecaptcha_is_local_request();
@@ -124,10 +130,6 @@
                     <div class="flex justify-between">
                         <span class="font-bold">BOYUT:</span>
                         <span><?php echo number_format(($note['file_size'] ?? 0) / 1048576, 2); ?> MB</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="font-bold">İNDİRME:</span>
-                        <span class="text-[var(--text-accent)] font-bold"><?php echo $note['downloads']; ?></span>
                     </div>
                 </div>
 

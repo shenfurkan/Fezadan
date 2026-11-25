@@ -2,10 +2,10 @@
 $siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
 $lang = App::getLang();
 $isEn = ($lang === 'EN');
-$page_title       = $isEn ? 'Privacy Policy — Data Protection | FEZADAN' : 'Gizlilik Politikası — Veri Koruma | FEZADAN';
+$page_title       = $isEn ? 'Privacy Policy | Data Protection | FEZADAN' : 'Gizlilik Politikası | Veri Koruma | FEZADAN';
 $page_description = $isEn
-    ? 'FEZADAN privacy policy — information about data collection, cookies, and user rights. No tracking, no third-party analytics.'
-    : 'FEZADAN gizlilik politikası — veri toplama, çerez ve kullanıcı hakları hakkında bilgi. Takip yok, üçüncü parti analiz yok.';
+    ? 'How FEZADAN uses cookieless Cloudflare Web Analytics, essential cookies and technical service providers.'
+    : 'FEZADAN’da çerezsiz Cloudflare Web Analytics, gerekli çerezler ve teknik hizmet sağlayıcıları hakkında bilgi.';
 $page_canonical   = langUrl('/privacy');
 $og_url           = $page_canonical;
 require_once ROOT . '/app/Views/inc/header.php';
@@ -22,27 +22,27 @@ require_once ROOT . '/app/Views/inc/header.php';
 <div class="texture-overlay"></div>
 
 <main id="main-content" class="relative z-10 w-full px-6 py-12 lg:p-16 2xl:p-20 max-w-4xl mx-auto flex-grow">
-    
+
     <header class="mb-12 border-b border-[var(--text-main)]/30 pb-8">
         <h1 class="font-syne text-5xl md:text-6xl xl:text-7xl font-bold leading-[0.9] tracking-tighter uppercase text-[var(--text-main)] break-words">
             <?php if ($isEn): ?>Privacy<br>Policy<?php else: ?>Gizlilik<br>Politikası<?php endif; ?>
         </h1>
         <p class="mt-6 font-mono text-xs md:text-sm text-[var(--text-accent)] font-bold tracking-widest uppercase">
-            <?php if ($isEn): ?>Last Updated: 23 April 2026<?php else: ?>Son Güncelleme: 23 Nisan 2026<?php endif; ?>
+            <?php if ($isEn): ?>Last Updated: 30 October 2026<?php else: ?>Son Güncelleme: 30 Ekim 2026<?php endif; ?>
         </p>
     </header>
 
     <div class="space-y-12 text-lg md:text-xl leading-relaxed opacity-90 text-[var(--text-main)]">
-        
+
         <section class="space-y-4">
             <h2 class="font-syne text-2xl font-bold uppercase tracking-tight opacity-100">
                 <?php if ($isEn): ?>Core Principles and Open Source Transparency<?php else: ?>Temel İlkeler ve Açık Kaynak Şeffaflığı<?php endif; ?>
             </h2>
             <p>
                 <?php if ($isEn): ?>
-                Fezadan.org is built on a privacy-by-design architecture. Unlike conventional blogging platforms, ours is founded on the principle of not collecting user data and minimizing digital footprint. The site's entire source code is open, and our privacy commitments are technically verifiable and transparent. Our goal is to provide a collectively conscious reading experience that fully protects individual data privacy.
+                FEZADAN aims to collect only the data needed to publish content, keep the site secure and understand its overall use. We do not use advertising profiles or cross-site tracking. Our source code is publicly available so that the practices described here can be inspected.
                 <?php else: ?>
-                Fezadan.org, mimari yapısı itibarıyla privacy by design ilkesi üzerine inşa edilmiştir. Geleneksel blog servislerinin aksine platformumuz, kullanıcı verilerinin toplanmaması ve dijital ayak izinin en aza indirilmesi esasına dayanır. Sitenin tüm kaynak kodları açık olup, gizlilik taahhütlerimiz teknik olarak doğrulanabilir ve şeffaf bir yapıdadır. Hedefimiz, bireyin kişisel veri mahremiyetini tam anlamıyla koruyan kolektif bilinçli bir okuma deneyimi sunmaktır.
+                FEZADAN, içerik sunmak, siteyi güvenli tutmak ve genel kullanımını anlamak için gereken verileri sınırlı tutmayı amaçlar. Reklam profilleri veya siteler arası takip kullanmayız. Burada açıklanan uygulamaların incelenebilmesi için kaynak kodlarımız herkese açıktır.
                 <?php endif; ?>
             </p>
         </section>
@@ -53,9 +53,9 @@ require_once ROOT . '/app/Views/inc/header.php';
             </h2>
             <p>
                 <?php if ($isEn): ?>
-                There are no third-party cookies on the platform that track, profile, or monitor visitors' on-site behavior. Visitor IP addresses are not stored, retained, or processed in server logs; therefore, user identity remains completely anonymous on the system. The site infrastructure only communicates with Cloudflare for cybersecurity, DDoS protection, and firewall services. Beyond this, no data is shared with any third-party service.
+                The fezadan_lang cookie remembers your language choice for 30 days. Session cookies are used for admin sign-in and mail-invitation forms; browser storage also remembers preferences such as theme, reading size and the installation prompt. These are separate from analytics. Cloudflare Web Analytics does not use cookies, localStorage or persistent visitor identifiers. Hosting and Cloudflare security services necessarily process connection information, including IP addresses; access, error and security logs may contain technical request data. We therefore do not promise that an IP address is never processed or logged.
                 <?php else: ?>
-                Platform üzerinde, kullanıcıların site içi davranışlarını izleyen, profilleyen veya takip eden hiçbir üçüncü taraf çerez (cookie) bulunmamaktadır. Ziyaretçilerin IP adresleri sunucu kayıtlarında tutulmaz, depolanmaz ve işlenmez; dolayısıyla kullanıcı kimliği sistem üzerinde tamamen anonim kalır. Site altyapısı, yalnızca siber güvenlik, DDoS saldırılarına karşı koruma ve güvenlik duvarı (firewall) hizmeti sağlayan Cloudflare ile sınırlı bir veri iletişimine sahiptir. Bunun dışında hiçbir üçüncü taraf servisle veri paylaşımı yapılmamaktadır.
+                fezadan_lang çerezi dil tercihinizi 30 gün hatırlar. Yönetim paneli girişi ve e-posta davet formları için oturum çerezleri kullanılır; tema, okuma boyutu ve kurulum hatırlatması gibi tercihler de tarayıcı depolamasında tutulur. Bunlar analitikten ayrıdır. Cloudflare Web Analytics çerez, localStorage veya kalıcı ziyaretçi kimliği kullanmaz. Barındırma ve Cloudflare güvenlik hizmetleri, IP adresi dahil bağlantı bilgilerini zorunlu olarak işler; erişim, hata ve güvenlik kayıtları teknik istek verileri içerebilir. Bu nedenle IP adreslerinin hiçbir zaman işlenmediği veya kaydedilmediği yönünde bir taahhütte bulunmayız.
                 <?php endif; ?>
             </p>
         </section>
@@ -66,9 +66,9 @@ require_once ROOT . '/app/Views/inc/header.php';
             </h2>
             <p>
                 <?php if ($isEn): ?>
-                To protect user privacy, the site's visual and technical components are independent of external sources. Fonts and stylesheets (including Tailwind CSS) are served directly from our own server (self-hosted) rather than through third-party CDN services. This prevents your browser from sending requests to Google Fonts or similar external providers, eliminating indirect data leakage.
+                Fonts, stylesheets and frontend libraries are served from our own infrastructure, not Google Fonts or a public library CDN. Cloudflare provides traffic protection, content delivery and R2 file storage. The Web Analytics beacon is an explicit exception to local script hosting: it loads from static.cloudflareinsights.com and sends measurements to cloudflareinsights.com. PDF downloads and mail invitations may also use our LiteCaptcha verification service. Some article images are hosted by external sources; loading them sends connection information to that source. External services, including social media links you open, have their own privacy policies.
                 <?php else: ?>
-                Kullanıcı mahremiyetini korumak amacıyla, sitenin görsel ve teknik bileşenleri dış kaynaklardan bağımsız hale getirilmiştir. Yazı tipleri (fontlar) ve stil dosyaları (Tailwind CSS dahil) harici CDN (İçerik Dağıtım Ağı) servisleri yerine doğrudan kendi sunucumuz üzerinden (self-hosted) servis edilir. Bu yöntem, tarayıcınızın Google Fonts veya benzeri dış sağlayıcılara istek göndermesini engelleyerek dolaylı veri sızıntılarını önler.
+                Yazı tipleri, stil dosyaları ve arayüz kütüphaneleri Google Fonts veya herkese açık bir kütüphane CDN’i yerine kendi altyapımızdan sunulur. Cloudflare; trafik koruması, içerik dağıtımı ve R2 dosya depolama hizmetleri sağlar. Web Analytics betiği, yerel betik sunumunun açık bir istisnasıdır: static.cloudflareinsights.com adresinden yüklenir ve ölçümleri cloudflareinsights.com adresine gönderir. PDF indirmelerinde ve e-posta davetlerinde ayrıca kendi LiteCaptcha doğrulama hizmetimiz kullanılabilir. Bazı makale görselleri dış kaynaklardan yüklenir; yükleme sırasında o kaynağa bağlantı bilgileri iletilir. Açtığınız sosyal medya bağlantıları dahil dış hizmetlerin kendi gizlilik politikaları geçerlidir.
                 <?php endif; ?>
             </p>
         </section>
@@ -79,9 +79,36 @@ require_once ROOT . '/app/Views/inc/header.php';
             </h2>
             <p>
                 <?php if ($isEn): ?>
-                Site traffic measurement is performed via server-side local counters that do not identify the user and are not linked to IP addresses. This system does not analyze individual user behavior; it only provides aggregate statistical data such as total page views and contains no personal data.
+                We use Cloudflare Web Analytics to understand page views, visits, referring sites, approximate country, browser/device categories and page performance, including Core Web Vitals. The beacon sends page and referrer information and performance measurements to Cloudflare. Cloudflare states that it does not log URL query strings, use cookies or fingerprint visitors for this service, and that incoming IP addresses are discarded at the nearest data center rather than stored in the RUM databases or logs. This does not mean that no network data is processed. Analytics can be viewed for the previous six months; older data may be sampled.
                 <?php else: ?>
-                Site trafiğinin ölçümlenmesi, kullanıcıyı tanımlamayan ve IP adresi ile ilişkilendirilmeyen, sunucu tabanlı yerel sayaçlar (local counters) aracılığıyla gerçekleştirilir. Bu sistem, bireysel kullanıcı davranışlarını analiz etmez; yalnızca toplam görüntülenme sayısı gibi genel istatistiksel verileri barındırır ve kişisel veri içermez.
+                Sayfa görüntülenmelerini, ziyaretleri, yönlendiren siteleri, yaklaşık ülkeyi, tarayıcı/cihaz gruplarını ve Core Web Vitals dahil sayfa performansını anlamak için Cloudflare Web Analytics kullanırız. Betik, sayfa ve yönlendiren sayfa bilgileri ile performans ölçümlerini Cloudflare’e gönderir. Cloudflare bu hizmette URL sorgu parametrelerini kaydetmediğini, çerez veya ziyaretçi parmak izi kullanmadığını ve gelen IP adreslerini RUM veritabanlarına ya da kayıtlarına yazmak yerine en yakın veri merkezinde attığını belirtir. Bu, ağ verilerinin hiç işlenmediği anlamına gelmez. Analitik raporları geçmiş altı ay için görüntülenebilir; daha eski veriler örneklenebilir.
+                <?php endif; ?>
+            </p>
+            <p>
+                <?php if ($isEn): ?>
+                The beacon is limited to public pages on fezadan.org and www.fezadan.org. It is not loaded on admin, mail-invitation, anonymity-check or notes/PDF pages, other subdomains or local development. We also omit it when the request contains Do Not Track (DNT: 1) or Global Privacy Control (Sec-GPC: 1). Blocking the beacon does not prevent reading the site. Cloudflare may process measurements internationally; this setup does not promise Turkey-only or EU-only storage. See <a class="underline" href="https://developers.cloudflare.com/speed/observatory/rum-beacon/" rel="noopener noreferrer">Cloudflare’s RUM privacy documentation</a> and <a class="underline" href="https://www.cloudflare.com/privacypolicy/" rel="noopener noreferrer">privacy policy</a>.
+                <?php else: ?>
+                Betik yalnızca fezadan.org ve www.fezadan.org üzerindeki herkese açık sayfalarda yüklenir. Yönetim paneli, e-posta daveti, anonimlik testi, not/PDF sayfaları, diğer alt alan adları ve yerel geliştirme ortamı ölçüm dışındadır. İstekte Do Not Track (DNT: 1) veya Global Privacy Control (Sec-GPC: 1) sinyali varsa betiği yüklemeyiz. Betiği engellemeniz siteyi okumanızı engellemez. Cloudflare ölçümleri farklı ülkelerde işleyebilir; bu kurulum yalnızca Türkiye’de veya AB’de saklama taahhüdü vermez. Ayrıntılar için <a class="underline" href="https://developers.cloudflare.com/speed/observatory/rum-beacon/" rel="noopener noreferrer">Cloudflare RUM gizlilik açıklamasını</a> ve <a class="underline" href="https://www.cloudflare.com/privacypolicy/" rel="noopener noreferrer">gizlilik politikasını</a> inceleyebilirsiniz.
+                <?php endif; ?>
+            </p>
+            <p>
+                <?php if ($isEn): ?>
+                Local readership and download totals, reading-time tracking and scroll-depth reporting have been retired. We do not send these measurements to our server or to Cloudflare. Historical local records have not been deleted by this change and are no longer updated or displayed. Separate abuse-prevention controls, such as PDF download limits, remain in place; they use a daily salted IP hash rather than a raw IP in the rate-limit table.
+                <?php else: ?>
+                Yerel okunma ve indirme toplamları, okuma süresi takibi ve kaydırma derinliği raporlaması kaldırılmıştır. Bu ölçümleri kendi sunucumuza veya Cloudflare’e göndermeyiz. Bu değişiklik geçmiş yerel kayıtları silmez; kayıtlar artık güncellenmez veya gösterilmez. PDF indirme limiti gibi kötüye kullanım önlemleri ayrı olarak sürer; indirme limiti tablosunda ham IP yerine günlük tuzlanmış IP özeti kullanılır.
+                <?php endif; ?>
+            </p>
+        </section>
+
+        <section class="space-y-4">
+            <h2 class="font-syne text-2xl font-bold uppercase tracking-tight opacity-100">
+                <?php if ($isEn): ?>Your Choices and Contact<?php else: ?>Tercihleriniz ve İletişim<?php endif; ?>
+            </h2>
+            <p>
+                <?php if ($isEn): ?>
+                You can delete site cookies and local preferences in your browser settings and block analytics requests. The DNT/GPC exclusion above applies to the Cloudflare beacon, not essential security processing. For questions about data processing or requests concerning your personal data, contact <a class="underline" href="mailto:info@fezadan.org">info@fezadan.org</a>. Information you send by email or through an account/invitation form is processed to respond to your request or provide the requested service, not for analytics or advertising.
+                <?php else: ?>
+                Tarayıcı ayarlarından site çerezlerini ve yerel tercihleri silebilir, analitik isteklerini engelleyebilirsiniz. Yukarıdaki DNT/GPC istisnası Cloudflare betiği içindir; gerekli güvenlik işlemlerini kapsamaz. Veri işleme hakkındaki sorularınız ve kişisel verilerinize ilişkin talepleriniz için <a class="underline" href="mailto:info@fezadan.org">info@fezadan.org</a> adresine yazabilirsiniz. E-posta veya hesap/davet formuyla gönderdiğiniz bilgiler, talebinizi yanıtlamak ya da istediğiniz hizmeti sunmak için işlenir; analitik veya reklam amacıyla kullanılmaz.
                 <?php endif; ?>
             </p>
         </section>

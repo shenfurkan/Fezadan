@@ -33,7 +33,7 @@ Her sayfa yüklendiğinde projenin giriş kapısı olan `index.php` baştan sona
 ## 4. Dil ve Rota Ayrımı: `App.php`
 Sistem artık ne yapılacağını anlamak için URL'ye bakar (örn: `/tr/hakkinda`).
 - **Dil Algılama:** İstekte `/tr/` veya `/en/` ön eki aranır. Eğer kullanıcı sadece `fezadan.org` adresine girmişse, tarayıcısının dili (`HTTP_ACCEPT_LANGUAGE`) kontrol edilir. Türkçe kullanıyorsa anında `fezadan.org/tr` adresine **307 Yönlendirmesi** yapılır.
-- **Subdomain Kontrolü:** Eğer adres `anonymitycheck.fezadan.org` ise dil kontrolleri es geçilerek direkt gizlilik aracına (`AnonymityCheckController`) bağlanılır.
+- **Subdomain Kontrolü:** `anonymitycheck.fezadan.org` ayrı bir servistir; ana site bu hostu modül olarak işlemez, `/anonymitycheck/*` isteklerini `ANONYMITY_SITE_URL` adresine yönlendirir.
 - **Controller Çözümleme:** Adres `/tr/makaleler` ise sistem bunun `ArticleController` dosyasına gideceğini anlar ve ilgili sınıfı ayağa kaldırır.
 
 ---

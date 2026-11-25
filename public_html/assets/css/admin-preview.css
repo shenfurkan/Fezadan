@@ -1,0 +1,134 @@
+/* Preview chrome stays outside the sandboxed reader document. */
+.editor-preview {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: var(--bg-paper);
+    color: var(--text-main);
+}
+.editor-preview[open] { display: flex; flex-direction: column; }
+.editor-preview::backdrop { background: var(--bg-paper); }
+html.editor-preview-open { overflow: hidden; }
+.editor-preview-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem 1.5rem;
+    flex-shrink: 0;
+    padding: 1rem clamp(1rem, 3vw, 2rem);
+    border-bottom: 1px solid var(--line-color);
+    font-family: 'Space Grotesk', sans-serif;
+}
+.editor-preview-heading { flex: 1 1 18rem; }
+.editor-preview-heading h2 { margin: 0; font-size: 1rem; font-weight: 700; }
+.editor-preview-heading p { margin: .3rem 0 0; font-size: .75rem; line-height: 1.5; }
+.editor-preview-devices { display: flex; gap: .25rem; }
+.editor-preview-toolbar button {
+    min-height: 44px;
+    padding: .6rem .85rem;
+    border: 1px solid var(--line-color);
+    background: transparent;
+    color: var(--text-main);
+    font: inherit;
+    font-size: .8rem;
+    cursor: pointer;
+}
+.editor-preview-toolbar button[aria-pressed="true"],
+.editor-preview-toolbar button:hover { background: var(--text-main); color: var(--bg-paper); }
+.editor-preview-toolbar button:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 3px; }
+.editor-preview-close { display: flex; align-items: center; gap: .75rem; font-weight: 700 !important; }
+.editor-preview-close span { font-size: 1.5rem; line-height: 1; }
+.editor-preview-stage {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    text-align: center;
+}
+#previewFrame {
+    display: block;
+    width: 100%;
+    max-width: 1440px;
+    height: 100%;
+    min-height: 20rem;
+    margin: 0 auto;
+    border: 1px solid var(--line-color);
+    background: var(--bg-paper);
+}
+.editor-preview-stage[data-device="tablet"] #previewFrame { width: 768px; max-width: 100%; }
+.editor-preview-stage[data-device="mobile"] #previewFrame { width: 390px; max-width: 100%; }
+@media (max-width: 600px) {
+    .editor-preview-toolbar { padding: .75rem; gap: .6rem; }
+    .editor-preview-heading { flex-basis: 100%; }
+    .editor-preview-devices { flex: 1; }
+    .editor-preview-toolbar button { padding-inline: .6rem; font-size: .75rem; }
+    .editor-preview-close span { display: none; }
+    .editor-preview-stage { padding: .5rem; }
+}
+
+/* The iframe uses the site's real reader stylesheet and responsive breakpoints. */
+html:has(.preview-reader) {
+    --bg-paper: #FEF9E1;
+    --bg-secondary: #E5D0AC;
+    --text-main: #6D2323;
+    --text-accent: #A31D1D;
+    --line-color: #6D2323;
+    background: var(--bg-paper);
+    color: var(--text-main);
+}
+html[data-theme="dark"]:has(.preview-reader) {
+    --bg-paper: #120A0A;
+    --bg-secondary: #1F1212;
+    --text-main: #E1C89E;
+    --text-accent: #FF5C5C;
+    --line-color: #E1C89E;
+}
+.preview-reader {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3rem;
+    max-width: 80rem;
+    margin: 0 auto;
+    padding: 3rem clamp(1rem, 4vw, 3rem);
+    overflow-wrap: anywhere;
+}
+.preview-reader [hidden] { display: none !important; }
+.preview-reader-article { min-width: 0; max-width: 56rem; }
+.preview-reader-header { margin-bottom: 3rem; }
+.preview-reader-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-bottom: 1.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .7rem;
+    text-transform: uppercase;
+}
+.preview-reader-authors { margin-top: 1rem; font-family: 'JetBrains Mono', monospace; font-size: .75rem; }
+.preview-reader-cover { margin: 3rem 0; padding: .5rem; border: 1px solid var(--line-color); }
+.preview-reader-cover img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.preview-reader-refs { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--line-color); }
+.preview-reader-refs h2, .preview-reader-toc h2 { margin-bottom: 1rem; font-family: 'Syne', sans-serif; font-weight: 700; }
+.preview-reader-refs ol { list-style: none; font-family: 'JetBrains Mono', monospace; font-size: .8rem; line-height: 1.8; }
+.preview-reader-refs li { margin: .5rem 0; scroll-margin-top: 1rem; }
+.preview-reader-toc { min-width: 0; font-family: 'Space Grotesk', sans-serif; font-size: .85rem; }
+.preview-reader-toc a { display: block; margin: .5rem 0; }
+.preview-reader-toc a[data-level="3"] { padding-left: 1rem; }
+@media (min-width: 1280px) {
+    .preview-reader { grid-template-columns: minmax(0, 56rem) minmax(0, 12rem); }
+    .preview-reader-toc { position: sticky; top: 2rem; align-self: start; max-height: calc(100vh - 4rem); overflow-y: auto; }
+}
+
+.editor-seo-snippet { padding: 1rem; border: 1px solid #d1d5db; background: #fff; color: #202124; font-family: Arial, sans-serif; overflow-wrap: anywhere; }
+.editor-seo-url { margin-bottom: .5rem; font-size: .75rem; line-height: 1.5; }
+.editor-seo-title { color: #1a0dab; font-size: 1.15rem; line-height: 1.35; }
+.editor-seo-desc { margin-top: .4rem; color: #4d5156; font-size: .85rem; line-height: 1.6; }

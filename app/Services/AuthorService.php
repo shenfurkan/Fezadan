@@ -31,13 +31,11 @@ class AuthorService
 
         $newImageStored = null;
 
-        require_once ROOT . '/app/Core/Controller.php'; // For uniqueSlug/createSlug if needed?
-        // Controller'da uniqueSlug ve createSlug var ama AuthorService Controller'dan türemiyor. Slug üretimini burada uygula veya yardımcı çağır.
         $slug = $this->createSlug($name);
         $slug = $this->uniqueSlug($pdo, 'authors', $slug, $id ?: null);
 
         if (isset($files['image']) && $files['image']['error'] === UPLOAD_ERR_OK) {
-            $storedPath = \App\Core\Upload::saveImageToR2($files['image'], 'uploads/authors', 'author_', 5242880, $slug);
+            $storedPath = \Upload::saveImageToR2($files['image'], 'uploads/authors', 'author_', 5242880, $slug);
             if ($storedPath !== null) {
                 $image_path     = $storedPath;
                 $newImageStored = $storedPath;
@@ -89,7 +87,7 @@ class AuthorService
             $r2 = \App\Core\R2Storage::instance();
             $r2->deleteObject($path);
         } catch (\Throwable $e) {
-            // Silme hatalarını yoksay
+            // Ignore deletion errors
         }
     }
 

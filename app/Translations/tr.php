@@ -1,6 +1,6 @@
 <?php
 /**
- * Türkçe çeviriler (ana dil — çoğu UI zaten Türkçe, fallback)
+ * Türkçe çeviriler (ana dil: çoğu UI zaten Türkçe, fallback)
  */
 return [
     // Site genel

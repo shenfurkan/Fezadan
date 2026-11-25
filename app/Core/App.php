@@ -1,34 +1,4 @@
 <?php
-
-/**
- * Fezadan platformunun merkezi yönlendirici ve istek dağıtıcısı.
- *
- * Host tabanlı yönlendirme (ana site, notlar subdomain, anonimlik kontrolü),
- * dil öneki tespiti (tr/en), yol temizleme ve controller dağıtımını
- * ROUTABLE_ACTIONS izin listesiyle yönetir.
- *
- * ## Yönlendirme akışı
- *
- * 1. **Yol temizleme** — path traversal ve kodlanmış slash'leri engeller.
- * 2. **Engellenen rotalar** — /admin, /panel, /dashboard kasıtlı olarak 404.
- * 3. **Statik dosyalar** — robots.txt ve sitemap XML doğrudan sunulur.
- * 4. **Host dağıtımı** — anonymitycheck.* ve notlar.* subdomain'leri
- *    kendi controller'larına yönlendirilir.
- * 5. **Dil yönlendirmesi** — /tr veya /en öneki eksikse çerez tercihi
- *    veya Accept-Language başlığı ile yönlendirme yapılır.
- * 6. **Ana site yönlendirme** — URL segmenti bir controller sınıfına
- *    eşlenir, ROUTABLE_ACTIONS ile doğrulanır ve dağıtılır.
- * 7. **Yedek** — statik sayfalar ve yazar/makale kısayol aramaları.
- *
- * ## Yeni rota ekleme
- *
- * 1. `app/Controllers/` altında bir controller oluşturun veya mevcut kullanın.
- * 2. Her genel erişimli metod adını aşağıdaki `ROUTABLE_ACTIONS` sabitine
- *    ekleyin. Eksik girişler 404 ile sonuçlanır.
- *
- * @see App::ROUTABLE_ACTIONS Rota izin listesi
- * @see App::dispatchController() Ana dağıtım mantığı
- */
 class App {
     protected $controller = 'HomeController';
     protected $method = 'index';
@@ -39,30 +9,32 @@ class App {
         'AdminController' => [
             'index', 'login', 'dashboard', 'logout',
             'createPatch', 'storePatch', 'deletePatch', 'patchDelete',
-            'create', 'store', 'edit', 'update', 'delete', 'publish', 'uploadContentImage',
+            'create', 'store', 'edit', 'update', 'delete', 'publish', 'uploadContentImage', 'prepareScientificImport',
+            'unlockAdmin', 'adminResetLink', 'deleteAdmin', 'updateAdminRole',
             'categories', 'storeCategory', 'deleteCategory',
             'addNote', 'storeNote', 'deleteNote', 'editNote', 'updateNote',
             'registerPasskeyChallenge', 'registerPasskeyVerify',
             'loginPasskeyChallenge', 'loginPasskeyVerify', 'deletePasskey',
-            'portfolio', 'storePortfolio', 'portfolioStore', 'portfolioEdit', 'updatePortfolio', 'portfolioUpdate', 'deletePortfolio', 'portfolioDelete', 'portfolioReorder',
+            'portfolio', 'storePortfolio', 'portfolioStore', 'portfolioEdit', 'updatePortfolio', 'portfolioUpdate', 'deletePortfolio', 'portfolioDelete', 'deleteAllPortfolio', 'portfolioDeleteAll', 'portfolioReorder',
             'generateSitemap',
             'forgotPassword', 'resetMailPreview', 'sendResetLink', 'resetPassword', 'updateResetPassword',
             'admins', 'storeAdmin', 'profile', 'logs', 'updatePassword', 'updateProfile',
-            'generateTts', 'generateOgImage',
+            'generateOgImage',
             'authors', 'storeAuthor', 'authorStore', 'deleteAuthor', 'authorDelete',
+            'mailInvitations', 'storeMailInvitation', 'revokeMailInvitation', 'reconcileMailInvitation', 'changeMailPassword',
         ],
-        'AnonymityCheckController' => ['index', 'torCheck', 'ispLookup', 'geoLookup', 'save'],
-        'ArticleController' => ['index', 'qr', 'count'],
-        'AnalyticsController' => ['track'],
+        'ArticleController' => ['index', 'qr'],
         'ArticlesController' => ['index'],
         'AuthorController' => ['index'],
         'HomeController' => ['index', 'privacy'],
+        'MailInviteController' => ['index', 'redeem'],
         'NotesController' => ['index', 'read', 'viewPdf', 'download', 'rss'],
         'PageController' => ['renderPage'],
         'RssController' => ['index'],
         'SearchController' => ['autocomplete'],
-        'SeoController' => ['robots', 'sitemapIndex', 'sitemapMain', 'sitemapNotes', 'sitemapAnonymity'],
+        'SeoController' => ['robots', 'sitemapIndex', 'sitemapMain', 'sitemapNotes'],
         'UploadsController' => ['index'],
+        'ImageController' => ['cover'],
     ];
 
     public static function getLang(): string {
@@ -78,29 +50,25 @@ class App {
             exit;
         }
 
-        $host = $_SERVER['HTTP_HOST'] ?? '';
+        $host = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         $parts = explode('?', $requestUri, 2);
         $rawPath = $parts[0];
         $queryString = isset($parts[1]) ? '?' . $parts[1] : '';
 
-        $rawUriLower = strtolower($requestUri);
-        if (strpos($rawUriLower, '%2e%2e') !== false ||
-            strpos($rawUriLower, '%2e.') !== false ||
-            strpos($rawUriLower, '.%2e') !== false ||
-            strpos($rawUriLower, '..') !== false) {
-            http_response_code(400);
-            echo 'Bad Request: Path traversal detected.';
-            exit;
-        }
-
-        if (strpos($rawUriLower, '%2f') !== false) {
+        // Validate the path, not search terms or signed captcha URLs in the query string.
+        if (stripos($rawPath, '%2f') !== false) {
             http_response_code(400);
             echo 'Bad Request: Encoded slashes are not allowed.';
             exit;
         }
 
         $canonicalPath = rawurldecode($rawPath);
+        if (preg_match('//u', $canonicalPath) !== 1 || preg_match('/[\x00-\x1f\x7f\\\\]/', $canonicalPath)) {
+            http_response_code(400);
+            echo 'Bad Request: Invalid path.';
+            exit;
+        }
         foreach (explode('/', $canonicalPath) as $segment) {
             if ($segment === '.' || $segment === '..') {
                 http_response_code(400);
@@ -114,9 +82,11 @@ class App {
             $canonicalPath = rtrim($canonicalPath, '/');
         }
 
-        if ($rawPath !== $canonicalPath) {
-            http_response_code(301);
-            header('Location: ' . $canonicalPath . $queryString);
+        // Re-encode decoded segments. Comparing an encoded URL with raw Unicode caused loops.
+        $encodedPath = implode('/', array_map('rawurlencode', explode('/', $canonicalPath)));
+        if ($rawPath !== $encodedPath) {
+            http_response_code(in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true) ? 301 : 308);
+            header('Location: ' . ($_SERVER['FEZADAN_PATH_PREFIX'] ?? '') . $encodedPath . $queryString);
             exit;
         }
 
@@ -137,22 +107,14 @@ class App {
             exit;
         }
 
-        if (in_array($pathLower, ['/sitemap.xml', '/sitemap_main.xml', '/sitemap_notes.xml', '/sitemap_anonymity.xml'], true)) {
-            $filePath = ROOT . '/public_html' . $pathLower;
-            if (file_exists($filePath)) {
-                header('Content-Type: application/xml; charset=utf-8');
-                readfile($filePath);
-                exit;
-            }
-
+        if (in_array($pathLower, ['/sitemap.xml', '/sitemap_main.xml', '/sitemap_notes.xml'], true)) {
             require_once ROOT . '/app/Controllers/SeoController.php';
             $seo = new SeoController();
             if ($pathLower === '/sitemap.xml') {
-                strpos($host, 'notlar.') === 0 ? $seo->sitemapNotes() : $seo->sitemapIndex();
+                if (strpos($host, 'notlar.') === 0) $seo->sitemapNotes();
+                else $seo->sitemapIndex();
             } elseif ($pathLower === '/sitemap_main.xml') {
                 $seo->sitemapMain();
-            } elseif ($pathLower === '/sitemap_anonymity.xml') {
-                $seo->sitemapAnonymity();
             } else {
                 $seo->sitemapNotes();
             }
@@ -161,11 +123,9 @@ class App {
 
         $url = $this->parseUrl();
         $hasLangPrefix = $this->detectLanguagePrefix($url);
-
-        if (strpos($host, 'anonymitycheck.') === 0) {
-            $this->routeAnonymityCheck($url);
-            return;
-        }
+        // Admin auth, role and CSRF checks must see the same action the router dispatches.
+        // Never let a client-supplied ?url= override Apache's rewritten route.
+        $_GET['url'] = implode('/', $url);
 
         if (strpos($host, 'notlar.') === 0) {
             $this->routeNotes($url);
@@ -186,14 +146,14 @@ class App {
             if (empty($url)) {
                 $url = ['home'];
             }
-            // 30 günlük dil tercihi çerezi
-            if (!headers_sent()) {
+            // Remember explicit language choice for 30 days
+            if (!headers_sent() && ($_COOKIE['fezadan_lang'] ?? '') !== 'en') {
                 setcookie('fezadan_lang', 'en', [
                     'expires'  => time() + 2592000,
                     'path'     => '/',
                     'samesite' => 'Lax',
                     'httponly' => true,
-                    'secure'   => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+                    'secure'   => HttpRequest::isHttps(),
                 ]);
             }
             return true;
@@ -205,36 +165,20 @@ class App {
             if (empty($url)) {
                 $url = ['home'];
             }
-            // 30 günlük dil tercihi çerezi
-            if (!headers_sent()) {
+            // Remember explicit language choice for 30 days
+            if (!headers_sent() && ($_COOKIE['fezadan_lang'] ?? '') !== 'tr') {
                 setcookie('fezadan_lang', 'tr', [
                     'expires'  => time() + 2592000,
                     'path'     => '/',
                     'samesite' => 'Lax',
                     'httponly' => true,
-                    'secure'   => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+                    'secure'   => HttpRequest::isHttps(),
                 ]);
             }
             return true;
         }
 
         return false;
-    }
-
-    private function routeAnonymityCheck(array $url): void
-    {
-        require_once ROOT . '/app/Controllers/AnonymityCheckController.php';
-        $this->controller = new AnonymityCheckController();
-        $this->method = 'index';
-        if (isset($url[0])) {
-            $methodName = $this->resolveRoutableMethod($this->controller, $url[0]);
-            if ($methodName !== null) {
-                $this->method = $methodName;
-                unset($url[0]);
-            }
-        }
-        $this->params = $url ? array_values($url) : [];
-        call_user_func_array([$this->controller, $this->method], $this->params);
     }
 
     private function routeNotes(array $url): void
@@ -251,25 +195,40 @@ class App {
         $this->controller = new NotesController();
 
         if (strtolower($url[0] ?? '') === 'rss') {
+            if (count($url) !== 1) {
+                $this->render404();
+            }
             $this->method = 'rss';
             $this->params = [];
         } elseif (($url[0] ?? '') === 'not') {
             if (($url[1] ?? '') === 'download') {
+                if (count($url) > 3) {
+                    $this->render404();
+                }
                 $this->method = 'download';
                 $this->params = isset($url[2]) ? [$url[2]] : [];
             } elseif (($url[1] ?? '') === 'view') {
+                if (count($url) > 3) {
+                    $this->render404();
+                }
                 $this->method = 'viewPdf';
                 $this->params = isset($url[2]) ? [$url[2]] : [];
             } else {
+                if (count($url) > 2) {
+                    $this->render404();
+                }
                 $this->method = 'read';
                 $this->params = isset($url[1]) ? [$url[1]] : [];
             }
         } else {
+            if ($url !== ['home'] && $url !== ['index']) {
+                $this->render404();
+            }
             $this->method = 'index';
             $this->params = [];
         }
 
-        call_user_func_array([$this->controller, $this->method], $this->params);
+        $this->invokeAction();
     }
 
     private function redirectAnonymityPath(array $url, string $queryString): void
@@ -279,14 +238,14 @@ class App {
             return;
         }
 
-        $redirectPath = '/anonymitycheck/';
+        $redirectPath = ANONYMITY_SITE_URL . '/';
         if (isset($url[1]) && $url[1] !== '') {
-            $redirectPath .= implode('/', array_slice($url, 1));
+            $redirectPath .= implode('/', array_map('rawurlencode', array_slice($url, 1)));
         }
         if ($queryString !== '') {
             $redirectPath .= $queryString;
         }
-        http_response_code(301);
+        http_response_code(in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true) ? 301 : 308);
         header('Location: ' . $redirectPath);
         exit;
     }
@@ -298,7 +257,7 @@ class App {
         }
 
         $pathLower = strtolower($canonicalPath);
-        $excludePrefixes = ['/yonetim', '/uploads', '/cdn', '/assets', '/scripts', '/admin', '/panel', '/dashboard'];
+        $excludePrefixes = ['/yonetim', '/uploads', '/portfolio', '/media', '/cdn', '/assets', '/scripts', '/admin', '/panel', '/dashboard'];
         foreach ($excludePrefixes as $prefix) {
             if ($pathLower === $prefix || strpos($pathLower, $prefix . '/') === 0) {
                 return;
@@ -308,21 +267,26 @@ class App {
         if ($canonicalPath === '/') {
             $preferredLang = 'tr'; // site default
 
-            // 1. Çerez önceliklidir — kullanıcının 30 günlük tercihi hatırlanır
-            $cookieLang = strtolower(trim($_COOKIE['fezadan_lang'] ?? ''));
+            // 1. Cookie takes priority: user's explicit choice remembered for 30 days
+            $cookieLang = is_string($_COOKIE['fezadan_lang'] ?? null) ? strtolower(trim($_COOKIE['fezadan_lang'])) : '';
             if (in_array($cookieLang, ['tr', 'en'], true)) {
                 $preferredLang = $cookieLang;
             } else {
-                // 2. Accept-Language başlığına düş (yalnızca ilk ziyarette, çerez yoksa)
-                $acceptLang = strtolower($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '');
-                $enPos = strpos($acceptLang, 'en');
-                $trPos = strpos($acceptLang, 'tr');
-                if ($enPos !== false && ($trPos === false || $enPos < $trPos)) {
-                    $preferredLang = 'en';
+                // 2. Fall back to Accept-Language header (only on first visit, no cookie)
+                $bestQuality = 0.0;
+                foreach (explode(',', strtolower($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '')) as $preference) {
+                    if (preg_match('/^\s*(tr|en)(?:-[a-z0-9-]+)?\s*(?:;\s*q=(0(?:\.\d{1,3})?|1(?:\.0{1,3})?))?\s*$/', $preference, $match)) {
+                        $quality = isset($match[2]) ? (float)$match[2] : 1.0;
+                        if ($quality > $bestQuality) {
+                            $preferredLang = $match[1];
+                            $bestQuality = $quality;
+                        }
+                    }
                 }
             }
 
             http_response_code(307);
+            header('Vary: Accept-Language, Cookie');
             header('Location: /' . $preferredLang . $queryString);
             exit;
         }
@@ -343,6 +307,8 @@ class App {
             'yonetim' => 'Admin',
             'makale' => 'Article',
             'article' => 'Article',
+            'yazi' => 'Article',
+            'post' => 'Article',
             'makaleler' => 'Articles',
             'articles' => 'Articles',
             'yazar' => 'Author',
@@ -352,8 +318,11 @@ class App {
             'sitemap.xml' => 'Seo',
             'sitemap_main.xml' => 'Seo',
             'sitemap_notes.xml' => 'Seo',
-            'sitemap_anonymity.xml' => 'Seo',
             'robots.txt' => 'Seo',
+            'portfolio' => 'Uploads',
+            'media' => 'Image',
+            'posta-davet' => 'MailInvite',
+            'mail-invitation' => 'MailInvite',
         ];
 
         $mappedSegment = $controllerMapping[strtolower($firstSegment)] ?? $firstSegment;
@@ -370,11 +339,14 @@ class App {
 
         $staticPage = $this->resolveStaticPage($firstSegment);
         if ($staticPage !== null) {
+            if (count($url) !== 1) {
+                $this->render404();
+            }
             require_once ROOT . '/app/Controllers/PageController.php';
             $this->controller = new PageController();
             $this->method = 'renderPage';
             $this->params = [$staticPage];
-            call_user_func_array([$this->controller, $this->method], $this->params);
+            $this->invokeAction();
             return;
         }
 
@@ -400,24 +372,25 @@ class App {
                 $this->render404();
             }
             $this->params = array_values($segments);
-            call_user_func_array([$this->controller, $this->method], $this->params);
+            $this->invokeAction();
             return;
         }
 
         if ($controllerClass === 'ArticleController') {
-            $methodName = isset($segments[0]) ? $this->resolveRoutableMethod($this->controller, $segments[0]) : null;
+            // A single segment is always an article slug, even if it is "qr" or "index".
+            $methodName = count($segments) > 1 ? $this->resolveRoutableMethod($this->controller, $segments[0]) : null;
             if ($methodName !== null) {
                 $this->method = $methodName;
                 array_shift($segments);
             }
             $this->params = array_values($segments);
-            call_user_func_array([$this->controller, $this->method], $this->params);
+            $this->invokeAction();
             return;
         }
 
         if ($controllerClass === 'UploadsController') {
             $this->params = array_values($segments);
-            call_user_func_array([$this->controller, $this->method], $this->params);
+            $this->invokeAction();
             return;
         }
 
@@ -433,6 +406,17 @@ class App {
         }
 
         $this->params = array_values($segments);
+        $this->invokeAction();
+    }
+
+    /** Reject missing/extra route arguments instead of crashing or rendering duplicate pages. */
+    private function invokeAction(): void
+    {
+        $action = new \ReflectionMethod($this->controller, $this->method);
+        if (count($this->params) < $action->getNumberOfRequiredParameters()
+            || (!$action->isVariadic() && count($this->params) > $action->getNumberOfParameters())) {
+            $this->render404();
+        }
         call_user_func_array([$this->controller, $this->method], $this->params);
     }
 
@@ -444,6 +428,8 @@ class App {
             'manifesto' => 'manifesto',
             'privacy' => 'privacy',
             'gizlilik-politikasi' => 'privacy',
+            'donate' => 'donate',
+            'bagis' => 'donate',
             'verification' => 'verification',
             'teyit' => 'verification',
         ];
@@ -458,6 +444,9 @@ class App {
 
     private function routeAuthorArticleShortcut(string $firstSegment, array $url): void
     {
+        if (count($url) > 2) {
+            $this->render404();
+        }
         require_once ROOT . '/app/Core/Db.php';
         try {
             $pdo = Db::pdo();
@@ -482,13 +471,11 @@ class App {
         $this->controller = new ArticleController();
         $this->method = 'index';
         $this->params = [$url[1], $firstSegment];
-        call_user_func_array([$this->controller, $this->method], $this->params);
+        $this->invokeAction();
     }
     public function parseUrl() {
-        if (isset($_GET['url'])) {
-            return explode('/', filter_var(rtrim($_GET['url'], '/'), FILTER_SANITIZE_URL));
-        }
-        return ['home'];
+        $path = trim(rawurldecode(explode('?', (string)($_SERVER['REQUEST_URI'] ?? '/'), 2)[0]), '/');
+        return $path === '' ? ['home'] : explode('/', $path);
     }
 
     private function resolveRoutableMethod(object $controller, string $segment): ?string

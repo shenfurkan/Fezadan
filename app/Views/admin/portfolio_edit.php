@@ -1,8 +1,13 @@
+<?php
+/**
+ * @var array $item
+ */
+?>
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>FEZADAN | PORTFOLYO DÜZENLE</title>
+    <title>FEZADAN | FOTOĞRAF ALBÜMÜ DÜZENLE</title>
     <link rel="icon" type="image/x-icon" href="/cdn/dark-favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/cdn/dark-favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/cdn/dark-favicon-16x16.png">
@@ -56,10 +61,58 @@
             background: rgba(229,208,172,0.05);
         }
 
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; border-left: 1px dashed rgba(109,35,35,0.2); }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(109,35,35,0.5); border-radius: 0px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(109,35,35,1); }
+
+    </style>
+</head>
+<body class="flex h-screen w-full overflow-hidden relative">
+
+    <style>
+        :root {
+            --bg-paper: #FEF9E1;
+            --bg-secondary: #E5D0AC;
+            --text-main: #6D2323;
+            --text-accent: #A31D1D;
+            --line-color: #6D2323;
+        }
+        body {
+            background-color: var(--bg-paper);
+            color: var(--text-main);
+            font-family: 'Space Grotesk', sans-serif;
+            overflow-x: hidden;
+        }
+        .font-syne { font-family: 'Syne', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        .grid-bg {
+            background-image: linear-gradient(var(--line-color) 1px, transparent 1px), linear-gradient(90deg, var(--line-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.05;
+            pointer-events: none;
+        }
+        .nav-item { position: relative; transition: all 0.3s; z-index: 1; }
+        .nav-item::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--text-main); transition: width 0.3s; z-index: -1; }
+        .nav-item:hover::before { width: 100%; }
+        .nav-item:hover { color: var(--bg-paper); padding-left: 1.5rem; }
+        .nav-item.active { background: var(--text-main); color: var(--bg-paper); }
+
+        .brutalist-input {
+            width: 100%;
+            background: transparent;
+            border-bottom: 2px solid var(--line-color);
+            padding: 10px;
+            font-family: 'Space Grotesk', sans-serif;
+            outline: none;
+            transition: 0.3s;
+            color: var(--text-main);
+        }
+        .brutalist-input:focus {
+            background: rgba(109,35,35,0.05);
+        }
+        [data-theme="dark"] .brutalist-input:focus {
+            background: rgba(229,208,172,0.05);
+        }
+
+
     </style>
 </head>
 <body class="flex h-screen w-full overflow-hidden relative">
@@ -75,7 +128,7 @@
             <div class="flex items-center gap-4 mb-6">
                 <a href="/yonetim/portfolio" class="text-xs font-mono uppercase opacity-60 hover:opacity-100 transition-opacity">← Geri</a>
                 <h3 class="font-syne text-xl font-bold uppercase flex items-center gap-2 text-[var(--text-main)]">
-                    <span class="w-3 h-3 bg-[#A31D1D]"></span> Portfolyo Düzenle
+                    <span class="w-3 h-3 bg-[#A31D1D]"></span> FOTOĞRAF ALBÜMÜ DÜZENLE
                 </h3>
             </div>
 
@@ -87,7 +140,7 @@
                 <?php if (!empty($item['image_url'])): ?>
                 <div class="border-2 border-[var(--line-color)] p-2 bg-white relative">
                     <img src="<?= htmlspecialchars(Upload::assetUrl($item['image_url'])) ?>" alt="<?= htmlspecialchars($item['title_tr']) ?>" class="max-h-48 w-full object-cover">
-                    <div class="mt-2 text-xs font-mono opacity-60">Mevcut görsel — yeni görsel yüklenirse değiştirilecek.</div>
+                    <div class="mt-2 text-xs font-mono opacity-60">Mevcut görsel / yeni görsel yüklenirse değiştirilecek.</div>
                 </div>
                 <?php endif; ?>
 
@@ -108,38 +161,29 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="block font-mono text-[10px] uppercase opacity-60 mb-1">Başlık (TR)*</label>
-                        <input type="text" name="title_tr" id="title-tr-input" class="brutalist-input font-bold text-sm" placeholder="e.g. Dolunay Altında" required autocomplete="off" value="<?= htmlspecialchars($item['title_tr']) ?>">
+                        <label class="block font-mono text-[10px] uppercase opacity-60 mb-1">Başlık (TR, İsteğe Bağlı)</label>
+                        <input type="text" name="title_tr" id="title-tr-input" class="brutalist-input font-bold text-sm" placeholder="İsteğe bağlı" autocomplete="off" value="<?= htmlspecialchars($item['title_tr']) ?>">
                     </div>
                     <div>
-                        <label class="block font-mono text-[10px] uppercase opacity-60 mb-1">Başlık (EN)</label>
+                        <label class="block font-mono text-[10px] uppercase opacity-60 mb-1">Başlık (EN, İsteğe Bağlı)</label>
                         <input type="text" name="title_en" class="brutalist-input font-bold text-sm" placeholder="e.g. Under the Full Moon" autocomplete="off" value="<?= htmlspecialchars($item['title_en'] ?? '') ?>">
                     </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="block font-mono text-[10px] uppercase opacity-60 mb-1">Açıklama (TR)</label>
+                        <label class="block font-mono text-[10px] uppercase opacity-60 mb-1">Açıklama (TR, İsteğe Bağlı)</label>
                         <textarea name="description_tr" rows="3" class="brutalist-input text-xs" placeholder="Türkçe açıklama yazın..." autocomplete="off"><?= htmlspecialchars($item['description_tr'] ?? '') ?></textarea>
                     </div>
                     <div>
-                        <label class="block font-mono text-[10px] uppercase opacity-60 mb-1">Açıklama (EN)</label>
+                        <label class="block font-mono text-[10px] uppercase opacity-60 mb-1">Açıklama (EN, İsteğe Bağlı)</label>
                         <textarea name="description_en" rows="3" class="brutalist-input text-xs" placeholder="İngilizce açıklama..." autocomplete="off"><?= htmlspecialchars($item['description_en'] ?? '') ?></textarea>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block font-mono text-[10px] uppercase opacity-60 mb-1">Tür*</label>
-                        <select name="type" class="brutalist-input text-xs" required>
-                            <option value="photo" <?= ($item['type'] ?? 'photo') === 'photo' ? 'selected' : '' ?>>Fotoğraf</option>
-                            <option value="drawing" <?= ($item['type'] ?? '') === 'drawing' ? 'selected' : '' ?>>Çizim</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block font-mono text-[10px] uppercase opacity-60 mb-1">Gösterim Sırası</label>
-                        <input type="number" name="display_order" class="brutalist-input text-xs" value="<?= (int)($item['display_order'] ?? 0) ?>" required min="0">
-                    </div>
+                <div>
+                    <label class="block font-mono text-[10px] uppercase opacity-60 mb-1">Gösterim Sırası</label>
+                    <input type="number" name="display_order" class="brutalist-input text-xs" value="<?= (int)($item['display_order'] ?? 0) ?>" required min="0">
                 </div>
 
                 <button type="submit" class="w-full py-3 bg-[#A31D1D] text-[#FEF9E1] font-bold uppercase hover:bg-black transition-all">

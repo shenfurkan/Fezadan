@@ -3,10 +3,10 @@ $lang = App::getLang();
 $isEn = ($lang === 'EN');
 
 $siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
-$page_title       = $isEn ? 'About FEZADAN — Independent Publication' : 'Hakkında — Bağımsız Yayın | FEZADAN';
-$page_description = $isEn 
-    ? 'About FEZADAN — an independent publication on science, aesthetics, and thought. Learn about our manifesto, team, and objectives.'
-    : 'FEZADAN hakkında — bilim, estetik ve fikir üzerine bağımsız bir yayın. Manifestomuz, ekibimiz ve amaçlarımız hakkında bilgi edinin.';
+$page_title       = $isEn ? 'About FEZADAN | Independent Publication' : 'Hakkında | Bağımsız Yayın | FEZADAN';
+$page_description = $isEn
+    ? 'About FEZADAN / an independent publication on science, aesthetics, and thought. Learn about our manifesto, team, and objectives.'
+    : 'FEZADAN hakkında / bilim, estetik ve fikir üzerine bağımsız bir yayın. Manifestomuz, ekibimiz ve amaçlarımız hakkında bilgi edinin.';
 $page_canonical   = langUrl('/hakkinda');
 $og_url           = $page_canonical;
 require_once ROOT . '/app/Views/inc/header.php';
@@ -22,7 +22,7 @@ require_once ROOT . '/app/Views/inc/header.php';
     @media (min-width: 1024px) {
         .grid-layout { grid-template-columns: 40% 60%; }
     }
-    
+
     .sidebar {
         position: relative;
         overflow: hidden;
@@ -33,8 +33,8 @@ require_once ROOT . '/app/Views/inc/header.php';
         flex-direction: column;
         justify-content: space-between;
     }
-    @media (max-width: 1023px) { 
-        .sidebar { border-right: none; border-bottom: 1px solid var(--text-main); } 
+    @media (max-width: 1023px) {
+        .sidebar { border-right: none; border-bottom: 1px solid var(--text-main); }
     }
 
     .content-area {
@@ -50,7 +50,7 @@ require_once ROOT . '/app/Views/inc/header.php';
 </style>
 
 <main id="main-content" class="flex-grow w-full max-w-[1920px] mx-auto">
-    
+
     <div class="grid-layout">
         <aside class="sidebar">
             <canvas id="hakkinda-canvas" class="absolute inset-0 w-full h-full pointer-events-none z-0 opacity-25"></canvas>
@@ -61,7 +61,7 @@ require_once ROOT . '/app/Views/inc/header.php';
                     </h1>
                     <div class="w-16 h-1 bg-[var(--text-main)] opacity-50 mb-6"></div>
                 </div>
-                
+
                 <div class="mt-12 hidden lg:block">
                     <svg width="100" height="100" viewBox="0 0 100 100" class="text-[var(--text-main)] opacity-70">
                         <path d="M0,50 a50,50 0 1,1 0,1 z" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="10 5"/>
@@ -75,17 +75,17 @@ require_once ROOT . '/app/Views/inc/header.php';
             <div class="space-y-6 text-lg leading-relaxed opacity-90 text-[var(--text-main)]">
                 <?php if ($isEn): ?>
                 <p>
-                    fezadan.org is an autonomous digital resistance space built on the principles of open source philosophy and the freedom of knowledge, standing against surveillance capitalism. Today, the internet is dominated by surveillance capitalism, which unilaterally usurps private human experience and converts it into behavioral data for profit, viewing users as commodities for sale. We completely reject this hierarchical panopticon system established by corporations through surveillance.
+                    fezadan.org is an independent platform built on open source philosophy and the freedom of knowledge. Our goal is to stand against surveillance capitalism that reduces users to data and commodities.
                 </p>
                 <p>
-                    At the heart of our philosophy lie two great digital freedom legacies: First, as Aaron Swartz advocated in the "Guerilla Open Access Manifesto" against greedy entities that lock up all scientific and cultural heritage of humanity in private property, the fact that sharing knowledge is not a theft, but a moral imperative. Second is the principle of "transparency for the strong, privacy for the weak" upon which the Cypherpunk movement is based. As the Cypherpunk manifesto emphasizes, we cannot expect governments or giant, faceless corporations to grant us privacy and freedom out of their own goodwill; we must defend our privacy ourselves with the code we write, the texts we author, and the open systems we build.
+                    Our philosophy relies on two core principles. First is the defense of open access against the privatization of knowledge. Sharing knowledge is a moral imperative. Second is the principle of "transparency for the powerful, privacy for the weak". We cannot leave our privacy and freedom to the mercy of corporations. We must defend them ourselves through the code we write, the content we produce, and the systems we build.
                 </p>
                 <?php else: ?>
                 <p>
-                    fezadan.org, açık kaynak felsefesi ve bilginin özgürlüğü ilkeleri üzerine inşa edilmiş, gözetim kapitalizmine karşı duran özerk bir dijital direniş uzayıdır. Günümüzde internet, özel insan deneyimini tek taraflı olarak gasp edip kâr amaçlı davranışsal veriye dönüştüren, kullanıcıları satılık birer meta olarak gören gözetim kapitalizminin tahakkümü altındadır. Bizler, şirketlerin gözetim yoluyla kurduğu bu hiyerarşik panoptikon sistemini tümüyle reddediyoruz.
+                    fezadan.org, açık kaynak felsefesini ve bilgi özgürlüğünü savunan bağımsız bir platformdur. Amacımız, kullanıcıları veriye ve metaya dönüştüren gözetim kapitalizmine karşı durmaktır.
                 </p>
                 <p>
-                    Felsefemizin merkezinde iki büyük dijital özgürlük mirası yatmaktadır: İnsanlığın tüm bilimsel ve kültürel mirasını özel mülkiyete hapseden açgözlü yapılara karşı Aaron Swartz'ın "Gerilla Açık Erişim Manifestosu"nda savunduğu üzere, bilgiyi paylaşmanın bir hırsızlık değil, ahlaki bir zorunluluk olduğu gerçeğidirİkincisi ise Cypherpunk hareketinin temel aldığı "güçlüler için şeffaflık, zayıflar için mahremiyet" ilkesidir Şifrepunk manifestosunun vurguladığı gibi, hükümetlerin veya dev, yüzsüz şirketlerin kendi lütuflarıyla bize mahremiyet ve özgürlük bahşetmesini bekleyemeyiz; kendi mahremiyetimizi kendi yazdığımız kodlarla, yazdığımız yazılarla, kurduğumuz açık sistemlerle bizzat kendimiz savunmalıyız.
+                    Felsefemiz iki temel ilkeye dayanır. Birincisi, bilginin özel mülkiyete hapsedilmesine karşı çıkan açık erişim savunuculuğudur. Bilgiyi paylaşmak ahlaki bir zorunluluktur. İkincisi ise "güçlüler için şeffaflık, zayıflar için mahremiyet" ilkesidir. Mahremiyetimizi ve özgürlüğümüzü şirketlerin insafına bırakamayız. Bunları yazdığımız kodlar, ürettiğimiz içerikler ve kurduğumuz sistemlerle bizzat biz savunmalıyız.
                 </p>
                 <?php endif; ?>
             </div>
@@ -187,6 +187,6 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 
-<?php 
-require_once ROOT . '/app/Views/inc/footer.php'; 
+<?php
+require_once ROOT . '/app/Views/inc/footer.php';
 ?>

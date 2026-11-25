@@ -92,7 +92,7 @@ trait AdminNotes
             ]);
         }
         catch (\PDOException $e) {
-            throw new \Exception("Not Listesi Hatası: " . $e->getMessage());
+            throw new \Exception("Not Listesi Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -182,6 +182,7 @@ trait AdminNotes
 
             $pdo->commit();
             \App\Services\SitemapService::markSitemapDirty();
+            $this->submitNoteIndexNow($slug);
 
             $this->adminCheckpoint('storeNote_redirect', [
                 'endpoint' => 'storeNote',
@@ -239,7 +240,7 @@ trait AdminNotes
         if ($id > 0) {
             try {
                 $pdo = $this->getPDO();
-                $stmt = $pdo->prepare("SELECT r2_path FROM notes WHERE id = ?");
+                $stmt = $pdo->prepare("SELECT r2_path, slug FROM notes WHERE id = ?");
                 $stmt->execute([$id]);
                 $note = $stmt->fetch(\PDO::FETCH_ASSOC);
 
@@ -263,6 +264,9 @@ trait AdminNotes
 
                     $pdo->prepare("DELETE FROM notes WHERE id = ?")->execute([$id]);
                     \App\Services\SitemapService::markSitemapDirty();
+                    if (!empty($note['slug'])) {
+                        $this->submitNoteIndexNow((string)$note['slug']);
+                    }
                 }
             }
             catch (\Throwable $e) {
@@ -316,7 +320,7 @@ trait AdminNotes
             ]);
         }
         catch (\PDOException $e) {
-            throw new \Exception("Veritabanı Hatası: " . $e->getMessage());
+            throw new \Exception("Veritabanı Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -375,7 +379,7 @@ trait AdminNotes
                     exit;
                 }
 
-                // Güncellemeden önce eski R2 yolunu al
+                // Get old R2 path before updating
                 $oldStmt = $pdo->prepare("SELECT r2_path FROM notes WHERE id = ?");
                 $oldStmt->execute([$id]);
                 $oldR2Path = $oldStmt->fetchColumn();
@@ -410,14 +414,13 @@ trait AdminNotes
 
             $pdo->commit();
             \App\Services\SitemapService::markSitemapDirty();
+            $this->submitNoteIndexNowById($id);
 
-            // Nesne depolama işlemsel değildir. Önceki PDF'i yalnızca DB commit başarılı olduktan sonra sil ki rollback asla silinmiş bir nesneye işaret etmesin.
+            // Object storage is not transactional. Delete the previous PDF only after
+            // the DB commit succeeds so rollback never points at a removed object.
             if ($oldR2PathToDelete) {
                 try {
-                    if (!isset($r2)) {
-                        require_once ROOT . '/app/Core/R2Storage.php';
-                        $r2 = \App\Core\R2Storage::instance();
-                    }
+                    $r2 = \App\Core\R2Storage::instance();
                     if (!$r2->deletePDF($oldR2PathToDelete)) {
                         AdminLog::write('error', 'Eski not PDF R2 silme başarısız.', [
                             'endpoint' => 'updateNote',
@@ -477,6 +480,34 @@ trait AdminNotes
             Flash::set('Not güncellenemedi. (Hata kodu: ' . $requestId . ')');
             header('Location: /yonetim/edit-note?id=' . $id . '&error=system_failure');
             exit;
+        }
+    }
+
+    private function submitNoteIndexNow(string $slug): void
+    {
+        if ($slug === '') return;
+
+        \App\Services\IndexNowService::submit([
+            rtrim(NOTES_SITE_URL, '/') . '/not/' . rawurlencode($slug),
+            rtrim(NOTES_SITE_URL, '/') . '/',
+        ]);
+    }
+
+    private function submitNoteIndexNowById(int $noteId): void
+    {
+        if ($noteId <= 0) return;
+
+        try {
+            $stmt = $this->getPDO()->prepare('SELECT slug FROM notes WHERE id = ? LIMIT 1');
+            $stmt->execute([$noteId]);
+            $slug = (string)($stmt->fetchColumn() ?: '');
+            $this->submitNoteIndexNow($slug);
+        } catch (\Throwable $e) {
+            AdminLog::write('warning', 'IndexNow not bildirimi başarısız.', [
+                'note_id' => $noteId,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 }

@@ -4,8 +4,8 @@ $lang = App::getLang();
 $isEn = ($lang === 'EN');
 $page_title       = $isEn ? 'Verification & Fact-Checking | FEZADAN' : 'Teyit & Doğruluk Kontrolü | FEZADAN';
 $page_description = $isEn
-    ? 'FEZADAN verification and fact-checking principles — accuracy, transparency, and source citation in every published article.'
-    : 'FEZADAN teyit ve doğruluk kontrolü ilkeleri — yayınlanan her makalede doğruluk, şeffaflık ve kaynak gösterme prensipleri.';
+    ? 'FEZADAN verification and fact-checking principles / accuracy, transparency, and source citation in every published article.'
+    : 'FEZADAN teyit ve doğruluk kontrolü ilkeleri / yayınlanan her makalede doğruluk, şeffaflık ve kaynak gösterme prensipleri.';
 $page_canonical   = langUrl('/teyit');
 $og_url           = $page_canonical;
 require_once ROOT . '/app/Views/inc/header.php';

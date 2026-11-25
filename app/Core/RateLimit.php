@@ -5,7 +5,6 @@ class RateLimit
 {
     private const ALLOWED_COLUMNS = [
         'download_rate_limits' => ['download_time'],
-        'read_rate_limits' => ['hit_time', 'article_id'],
     ];
 
     private static function identifier(string $table, string $column = null): string
@@ -59,20 +58,4 @@ class RateLimit
         $stmt->execute([$cutoff]);
     }
 
-    public static function recordDailyUnique(\PDO $pdo, string $table, string $ipHash, int $entityId, string $entityColumn = 'article_id'): bool
-    {
-        $today = date('Y-m-d');
-        $tableSql = self::identifier($table);
-        $entityColumnSql = self::identifier($table, $entityColumn);
-        $stmt = $pdo->prepare(
-            "INSERT IGNORE INTO {$tableSql} (ip_hash, {$entityColumnSql}, hit_date, hit_time) VALUES (?, ?, ?, NOW())"
-        );
-        $stmt->execute([$ipHash, $entityId, $today]);
-        return $stmt->rowCount() > 0;
-    }
-
-    public static function cleanupDaily(\PDO $pdo, string $table, int $olderThanSeconds = 86400): void
-    {
-        self::cleanup($pdo, $table, 'hit_time', $olderThanSeconds);
-    }
 }

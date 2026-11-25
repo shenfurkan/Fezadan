@@ -34,7 +34,7 @@ trait AdminArticles
             header('Location: /yonetim/dashboard?status=patch_added');
         }
         catch (\PDOException $e) {
-            throw new \Exception("Yama Notu Kayıt Hatası: " . $e->getMessage());
+            throw new \Exception("Yama Notu Kayıt Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -51,7 +51,7 @@ trait AdminArticles
                 $stmt->execute([$id]);
             }
             catch (\PDOException $e) {
-                throw new \Exception("Yama Notu Silme Hatası: " . $e->getMessage());
+                throw new \Exception("Yama Notu Silme Hatası: " . $e->getMessage(), 0, $e);
             }
         }
         header('Location: /yonetim/dashboard?status=patch_deleted');
@@ -62,7 +62,37 @@ trait AdminArticles
         $this->deletePatch();
     }
 
-    // --- Makale yönetimi ---
+    // Makale yönetimi
+
+    public function prepareScientificImport()
+    {
+        $this->requirePost();
+        header('Content-Type: application/json; charset=utf-8');
+        $html = $_POST['html'] ?? null;
+        if (!is_string($html)) {
+            $this->jsonError(422, 'Aktarılacak içerik eksik.', [], 'import_content_missing');
+        }
+        try {
+            $result = ScientificContent::prepareImport($html);
+            echo json_encode(['success' => true] + $result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        } catch (InvalidArgumentException $error) {
+            $this->jsonError(422, $error->getMessage(), [], 'import_content_invalid');
+        }
+        exit;
+    }
+
+    private function normalizeArticleMathOrFail(string $content, string $redirect): string
+    {
+        try {
+            if (($_POST['status'] ?? 'published') !== 'draft' && ScientificContent::hasImportErrors($content)) {
+                throw new InvalidArgumentException('Aktarılamayan içerik var. İşaretli bölümleri düzeltin veya taslak olarak kaydedin.');
+            }
+            return ScientificContent::normalizeMath($content, true);
+        } catch (InvalidArgumentException $error) {
+            $this->failBackWithFlash($redirect, $error->getMessage(), ['endpoint' => 'article_math'], 'article_math_invalid');
+            return '';
+        }
+    }
 
     // Yeni makale oluşturma sayfası
     public function create()
@@ -75,7 +105,7 @@ trait AdminArticles
         try {
             $pdo = $this->getPDO();
             $categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll(\PDO::FETCH_ASSOC);
-            $authors = $pdo->query("SELECT id, name FROM authors ORDER BY name ASC")->fetchAll(\PDO::FETCH_ASSOC);
+            $authors = $pdo->query("SELECT id, name, slug FROM authors ORDER BY name ASC")->fetchAll(\PDO::FETCH_ASSOC);
             $articlesList = $pdo->query("SELECT id, title, lang FROM articles ORDER BY title ASC")->fetchAll(\PDO::FETCH_ASSOC);
 
             $this->view('admin/create', [
@@ -85,7 +115,7 @@ trait AdminArticles
             ]);
         }
         catch (\PDOException $e) {
-            throw new \Exception("Veri Çekilemedi: " . $e->getMessage());
+            throw new \Exception("Veri Çekilemedi: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -99,7 +129,7 @@ trait AdminArticles
         $requestId = $this->requestId();
         $title              = trim($_POST['title'] ?? '') ?: 'Adsiz';
         $desc               = $_POST['desc'] ?? '';
-        $content            = $_POST['content'] ?? '';
+        $content            = $this->normalizeArticleMathOrFail((string)($_POST['content'] ?? ''), '/yonetim/create');
         $refs               = $_POST['refs'] ?? '';
         $selectedAuthors    = $_POST['authors'] ?? [];
         if (empty($selectedAuthors) && isset($_POST['author_id']) && (int)$_POST['author_id'] > 0) {
@@ -152,7 +182,7 @@ trait AdminArticles
             }
             $primaryAuthorId = $validatedAuthors[0];
 
-            // Kategori beyaz listesi
+            // Kategori whitelist
             $selectedCategories = $this->validateCategoryIds($pdo, $selectedCategories);
 
             $slug = !empty(trim($_POST['manual_slug'] ?? ''))
@@ -233,11 +263,9 @@ trait AdminArticles
             ]);
             $articleId = $pdo->lastInsertId();
 
-            if (!empty($validatedAuthors)) {
-                $stmtAut = $pdo->prepare("INSERT INTO article_authors (article_id, author_id, display_order) VALUES (?, ?, ?)");
-                foreach ($validatedAuthors as $index => $autId) {
-                    $stmtAut->execute([$articleId, $autId, $index]);
-                }
+            $stmtAut = $pdo->prepare("INSERT INTO article_authors (article_id, author_id, display_order) VALUES (?, ?, ?)");
+            foreach ($validatedAuthors as $index => $autId) {
+                $stmtAut->execute([$articleId, $autId, $index]);
             }
 
             if (!empty($selectedCategories)) {
@@ -263,6 +291,9 @@ trait AdminArticles
             ], $transactionStarted);
 
             $this->markSitemapDirtyWithCheckpoint('article_store', $requestId, (int)$articleId);
+            if ($status === 'published') {
+                $this->submitArticleIndexNowById((int)$articleId);
+            }
             $msg = ($status === 'draft') ? 'draft_saved' : 'success';
             $this->adminCheckpoint('article_store_redirect', [
                 'endpoint' => 'article_store',
@@ -284,12 +315,12 @@ trait AdminArticles
             }
             AdminLog::write('error', 'Makale kayıt hatası.', [
                 'endpoint' => 'article_store',
-                'request_id' => $requestId ?? $this->requestId(),
+                'request_id' => $requestId,
                 'exception' => get_class($e),
                 'message' => $e->getMessage(),
                 'stage_ms' => $this->elapsedMs($requestStarted),
             ]);
-            throw new \Exception("Makale Kayıt Hatası: " . $e->getMessage());
+            throw new \Exception("Makale Kayıt Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -476,15 +507,6 @@ trait AdminArticles
         return $files;
     }
 
-    /** FK validation: var olan author_id'yi geri döndürür; aksi halde 0. */
-    private function validateAuthorId(\PDO $pdo, int $id): int
-    {
-        if ($id <= 0) return 0;
-        $stmt = $pdo->prepare("SELECT id FROM authors WHERE id = ?");
-        $stmt->execute([$id]);
-        return (int)($stmt->fetchColumn() ?: 0);
-    }
-
     /** FK validation: yalnızca DB'de mevcut olan yazar id'lerini döndürür. */
     private function validateAuthorIds(\PDO $pdo, $ids): array
     {
@@ -494,7 +516,9 @@ trait AdminArticles
         $place = implode(',', array_fill(0, count($clean), '?'));
         $stmt  = $pdo->prepare("SELECT id FROM authors WHERE id IN ($place)");
         $stmt->execute($clean);
-        return array_map('intval', $stmt->fetchAll(\PDO::FETCH_COLUMN));
+        $existing = array_map('intval', $stmt->fetchAll(\PDO::FETCH_COLUMN));
+        // SQL IN does not preserve input order; the first author defines the public URL.
+        return array_values(array_intersect($clean, $existing));
     }
 
     /** FK validation: yalnızca DB'de mevcut olan kategori id'lerini döndürür. */
@@ -540,18 +564,28 @@ trait AdminArticles
             $stmtCat->execute([$id]);
             $selectedCategories = $stmtCat->fetchAll(\PDO::FETCH_COLUMN);
 
-            // Seçili yazarları getir
+            // Fetch selected authors
             $stmtAut = $pdo->prepare("SELECT author_id FROM article_authors WHERE article_id = ? ORDER BY display_order ASC");
             $stmtAut->execute([$id]);
-            $selectedAuthors = $stmtAut->fetchAll(\PDO::FETCH_COLUMN);
+            $selectedAuthors = array_map('intval', $stmtAut->fetchAll(\PDO::FETCH_COLUMN));
+            // Legacy rows only have author_id. Keep the actual primary author first,
+            // including when an older join table contains only the co-authors.
+            if (!empty($article['author_id'])) {
+                array_unshift($selectedAuthors, (int)$article['author_id']);
+                $selectedAuthors = array_values(array_unique($selectedAuthors));
+            }
 
-            // Düzeltmeleri getir
+            // Fetch corrections
             $stmtCorrs = $pdo->prepare("SELECT * FROM article_corrections WHERE article_id = ? ORDER BY created_at DESC");
             $stmtCorrs->execute([$id]);
             $corrections = $stmtCorrs->fetchAll(\PDO::FETCH_ASSOC);
 
             $categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll(\PDO::FETCH_ASSOC);
-            $authors    = $pdo->query("SELECT id, name FROM authors ORDER BY name ASC")->fetchAll(\PDO::FETCH_ASSOC);
+            $authors    = $pdo->query("SELECT id, name, slug FROM authors ORDER BY name ASC")->fetchAll(\PDO::FETCH_ASSOC);
+            $authorOrder = array_flip($selectedAuthors);
+            usort($authors, static fn($left, $right) =>
+                ($authorOrder[(int)$left['id']] ?? PHP_INT_MAX) <=> ($authorOrder[(int)$right['id']] ?? PHP_INT_MAX)
+            );
             $articlesListStmt = $pdo->prepare("SELECT id, title, lang FROM articles WHERE id != ? ORDER BY title ASC");
             $articlesListStmt->execute([$id]);
             $articlesList = $articlesListStmt->fetchAll(\PDO::FETCH_ASSOC);
@@ -567,7 +601,7 @@ trait AdminArticles
             ]);
         }
         catch (\PDOException $e) {
-            throw new \Exception("Veri Hatası: " . $e->getMessage());
+            throw new \Exception("Veri Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -582,16 +616,17 @@ trait AdminArticles
         $this->guardPostSizeOrFail($id > 0 ? '/yonetim/edit?id=' . $id : '/yonetim/dashboard', 'article_update');
         $title              = trim($_POST['title'] ?? '') ?: 'Adsiz';
         $desc               = $_POST['desc'] ?? '';
-        $content            = $_POST['content'] ?? '';
+        $content            = $this->normalizeArticleMathOrFail((string)($_POST['content'] ?? ''), '/yonetim/edit?id=' . $id);
         $refs               = $_POST['refs'] ?? '';
         $selectedAuthors    = $_POST['authors'] ?? [];
         if (empty($selectedAuthors) && isset($_POST['author_id']) && (int)$_POST['author_id'] > 0) {
             $selectedAuthors = [(int)$_POST['author_id']];
         }
         $selectedCategories = $_POST['categories'] ?? [];
-        $current_image      = $_POST['current_image'] ?? '';
-        $image_db_path      = $current_image;
-        $oldImagePath       = $current_image;
+        // Existing media is authoritative server state. Never trust a hidden form
+        // value here: it could otherwise target another upload for deletion.
+        $image_db_path      = '';
+        $oldImagePath       = '';
         $status             = ($_POST['status'] ?? 'published') === 'draft' ? 'draft' : 'published';
         $publish_at         = !empty($_POST['publish_at']) ? date('Y-m-d H:i:s', strtotime($_POST['publish_at'])) : null;
         if ($publish_at && strtotime($publish_at) > time() && $status !== 'draft') {
@@ -616,6 +651,7 @@ trait AdminArticles
         }
 
         $newImageStored = null;
+        $oldIndexNowUrl = null;
 
         $this->adminCheckpoint('article_update_input_parsed', [
             'endpoint' => 'article_update',
@@ -640,6 +676,24 @@ trait AdminArticles
                 'request_id' => $requestId,
                 'article_id' => $id,
             ], $dbStarted);
+            $oldIndexStmt = $pdo->prepare(
+                'SELECT a.slug, a.lang, a.image_url, au.slug AS author_slug
+                 FROM articles a
+                 LEFT JOIN authors au ON au.id = a.author_id
+                 WHERE a.id = ? LIMIT 1'
+            );
+            $oldIndexStmt->execute([$id]);
+            $oldIndexArticle = $oldIndexStmt->fetch(\PDO::FETCH_ASSOC);
+            if (!$oldIndexArticle) {
+                header('Location: /yonetim/dashboard?status=not_found');
+                exit;
+            }
+            $image_db_path = (string)($oldIndexArticle['image_url'] ?? '');
+            $oldImagePath = $image_db_path;
+            if (!empty($oldIndexArticle['slug'])) {
+                $oldLang = strtolower((string)($oldIndexArticle['lang'] ?? 'tr')) === 'en' ? 'en' : 'tr';
+                $oldIndexNowUrl = articleUrl($oldIndexArticle['slug'], $oldLang);
+            }
             if (!$translationFieldSubmitted) {
                 $existingTranslationStmt = $pdo->prepare('SELECT translation_of FROM articles WHERE id = ?');
                 $existingTranslationStmt->execute([$id]);
@@ -711,13 +765,11 @@ trait AdminArticles
             $stmt = $pdo->prepare($sql);
             $stmt->execute([$title, $slug, $desc, $content, $refs, $primaryAuthorId, $image_db_path, $status, $lang, $meta_keywords ?: null, $translation_of, $seo_title ?: null, $seo_description ?: null, $publish_at, $id]);
 
-            // Yazarları temizle ve yeniden yaz
+            // Clear and rewrite authors
             $pdo->prepare("DELETE FROM article_authors WHERE article_id = ?")->execute([$id]);
-            if (!empty($validatedAuthors)) {
-                $stmtAut = $pdo->prepare("INSERT INTO article_authors (article_id, author_id, display_order) VALUES (?, ?, ?)");
-                foreach ($validatedAuthors as $index => $autId) {
-                    $stmtAut->execute([$id, $autId, $index]);
-                }
+            $stmtAut = $pdo->prepare("INSERT INTO article_authors (article_id, author_id, display_order) VALUES (?, ?, ?)");
+            foreach ($validatedAuthors as $index => $autId) {
+                $stmtAut->execute([$id, $autId, $index]);
             }
 
             $pdo->prepare("DELETE FROM article_categories WHERE article_id = ?")->execute([$id]);
@@ -728,7 +780,7 @@ trait AdminArticles
                 }
             }
 
-            // Düzeltme metni varsa ekle
+            // Insert correction text if provided
             if ($correction_text !== '') {
                 $stmtCorr = $pdo->prepare("INSERT INTO article_corrections (article_id, correction_text) VALUES (?, ?)");
                 $stmtCorr->execute([$id, $correction_text]);
@@ -757,6 +809,10 @@ trait AdminArticles
             }
 
             $this->markSitemapDirtyWithCheckpoint('article_update', $requestId, $id);
+            $this->submitArticleIndexNowById($id);
+            if ($oldIndexNowUrl !== null) {
+                \App\Services\IndexNowService::submit([$oldIndexNowUrl]);
+            }
             $this->adminCheckpoint('article_update_redirect', [
                 'endpoint' => 'article_update',
                 'request_id' => $requestId,
@@ -778,7 +834,7 @@ trait AdminArticles
                 'message' => $e->getMessage(),
                 'stage_ms' => $this->elapsedMs($requestStarted),
             ]);
-            throw new \Exception("Güncelleme Hatası: " . $e->getMessage());
+            throw new \Exception("Güncelleme Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -803,6 +859,34 @@ trait AdminArticles
             AdminLog::write('error', 'Sitemap işaretleme hatası.', [
                 'endpoint' => $endpoint,
                 'request_id' => $requestId,
+                'article_id' => $articleId,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function submitArticleIndexNowById(int $articleId): void
+    {
+        if ($articleId <= 0) return;
+
+        try {
+            $stmt = $this->getPDO()->prepare(
+                'SELECT a.slug, a.lang, au.slug AS author_slug
+                 FROM articles a
+                 LEFT JOIN authors au ON au.id = a.author_id
+                 WHERE a.id = ? LIMIT 1'
+            );
+            $stmt->execute([$articleId]);
+            $article = $stmt->fetch(\PDO::FETCH_ASSOC);
+            if (!$article || empty($article['slug'])) return;
+
+            $lang = strtolower((string)($article['lang'] ?? 'tr')) === 'en' ? 'en' : 'tr';
+            \App\Services\IndexNowService::submit([
+                articleUrl($article['slug'], $lang),
+            ]);
+        } catch (\Throwable $e) {
+            AdminLog::write('warning', 'IndexNow makale bildirimi başarısız.', [
                 'article_id' => $articleId,
                 'exception' => get_class($e),
                 'message' => $e->getMessage(),
@@ -848,7 +932,12 @@ trait AdminArticles
             try {
                 $pdo = $this->getPDO();
 
-                $stmt = $pdo->prepare("SELECT image_url FROM articles WHERE id = ?");
+                $stmt = $pdo->prepare(
+                    "SELECT a.image_url, a.slug, a.lang, au.slug AS author_slug
+                     FROM articles a
+                     LEFT JOIN authors au ON au.id = a.author_id
+                     WHERE a.id = ?"
+                );
                 $stmt->execute([$id]);
                 $article = $stmt->fetch(\PDO::FETCH_ASSOC);
 
@@ -860,9 +949,15 @@ trait AdminArticles
                 }
 
                 \App\Services\SitemapService::markSitemapDirty();
+                if ($article && !empty($article['slug'])) {
+                    $lang = strtolower((string)($article['lang'] ?? 'tr')) === 'en' ? 'en' : 'tr';
+                    \App\Services\IndexNowService::submit([
+                        articleUrl($article['slug'], $lang),
+                    ]);
+                }
             }
             catch (\PDOException $e) {
-                throw new \Exception("Makale Silme Hatası: " . $e->getMessage());
+                throw new \Exception("Makale Silme Hatası: " . $e->getMessage(), 0, $e);
             }
         }
         header('Location: /yonetim/dashboard?status=deleted');
@@ -877,11 +972,32 @@ trait AdminArticles
         if ($id > 0) {
             try {
                 $pdo = $this->getPDO();
-                $pdo->prepare("UPDATE articles SET status = 'published' WHERE id = ?")
+                $articleStmt = $pdo->prepare(
+                    "SELECT a.slug, a.lang, a.content, au.slug AS author_slug
+                     FROM articles a
+                     LEFT JOIN authors au ON au.id = a.author_id
+                     WHERE a.id = ? LIMIT 1"
+                );
+                $articleStmt->execute([$id]);
+                $article = $articleStmt->fetch(\PDO::FETCH_ASSOC);
+                if ($article) {
+                    // Dashboard publish must not bypass the editor's unresolved-import gate.
+                    if (ScientificContent::hasImportErrors((string)$article['content'])) {
+                        $this->failBackWithFlash('/yonetim/edit?id=' . $id, 'Aktarılamayan içerik var; yayınlamadan önce işaretli bölümleri düzeltin.', [], 'article_import_incomplete');
+                    }
+                    $this->normalizeArticleMathOrFail((string)$article['content'], '/yonetim/edit?id=' . $id);
+                }
+                $pdo->prepare("UPDATE articles SET status = 'published', publish_at = NULL, updated_at = NOW() WHERE id = ?")
                     ->execute([$id]);
                 \App\Services\SitemapService::markSitemapDirty();
+                if ($article && !empty($article['slug'])) {
+                    $lang = strtolower((string)($article['lang'] ?? 'tr')) === 'en' ? 'en' : 'tr';
+                    \App\Services\IndexNowService::submit([
+                        articleUrl($article['slug'], $lang),
+                    ]);
+                }
             } catch (\PDOException $e) {
-                throw new \Exception("Yayınlama Hatası: " . $e->getMessage());
+                throw new \Exception("Yayınlama Hatası: " . $e->getMessage(), 0, $e);
             }
         }
         header('Location: /yonetim/dashboard?status=published');
@@ -934,9 +1050,10 @@ trait AdminArticles
         return $storedPath;
     }
 
-    // Summernote resim yükleme — her durumda JSON döner.
+    // Summernote resim yükleme: her durumda JSON döner.
     public function uploadContentImage()
     {
+        $this->requirePost();
         header('Content-Type: application/json; charset=utf-8');
         $requestStarted = microtime(true);
         $requestId = $this->requestId();
@@ -1011,7 +1128,7 @@ trait AdminArticles
         exit;
     }
 
-    // --- Kategori yönetimi ---
+    // Kategori yönetimi
 
     public function categories()
     {
@@ -1026,7 +1143,7 @@ trait AdminArticles
             $sql = "SELECT c.*,
                     (SELECT COUNT(*) FROM article_categories ac
                      JOIN articles a ON ac.article_id = a.id
-                     WHERE ac.category_id = c.id AND a.status = 'published') as article_count,
+                     WHERE ac.category_id = c.id AND " . ArticleQueries::PUBLISHED . ") as article_count,
                     (SELECT COUNT(*) FROM note_categories nc
                      JOIN notes n ON nc.note_id = n.id
                      WHERE nc.category_id = c.id) as note_count
@@ -1037,7 +1154,7 @@ trait AdminArticles
             $this->view('admin/categories', ['categories' => $categories]);
         }
         catch (\PDOException $e) {
-            throw new \Exception("Kategori Listesi Hatası: " . $e->getMessage());
+            throw new \Exception("Kategori Listesi Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -1060,7 +1177,7 @@ trait AdminArticles
             exit;
         }
         catch (\PDOException $e) {
-            throw new \Exception("Kategori Kayıt Hatası: " . $e->getMessage());
+            throw new \Exception("Kategori Kayıt Hatası: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -1075,7 +1192,7 @@ trait AdminArticles
                 $pdo->prepare("DELETE FROM categories WHERE id = ?")->execute([$id]);
             }
             catch (\PDOException $e) {
-                throw new \Exception("Silme Hatası: " . $e->getMessage());
+                throw new \Exception("Silme Hatası: " . $e->getMessage(), 0, $e);
             }
         }
         header('Location: /yonetim/categories?status=deleted');

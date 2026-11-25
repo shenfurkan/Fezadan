@@ -1,3 +1,8 @@
+<?php
+/**
+ * @var array $categories
+ */
+?>
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -22,11 +27,8 @@
         .nav-item.active { background: var(--text-main); color: var(--bg-paper); }
         .brutalist-input { width: 100%; background: transparent; border: 2px solid var(--line-color); padding: 12px; font-family: 'JetBrains Mono', monospace; outline: none; transition: 0.3s; }
         .brutalist-input:focus { background: rgba(109,35,35,0.05); box-shadow: 4px 4px 0px var(--text-accent); }
-        
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; border-left: 1px dashed rgba(109,35,35,0.2); }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(109,35,35,0.5); border-radius: 0px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(109,35,35,1); }
+
+
     </style>
 </head>
 <body class="flex h-screen w-full overflow-hidden relative">
@@ -61,12 +63,12 @@
         <?php endif; ?>
 
         <div class="flex flex-col lg:flex-row gap-12 flex-1 min-h-0 h-[calc(100vh-180px)]">
-            
+
             <div class="lg:w-2/5 flex flex-col h-full">
                 <h3 class="font-syne text-xl font-bold uppercase mb-4 flex items-center gap-2 text-[var(--text-main)] flex-shrink-0">
                     <span class="w-3 h-3 bg-[#6D2323]"></span> YENİ YÜKLEME
                 </h3>
-                
+
                 <form action="/yonetim/store-note" method="POST" enctype="multipart/form-data" class="border-2 border-[var(--text-main)] bg-[var(--bg-paper)] p-6 shadow-[8px_8px_0px_#A31D1D] space-y-6 flex-1 overflow-y-auto custom-scrollbar">
                     <?= Csrf::field() ?>
                     <div class="flex gap-4">
@@ -85,15 +87,15 @@
 
                     <div class="relative">
                         <label class="block font-syne font-bold uppercase text-xs mb-2">Kategoriler (Çoklu Seçim)</label>
-                        <div id="selected-tags" class="flex flex-wrap gap-2 mb-2"></div>                       
-                        <input type="text" id="cat-search" class="brutalist-input" placeholder="Kategori ara ve ekle...">                        
+                        <div id="selected-tags" class="flex flex-wrap gap-2 mb-2"></div>
+                        <input type="text" id="cat-search" class="brutalist-input" placeholder="Kategori ara ve ekle...">
                         <div id="search-results" class="absolute z-50 left-0 right-0 bg-[var(--bg-paper)] border-2 border-t-0 border-[var(--line-color)] max-h-40 overflow-y-auto hidden shadow-[4px_4px_0px_var(--text-main)]"></div>
                     </div>
 
                     <div>
                         <label class="block font-syne font-bold uppercase text-xs mb-2">PDF Dosyası Seç</label>
                         <input type="file" name="pdf_file" accept=".pdf" required class="brutalist-input cursor-pointer" style="padding-top: 10px;">
-                        
+
                         <div id="file-limit-warning" class="hidden mt-2 p-2 bg-red-100 text-red-700 font-mono text-[10px] border-l-4 border-red-700 uppercase">
                             Dosya boyutu çok büyük (Maksimum 50MB). Lütfen daha küçük bir dosya seçin.
                         </div>
@@ -105,9 +107,9 @@
                     </div>
 
                     <button type="submit" class="w-full py-4 bg-[#6D2323] text-[#FEF9E1] font-bold uppercase text-sm hover:bg-black transition-all border-2 border-[#6D2323] hover:border-black mt-4">
-                        YUKLE VE KAYDET
+                        SİSTEME İŞLE VE YÜKLE
                     </button>
-                    <?php 
+                    <?php
                         $host = $_SERVER['HTTP_HOST'];
                         $baseUrl = (isset($_SERVER['HTTPS']) ? "https://" : "http://") . (strpos($host, 'notlar.') === 0 ? $host : "notlar." . $host);
                     ?>
@@ -127,12 +129,12 @@
                         TOPLAM BOYUT: <?php echo number_format(($stats['total_size'] ?? 0) / 1048576, 2); ?> MB
                     </div>
                 </div>
-                
+
                 <div class="flex-1 overflow-y-auto pr-4 space-y-4 border-2 border-transparent hover:border-[var(--line-color)]/10 transition-colors p-1 custom-scrollbar">
-                    
+
                     <?php if(!empty($notes)): foreach($notes as $note): ?>
                         <div class="bg-[var(--bg-paper)] border-2 border-[var(--text-main)] p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-[var(--bg-secondary)] transition-colors">
-                            
+
                             <div class="flex-1">
                                 <div class="flex items-center gap-2 mb-1">
                                     <span class="font-mono text-[10px] bg-[var(--text-main)] text-[var(--bg-paper)] px-1.5 py-0.5 font-bold uppercase">
@@ -145,9 +147,9 @@
                                 </div>
 
                                 <div class="mb-2">
-                                    <?php 
-                                    $catList = explode(', ', $note['category_names']); 
-                                    foreach($catList as $cName): 
+                                    <?php
+                                    $catList = explode(', ', $note['category_names']);
+                                    foreach($catList as $cName):
                                     ?>
                                     <span class="font-mono text-[9px] bg-[#6D2323]/10 text-[var(--text-accent)] px-1 font-bold border border-[var(--text-accent)]/30 uppercase mr-1">
                                         <?php echo htmlspecialchars($cName); ?>
@@ -159,8 +161,6 @@
                                     <span>Yükleyen: <?php echo htmlspecialchars($note['uploader_name']); ?></span>
                                     <span>-</span>
                                     <span>Tarih: <?php echo date('d.m.Y', strtotime($note['created_at'])); ?></span>
-                                    <span>-</span>
-                                    <span class="text-[var(--text-accent)] font-bold">İndirme: <?php echo $note['downloads']; ?></span>
                                 </div>
                             </div>
 
@@ -168,8 +168,8 @@
                                 <a href="/yonetim/edit-note?id=<?php echo $note['id']; ?>" class="flex-1 md:flex-none text-center px-3 py-2 bg-[var(--bg-secondary)] border-2 border-[var(--text-main)] text-[var(--text-main)] text-[10px] font-bold font-mono hover:bg-[var(--text-main)] hover:text-[#FEF9E1] transition-colors">
                                     DÜZENLE
                                 </a>
-                                
-                                <?php 
+
+                                <?php
                                     $host = $_SERVER['HTTP_HOST'];
                                     if (strpos($host, 'notlar.') !== 0) {
                                         $noteUrl = (isset($_SERVER['HTTPS']) ? "https://" : "http://") . "notlar." . $host . "/not/" . $note['slug'];
@@ -218,7 +218,7 @@
         resultsContainer.innerHTML = '';
         if (val.length < 1) { resultsContainer.classList.add('hidden'); return; }
 
-        const filtered = categories.filter(c => 
+        const filtered = categories.filter(c =>
             c.name.toLowerCase().includes(val) && !selectedIds.includes(c.id)
         );
 
@@ -240,7 +240,14 @@
         selectedIds.push(cat.id);
         const tag = document.createElement('div');
         tag.className = 'bg-[var(--text-main)] text-[var(--bg-paper)] px-2 py-1 text-[10px] font-bold uppercase flex items-center gap-2';
-        tag.innerHTML = `${cat.name} <span class="remove-cat-btn cursor-pointer hover:text-red-400" data-cat="${cat.id}">✕</span>`;
+        tag.textContent = cat.name;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'remove-cat-btn cursor-pointer hover:text-red-400';
+        remove.dataset.cat = String(cat.id);
+        remove.setAttribute('aria-label', cat.name + ' kategorisini kaldır');
+        remove.textContent = '✕';
+        tag.appendChild(remove);
         const input = document.createElement('input');
         input.type = 'hidden';
         input.name = 'categories[]';

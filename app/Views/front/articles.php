@@ -1,4 +1,11 @@
 <?php
+require_once ROOT . '/app/Services/CoverImage.php';
+/**
+ * @var int $currentPage
+ * @var int $totalPages
+ * @var int $totalArticles
+ * @var array $filters
+ */
 $siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://fezadan.org';
 
 $lang = App::getLang();
@@ -28,63 +35,63 @@ if ($catOnly) {
 }
 
 if ($catOnly && $activeCategoryName) {
-    $page_title       = htmlspecialchars($activeCategoryName) . ($isEn ? ' — Articles | FEZADAN' : ' — Makaleler | FEZADAN');
-    $page_description = $isEn 
-        ? 'FEZADAN articles in the category ' . htmlspecialchars($activeCategoryName) . '.'
-        : htmlspecialchars($activeCategoryName) . ' kategorisindeki FEZADAN makaleleri.';
+    $categoryName = trim((string)$activeCategoryName);
+    $page_title       = $categoryName . ($isEn ? ' | Articles | FEZADAN' : ' | Makaleler | FEZADAN');
+    $page_description = $isEn
+        ? 'FEZADAN articles in the ' . $categoryName . ' category / the full archive of independent essays on science, aesthetics, and critical thought.'
+        : $categoryName . ' kategorisindeki FEZADAN makaleleri / bilim, estetik ve eleştirel düşünce üzerine bağımsız yazıların tam arşivi.';
     $page_canonical   = langUrl(App::getLang() === 'EN' ? '/articles' : '/makaleler') . '?cat=' . (int)$_GET['cat'];
 } elseif ($hasOtherFilters) {
-    $page_title       = $isEn ? 'Articles — Search & Filters | FEZADAN' : 'Makaleler — Arama & Filtre | FEZADAN';
+    $page_title       = $isEn ? 'Articles | Search & Filters | FEZADAN' : 'Makaleler | Arama & Filtre | FEZADAN';
     $page_description = $isEn
         ? 'Search the FEZADAN article archive. Filter by author, category, or keyword.'
         : 'FEZADAN makale arşivinde arama yapın. Yazara, kategoriye veya anahtar kelimeye göre filtreleyin.';
     $page_canonical   = langUrl(App::getLang() === 'EN' ? '/articles' : '/makaleler');
     $page_robots      = 'noindex, follow';
 } else {
-    $page_title       = $isEn ? 'All Articles — Archive of Independent Essays & Thought | FEZADAN' : 'Tüm Makaleler — Bağımsız Düşünce ve Makale Arşivi | FEZADAN';
+    $page_title       = $isEn ? 'All Articles | Archive of Independent Essays & Thought | FEZADAN' : 'Tüm Makaleler | Bağımsız Düşünce ve Makale Arşivi | FEZADAN';
     $page_description = $isEn
-        ? 'FEZADAN article archive — an independent publication on science, aesthetics, and thought. All writings in one list.'
-        : 'FEZADAN makale arşivi — bilim, estetik ve fikir üzerine bağımsız yayın. Tüm yazılar tek liste.';
+        ? 'FEZADAN article archive / an independent publication on science, aesthetics, and thought. All writings in one list.'
+        : 'FEZADAN makale arşivi / bilim, estetik ve fikir üzerine bağımsız yayın. Tüm yazılar tek liste.';
     $page_canonical   = langUrl(App::getLang() === 'EN' ? '/articles' : '/makaleler');
 }
 $og_url = $page_canonical;
 
-require_once ROOT . '/app/Views/inc/header.php'; 
+require_once ROOT . '/app/Views/inc/header.php';
 
 function build_url($new_params = []) {
-    // Apache mod_rewrite 'url' değişkenini $_GET'e enjekte eder (örn. url=en/articles).
-    // Bunu asla query param olarak geri iletme — Apache kodlanmış slash'leri (%2F) reddeder.
-    $params = $_GET;
-    unset($params['url']);
+    // Apache mod_rewrite injects 'url' into $_GET (e.g. url=en/articles).
+    // Never pass this back as a query param / Apache rejects encoded slashes (%2F).
+    $params = array_intersect_key($_GET, array_flip(['q', 'cat', 'author', 'sort', 'page']));
     foreach ($new_params as $key => $value) {
         $params[$key] = $value;
     }
-    return '?' . http_build_query($params);
+    return htmlspecialchars('?' . http_build_query($params), ENT_QUOTES, 'UTF-8');
 }
 ?>
 <style>
-    .grid-container { 
-        display: grid; 
-        grid-template-columns: 1fr; 
-        gap: 2rem; 
+    .grid-container {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2rem;
         padding: 2.5rem 1rem;
-        border-top: 1px solid var(--line-color); 
+        border-top: 1px solid var(--line-color);
     }
-    @media (min-width: 768px) { 
-        .grid-container { 
-            grid-template-columns: repeat(2, 1fr); 
-            gap: 2.5rem; 
+    @media (min-width: 768px) {
+        .grid-container {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2.5rem;
             padding: 4rem 2rem;
-        } 
+        }
     }
-    @media (min-width: 1024px) { 
-        .grid-container { 
-            grid-template-columns: repeat(4, 1fr); 
-            gap: 2.5rem; 
+    @media (min-width: 1024px) {
+        .grid-container {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2.5rem;
             padding: 4rem 2rem;
-        } 
+        }
     }
-    
+
     .grid-item {
         background-color: var(--bg-paper);
         border: 2px solid var(--line-color);
@@ -98,8 +105,8 @@ function build_url($new_params = []) {
         position: relative;
         overflow: hidden;
     }
-    
-    .grid-item:hover { 
+
+    .grid-item:hover {
         background-color: var(--bg-paper);
     }
 
@@ -151,19 +158,19 @@ function build_url($new_params = []) {
         filter: grayscale(0%) contrast(100%);
         opacity: 1;
     }
-    
+
     .font-bebas { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.05em; }
-    
+
     .text-outline {
-        color: var(--bg-secondary); 
-        -webkit-text-stroke: 2px var(--text-main); 
+        color: var(--bg-secondary);
+        -webkit-text-stroke: 2px var(--text-main);
         paint-order: stroke fill;
     }
-    .group:hover .text-outline { 
-        color: var(--text-main); 
-        -webkit-text-stroke: 0px transparent; 
+    .group:hover .text-outline {
+        color: var(--text-main);
+        -webkit-text-stroke: 0px transparent;
     }
-    
+
     .pagination-link {
         width: 45px; height: 45px; display: flex; align-items: center; justify-content: center;
         border: 1px solid var(--line-color); font-family: 'Syne', sans-serif; font-weight: 700;
@@ -171,7 +178,7 @@ function build_url($new_params = []) {
     }
     .pagination-link:hover { background: var(--bg-secondary); color: var(--text-main); }
     .pagination-link.active { background: var(--text-main); color: var(--bg-paper); border-color: var(--text-main); }
-    
+
     .filter-accent-border {
         border: none !important;
         border-bottom: 2px solid var(--text-accent) !important;
@@ -182,30 +189,30 @@ function build_url($new_params = []) {
         border-bottom-color: var(--text-main) !important;
     }
 
-    [data-theme="dark"] .grid-container { 
-        border-top-color: var(--text-main) !important; 
+    [data-theme="dark"] .grid-container {
+        border-top-color: var(--text-main) !important;
     }
-    [data-theme="dark"] .grid-item { 
+    [data-theme="dark"] .grid-item {
         box-shadow: 6px 6px 0px var(--text-main);
         border-color: var(--text-main);
     }
-    [data-theme="dark"] .grid-item:hover { 
+    [data-theme="dark"] .grid-item:hover {
     }
-    [data-theme="dark"] .dynamic-border-color { 
-        border-color: var(--text-main) !important; 
+    [data-theme="dark"] .dynamic-border-color {
+        border-color: var(--text-main) !important;
     }
-    [data-theme="dark"] .pagination-link { 
-        border-color: var(--text-main) !important; 
+    [data-theme="dark"] .pagination-link {
+        border-color: var(--text-main) !important;
     }
 
     .filter-select {
-        background: transparent; 
-        font-family: 'Space Grotesk', sans-serif; 
-        font-size: 0.75rem; 
+        background: transparent;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 0.75rem;
         color: var(--text-main);
-        padding: 5px 20px 5px 0; 
-        cursor: pointer; 
-        outline: none; 
+        padding: 5px 20px 5px 0;
+        cursor: pointer;
+        outline: none;
         appearance: none;
         background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236D2323' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
         background-repeat: no-repeat;
@@ -224,19 +231,19 @@ function build_url($new_params = []) {
 </style>
 
 <main id="main-content" class="flex-grow w-full max-w-[1920px] mx-auto">
-    
+
     <header class="px-4 py-12 flex flex-col items-center border-b border-[var(--line-color)] dynamic-border-color bg-[var(--bg-paper)]">
         <h1 class="text-4xl md:text-6xl font-syne font-bold uppercase text-[var(--text-main)]"><?= $isEn ? 'All Articles' : 'Tüm Dosyalar' ?></h1>
-        
+
         <form action="" method="GET" id="article-filter-form" class="mt-8 flex flex-wrap justify-center items-end gap-6 md:gap-8 w-full max-w-5xl">
-            
+
             <div class="flex flex-col w-full md:w-auto flex-grow max-w-xs relative" id="search-input-wrapper">
                 <label for="filter-search" class="text-[10px] uppercase tracking-widest opacity-60 mb-1 text-[var(--text-main)]"><?= $isEn ? 'Search' : 'Arama' ?></label>
-                <input type="text" name="q" id="filter-search" value="<?php echo htmlspecialchars($filters['q']); ?>" 
-                       placeholder="<?= $isEn ? 'Title or content...' : 'Başlık veya içerik...' ?>" 
+                <input type="text" name="q" id="filter-search" value="<?php echo htmlspecialchars($filters['q']); ?>"
+                       placeholder="<?= $isEn ? 'Title or content...' : 'Başlık veya içerik...' ?>"
                        class="bg-transparent py-1 text-[var(--text-main)] font-mono text-sm outline-none placeholder-[var(--text-main)]/40 filter-accent-border"
-                       autocomplete="off">
-                <div id="search-autocomplete-dropdown" class="absolute left-0 right-0 top-full bg-[var(--bg-paper)] border-2 border-[var(--line-color)] mt-1 z-50 hidden shadow-[6px_6px_0px_var(--line-color)] max-h-80 overflow-y-auto"></div>
+                       autocomplete="off" aria-controls="search-autocomplete-dropdown" aria-expanded="false">
+                <div id="search-autocomplete-dropdown" aria-label="<?= $isEn ? 'Search suggestions' : 'Arama önerileri' ?>" class="absolute left-0 right-0 top-full bg-[var(--bg-paper)] border-2 border-[var(--line-color)] mt-1 z-50 hidden shadow-[6px_6px_0px_var(--line-color)] max-h-80 overflow-y-auto"></div>
             </div>
 
             <div class="flex flex-col">
@@ -267,7 +274,7 @@ function build_url($new_params = []) {
                 <button type="submit" class="bg-[var(--text-main)] text-[var(--bg-paper)] px-4 py-1 text-xs font-bold uppercase border border-[var(--text-main)] hover:bg-transparent hover:text-[var(--text-main)] transition-colors">
                     <?= $isEn ? 'FILTER' : 'FİLTRELE' ?>
                 </button>
-                
+
                 <?php if(!empty($filters['cat']) || !empty($filters['author']) || !empty($filters['q'])): ?>
                 <a href="<?php echo langUrl(App::getLang() === 'EN' ? '/articles' : '/makaleler'); ?>" class="bg-transparent text-[var(--text-main)] px-3 py-1 text-xs font-bold uppercase border border-[var(--text-main)] hover:bg-[var(--text-main)] hover:text-[var(--bg-paper)] transition-colors">
                     <?= $isEn ? 'CLEAR' : 'TEMİZLE' ?>
@@ -285,7 +292,7 @@ function build_url($new_params = []) {
             <?php endif; ?>
         </p>
     </header>
- 
+
     <section class="grid-container">
         <?php if (empty($articles)): ?>
             <div class="md:col-span-2 lg:col-span-4 border-2 border-[var(--line-color)] bg-[var(--bg-paper)] p-8 md:p-12 text-center shadow-[6px_6px_0px_var(--line-color)]">
@@ -306,32 +313,35 @@ function build_url($new_params = []) {
                 <?php endif; ?>
             </div>
         <?php endif; ?>
-        <?php 
+        <?php
         if(!empty($articles)):
-            foreach($articles as $article): 
+            foreach($articles as $article):
                 $preview_img = !empty($article['image_url']) ? $article['image_url'] : '';
         ?>
         <div class="grid-item group relative">
-            
+
             <!-- Link to the article (occupies the entire card) -->
-            <a href="<?php echo articleUrl($article['author_slug'] ?? 'yazar', $article['slug']); ?>" class="absolute inset-0 z-10" aria-label="<?php echo htmlspecialchars($article['title']); ?> makalesini oku"></a>
+            <a href="<?php echo articleUrl($article['slug']); ?>" class="absolute inset-0 z-10" aria-label="<?php echo htmlspecialchars($article['title']); ?> makalesini oku"></a>
 
             <!-- Card Image Header -->
-            <?php if($preview_img): 
+            <?php if($preview_img):
                 $preview_webp = Upload::webpUrl($preview_img);
                 $preview_url = Upload::assetUrl($preview_img);
                 $preview_fallback = Upload::assetUrl((string)(parse_url($preview_img, PHP_URL_PATH) ?: $preview_img));
+                $preview_srcset = CoverImage::srcset((int)$article['id'], $preview_img);
+                if ($preview_srcset !== '') $preview_url = CoverImage::url((int)$article['id'], $preview_img);
             ?>
                 <div class="card-image-wrapper">
                     <picture>
-                        <?php if ($preview_webp): ?>
+                        <?php if ($preview_webp && $preview_srcset === ''): ?>
                             <source type="image/webp" srcset="<?php echo htmlspecialchars($preview_webp, ENT_QUOTES, 'UTF-8'); ?>">
                         <?php endif; ?>
-                        <img src="<?php echo htmlspecialchars($preview_url, ENT_QUOTES, 'UTF-8'); ?>" 
-                             width="600" height="400" 
+                        <img src="<?php echo htmlspecialchars($preview_url, ENT_QUOTES, 'UTF-8'); ?>"
+                              width="768" height="432"
+                              <?php if ($preview_srcset !== ''): ?>srcset="<?= htmlspecialchars($preview_srcset, ENT_QUOTES, 'UTF-8') ?>" sizes="<?= CoverImage::SIZES ?>"<?php endif; ?>
                              loading="lazy" decoding="async"
                              data-fallback="<?php echo htmlspecialchars($preview_fallback, ENT_QUOTES, 'UTF-8'); ?>"
-                             class="reveal-img pointer-events-none" 
+                             class="reveal-img pointer-events-none"
                              alt="<?php echo htmlspecialchars($article['title']); ?>">
                     </picture>
                 </div>
@@ -340,7 +350,7 @@ function build_url($new_params = []) {
                     <span class="text-xl font-syne font-bold opacity-30 select-none tracking-widest text-[var(--text-main)]">FEZADAN</span>
                 </div>
             <?php endif; ?>
-            
+
             <!-- Card Body -->
             <div class="flex-grow p-6 flex flex-col justify-between">
                 <div>
@@ -423,6 +433,14 @@ function build_url($new_params = []) {
         if (!searchInput || !dropdown) return;
 
         let debounceTimer = null;
+        let controller = null;
+        let generation = 0;
+        let renderedQuery = '';
+
+        function setDropdownVisible(visible) {
+            dropdown.classList.toggle('hidden', !visible);
+            searchInput.setAttribute('aria-expanded', String(visible));
+        }
 
         const style = document.createElement('style');
         style.textContent = `
@@ -485,59 +503,91 @@ function build_url($new_params = []) {
 
         searchInput.addEventListener('input', function () {
             clearTimeout(debounceTimer);
+            if (controller) controller.abort();
+            const currentGeneration = ++generation;
             const query = this.value.trim();
+            dropdown.replaceChildren();
+            setDropdownVisible(false);
             if (query.length < 2) {
-                dropdown.innerHTML = '';
-                dropdown.classList.add('hidden');
                 return;
             }
 
             debounceTimer = setTimeout(() => {
-                fetch('/<?= strtolower(App::getLang()) ?>/search/autocomplete?q=' + encodeURIComponent(query))
-                    .then(res => res.json())
+                controller = new AbortController();
+                fetch('/<?= strtolower(App::getLang()) ?>/search/autocomplete?q=' + encodeURIComponent(query), { signal: controller.signal })
+                    .then(res => {
+                        if (!res.ok) throw new Error('HTTP ' + res.status);
+                        return res.json();
+                    })
                     .then(data => {
-                        dropdown.innerHTML = '';
-                        if (data && data.length > 0) {
+                        if (currentGeneration !== generation || this.value.trim() !== query) return;
+                        if (!Array.isArray(data)) throw new Error('Invalid search response');
+                        dropdown.replaceChildren();
+                        renderedQuery = query;
+                        if (data.length > 0) {
                             data.forEach(item => {
+                                const url = new URL(item.url, window.location.href);
+                                if (!['https:', 'http:'].includes(url.protocol)) return;
                                 const row = document.createElement('a');
-                                row.href = item.url;
+                                row.href = url.href;
                                 row.className = 'autocomplete-item';
-                                
-                                const imgHtml = item.image 
-                                    ? `<img src="${item.image}" class="autocomplete-thumb" alt="${item.title}">`
-                                    : `<div class="autocomplete-thumb bg-[var(--bg-secondary)]/30 flex items-center justify-center text-xs opacity-50 font-bold font-syne">F</div>`;
-                                
-                                row.innerHTML = `
-                                    ${imgHtml}
-                                    <div class="autocomplete-info">
-                                        <span class="autocomplete-title">${item.title}</span>
-                                        <span class="autocomplete-desc">${item.desc}</span>
-                                    </div>
-                                `;
+                                const thumb = document.createElement(item.image ? 'img' : 'div');
+                                thumb.className = 'autocomplete-thumb';
+                                if (item.image) {
+                                    thumb.src = item.image;
+                                    thumb.alt = '';
+                                } else {
+                                    thumb.textContent = 'F';
+                                }
+                                const info = document.createElement('div');
+                                info.className = 'autocomplete-info';
+                                const title = document.createElement('span');
+                                title.className = 'autocomplete-title';
+                                title.textContent = item.title;
+                                const desc = document.createElement('span');
+                                desc.className = 'autocomplete-desc';
+                                desc.textContent = item.desc;
+                                info.append(title, desc);
+                                row.append(thumb, info);
                                 dropdown.appendChild(row);
                             });
-                            dropdown.classList.remove('hidden');
                         } else {
                             dropdown.innerHTML = `<div class="autocomplete-no-results"><?= $isEn ? 'No results found.' : 'Sonuç bulunamadı.' ?></div>`;
-                            dropdown.classList.remove('hidden');
                         }
+                        setDropdownVisible(document.activeElement === searchInput);
                     })
                     .catch(err => {
-                        console.error('Autocomplete error:', err);
+                        if (err.name !== 'AbortError' && currentGeneration === generation) {
+                            dropdown.replaceChildren();
+                            setDropdownVisible(false);
+                        }
                     });
             }, 250);
         });
 
         document.addEventListener('click', function (e) {
             if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
-                dropdown.classList.add('hidden');
+                setDropdownVisible(false);
             }
         });
 
         searchInput.addEventListener('focus', function () {
-            if (this.value.trim().length >= 2 && dropdown.children.length > 0) {
-                dropdown.classList.remove('hidden');
+            if (this.value.trim() === renderedQuery && dropdown.children.length > 0) {
+                setDropdownVisible(true);
             }
+        });
+        searchInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                ++generation;
+                if (controller) controller.abort();
+                setDropdownVisible(false);
+            } else if (event.key === 'ArrowDown' && !dropdown.classList.contains('hidden')) {
+                const first = dropdown.querySelector('a');
+                if (first) { event.preventDefault(); first.focus(); }
+            }
+        });
+        dropdown.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') { setDropdownVisible(false); searchInput.focus(); setDropdownVisible(false); }
         });
     });
 </script>

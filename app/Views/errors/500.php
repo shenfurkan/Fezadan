@@ -1,10 +1,10 @@
 <?php
-// Generic 500 sayfası — detay sızdırmaz.
+// Generic 500 sayfası / detay sızdırmaz.
 ?><!doctype html>
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<title>500 — Sistem Hatası | Fezadan</title>
+<title>500 / Sistem Hatası | Fezadan</title>
 <meta name="robots" content="noindex,nofollow">
 <style>
     html,body{margin:0;height:100%}
@@ -18,6 +18,9 @@
 <body>
     <h1>500</h1>
     <p>Sistem geçici olarak yanıt veremiyor</p>
+    <?php if (!empty($errorCode)): ?>
+        <p style="font-family:ui-monospace,monospace;letter-spacing:1px;text-transform:none;font-size:.95rem">Hata kodu: <?= htmlspecialchars((string)$errorCode) ?></p>
+    <?php endif; ?>
     <?php if (isset($e) && $e instanceof \Throwable): ?>
         <div style="background:#fff; color:#a00; padding:15px; border:2px solid #a00; max-width:800px; text-align:left; word-wrap:break-word; margin-bottom: 20px;">
             <strong>HATA DETAYI:</strong><br>
