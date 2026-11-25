@@ -120,4 +120,4 @@ AnonymityCheck bu depoda modül olarak tutulmaz; kendi deposundan kurulur ve `ht
 
 ## Lisans
 
-Bu proje **GNU General Public License v3.0 (GPL-3.0)** altında yayınlanmıştır. Ayrı depolardaki Roundcube skin'i CC BY-SA 3.0, AnonymityCheck ise GPL-3.0 lisansına sahiptir.
+Bu proje **GNU General Public License v3.0 (GPL-3.0)** altında yayınlanmıştır. AnonymityCheck modülü de GPL-3.0'dır. Roundcube skin deposunda orijinal build/tooling kodu GPL-3.0, Roundcube Elastic türevi `skin/` runtime'ı ise upstream lisansı gereği CC BY-SA 3.0'dır; ayrıntılar skin deposundaki `LICENSE` ve `NOTICE` dosyalarındadır.
